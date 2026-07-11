@@ -406,6 +406,11 @@ body{letter-spacing:-0.015em;}
 .p-tags span{font-size:11px;font-weight:600;color:var(--deep);background:var(--mist);padding:3px 9px;border-radius:20px;}
 .p-acts{display:flex;gap:6px;margin-top:12px;}
 .p-acts button{font-size:12.5px;padding:8px 12px;}
+
+.tab-add{border:1px dashed var(--line)!important;color:var(--soft)!important;background:transparent!important;font-weight:600!important;}
+.tab-add:hover{border-color:var(--mint)!important;color:var(--deep)!important;}
+.tab-x{margin-left:6px;opacity:.5;font-weight:700;}
+.tab-x:hover{opacity:1;color:#fff;}
 </style>
 </head>
 <body>
@@ -468,6 +473,7 @@ const state={
   companies:[],          // {id,name,role,desc}
   // 잡(Job): 회의에서 이어지는 제안·과업. 다음 회의로 연결 가능.
   projects:[],           // 회의에서 나온 프로젝트 (카드)
+  pages:[],              // 커스텀 탭 (HTML 페이지를 탭으로 등록)
   jobs:[],               // {id,title,desc,fromMeetingId,linkedMeetingIds:[],status}
   meeting:null,          // = 현재 회의 (currentMeetingId로 참조, 하위호환)
   attendees:[],          // 현재 회의 참석자 (meeting.attendees 미러)
@@ -629,7 +635,7 @@ function storageMode(){
 let saveTimer=null;
 function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveSession,1200);}
 async function saveSession(){await store.set("medit:hub1",{
-  accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,currentMeetingId:state.currentMeetingId,
+  accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,currentMeetingId:state.currentMeetingId,
   uploads:state.uploads.map(u=>({name:u.name,type:u.type,size:u.size,text:u.text})),
   tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
   nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart});}
@@ -651,13 +657,13 @@ async function loadAll(){
   const rec=await store.get("medit:records2");if(rec)state.records=rec;
   const s=await store.get("medit:hub1");
   if(s && typeof s==="object"){
-    Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],projects:s.projects||[],
+    Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],projects:s.projects||[],pages:s.pages||[],
       currentMeetingId:s.currentMeetingId||null,uploads:s.uploads||[],
       tabNotes:s.tabNotes||state.tabNotes,segments:s.segments||[],notes:s.notes||null,research:s.research||[],
       nextActions:s.nextActions||[],topicTags:s.topicTags||[],meetingStart:s.meetingStart||null});
   }
   // 배열이 아닌 값이 들어와도 안전하게 정규화 (데이터가 비었거나 깨진 경우)
-  ["accounts","meetings","companies","jobs","projects","uploads","segments","research","nextActions","topicTags","records"].forEach(k=>{
+  ["accounts","meetings","companies","jobs","projects","pages","uploads","segments","research","nextActions","topicTags","records"].forEach(k=>{
     if(!Array.isArray(state[k]))state[k]=[];
   });
   if(!state.tabNotes||typeof state.tabNotes!=="object")state.tabNotes={deck:[],app:[],registry:[],console:[]};
@@ -692,6 +698,7 @@ function renderStage(tab){
   else if(tab==="video")st.innerHTML=videoHTML();
   else if(tab==="today")st.innerHTML=todayHTML();
   else if(tab==="projects")st.innerHTML=projectsHTML();
+  else if((state.pages||[]).some(p=>p.id===tab))st.innerHTML=pageHTML(tab);
   else if(tab==="console")st.innerHTML=consoleHTML();
   else if(tab==="email")st.innerHTML=emailHTML();
   if(tab==="home")bindHome();
@@ -2002,6 +2009,77 @@ function resetData(){
 
 // ==================== 액션 레이어 (MCP·로봇·음성 연동 준비) ====================
 // 나중에 MCP 서버·로봇은 이 함수들만 감싸면 됩니다.
+
+// ==================== 페이지(탭) API ====================
+// HTML 파일을 탭으로 등록합니다. Claude로 만든 웹앱을 올리고 탭으로 붙이는 용도.
+//   MedITHub.addPage({id,label,url})   → 탭 추가
+//   MedITHub.removePage(id)            → 탭 제거
+//   MedITHub.listPages()               → 등록된 탭 목록
+function addPage(p){
+  if(!p||!p.label||!p.url) throw new Error("label과 url이 필요합니다");
+  const id=p.id||("pg_"+Date.now());
+  state.pages=state.pages||[];
+  if(state.pages.some(x=>x.id===id)) throw new Error("이미 있는 id입니다: "+id);
+  state.pages.push({id,label:p.label,url:p.url});
+  scheduleSave(); renderTabs();
+  return id;
+}
+function removePage(id){
+  state.pages=(state.pages||[]).filter(p=>p.id!==id);
+  scheduleSave();
+  if(state.activeTab===id) switchTab("home"); else renderTabs();
+  return true;
+}
+function listPages(){ return (state.pages||[]).slice(); }
+
+// 탭 바를 다시 그림 (기본 탭 + 커스텀 페이지 탭)
+function renderTabs(){
+  const bar=$("tabs"); if(!bar) return;
+  // 기존 커스텀 탭 제거
+  bar.querySelectorAll("[data-page]").forEach(el=>el.remove());
+  const canEdit=state.user.role==="operator"||state.user.role==="host";
+  (state.pages||[]).forEach(p=>{
+    const el=document.createElement("div");
+    el.className="tab"+(state.activeTab===p.id?" active":"");
+    el.dataset.tab=p.id; el.dataset.page=p.id;
+    el.innerHTML=esc(p.label)+(canEdit?' <span class="tab-x" title="탭 삭제">×</span>':'');
+    el.onclick=(e)=>{
+      if(e.target.classList.contains("tab-x")){
+        e.stopPropagation();
+        if(confirm("'"+p.label+"' 탭을 삭제할까요?")) removePage(p.id);
+        return;
+      }
+      switchTab(p.id);
+    };
+    bar.appendChild(el);
+  });
+  // 페이지 추가 버튼
+  if(canEdit && !bar.querySelector("#tabAdd")){
+    const add=document.createElement("div");
+    add.className="tab tab-add"; add.id="tabAdd"; add.textContent="+ 페이지";
+    add.onclick=addPageFlow;
+    bar.appendChild(add);
+  }
+}
+function addPageFlow(){
+  const label=prompt("탭 이름 (예: 약국 재고 관리)"); if(!label) return;
+  const url=prompt("HTML 파일명 또는 주소\n예: registry.html 또는 https://...","");
+  if(!url) return;
+  try{ addPage({label:label.trim(),url:url.trim()}); toast("'"+label+"' 탭이 추가되었습니다"); }
+  catch(e){ toast(e.message); }
+}
+function pageHTML(id){
+  const p=(state.pages||[]).find(x=>x.id===id);
+  if(!p) return '<div class="hero"><div class="mini">페이지를 찾을 수 없습니다.</div></div>';
+  return `<div class="hero" style="padding:0">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px">
+      <b style="font-size:17px">${esc(p.label)}</b>
+      <button class="b-ghost" onclick="window.open('${esc(p.url)}','_blank')">새 탭에서 열기</button>
+    </div>
+    <iframe src="${esc(p.url)}" style="width:100%;height:720px;border:0;border-radius:16px;display:block"></iframe>
+  </div>`;
+}
+
 window.MedITHub={
   searchMeetings,                                   // (query) → 회의 배열
   listMeetings:()=>state.meetings.filter(canView),  // 볼 수 있는 회의 목록
@@ -2012,6 +2090,7 @@ window.MedITHub={
   listJobs:()=>state.jobs,
   currentUser:()=>state.user,
   joinMeeting:(id)=>{state.currentMeetingId=id;syncCurrentMeeting();enterHub();return true;},
+  addPage, removePage, listPages,
   exportData, importData,
   storageOK:()=>storageOK,
   storageMode,
@@ -2339,6 +2418,7 @@ function createMeetingFlow(){
 
 function enterHub(){
   $("gate").style.display="none";
+  renderTabs();
   $("appMain").style.display="flex";
   syncCurrentMeeting();
   // 헤더 회의 제목 갱신
