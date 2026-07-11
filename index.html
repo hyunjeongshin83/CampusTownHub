@@ -430,6 +430,7 @@ body{letter-spacing:-0.015em;}
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== STATE ====================
 const state={
@@ -1800,6 +1801,10 @@ function renderAuth(){
   if(authMode==="login"){
     box.innerHTML=`
       <div class="auth-tabs"><button class="at on" id="toLogin">로그인</button><button class="at" id="toSignup">회원가입</button></div>
+      <div class="social-list" style="margin-bottom:14px">
+        <button class="social2 s-google" data-p="Gmail">${ICON.google}<span>Google로 계속하기</span></button>
+      </div>
+      <div class="social-or">또는 이메일로 로그인</div>
       <input class="auth-in" id="loginEmail" placeholder="이메일" autocomplete="off">
       <input class="auth-in" id="loginPw" type="password" placeholder="비밀번호" autocomplete="off">
       <button class="b-mint auth-btn" id="doLogin">로그인</button>
@@ -1814,9 +1819,6 @@ function renderAuth(){
       <div class="invite-notice">${OPEN_SIGNUP?"본인 이메일로 가입하실 수 있습니다. 가입 후 초대된 회의가 목록에 표시됩니다.":"초대받은 이메일로만 가입할 수 있습니다."}</div>
       <div class="social-list">
         <button class="social2 s-google" data-p="Gmail">${ICON.google}<span>Google로 계속하기</span></button>
-        <button class="social2 s-naver" data-p="Naver">${ICON.naver}<span>Naver로 계속하기</span></button>
-        <button class="social2 s-kakao" data-p="Kakao">${ICON.kakao}<span>Kakao로 계속하기</span></button>
-        <button class="social2 s-apple" data-p="Apple">${ICON.apple}<span>Apple로 계속하기</span></button>
         <button class="social2 s-email" id="emailToggle">${ICON.mail}<span>개인 이메일로 가입</span></button>
       </div>
       <div id="emailForm" class="email-form" style="display:none">
@@ -1865,56 +1867,170 @@ function invitedRole(email){
 // [서버 연동 자리] 실제 인증(Supabase 등)을 붙일 때 이 함수를 구현하세요.
 // async function serverAuth(email, pw){ ... return {ok, user} }
 
-function doLogin(){
+async function doLogin(){
   const email=($("loginEmail").value||"").trim().toLowerCase();
   const pw=($("loginPw").value||"").trim();
-  const acc=state.accounts.find(a=>a.email.toLowerCase()===email);
   const msg=$("authMsg");
+  if(!email||!pw){ msg.innerHTML='<span class="gate-err">이메일과 비밀번호를 입력하세요.</span>'; return; }
+  // 진짜 인증
+  if(authReady){
+    msg.innerHTML='<span style="color:#8FD9D2">로그인 중…</span>';
+    try{
+      await emailSignIn(email,pw);
+      const u=await restoreSession();
+      if(u){ saveUser(); showMeetingList(); return; }
+      msg.innerHTML='<span class="gate-err">로그인에 실패했습니다.</span>';
+      return;
+    }catch(e){
+      if(/Invalid login credentials/i.test(e.message)){
+        msg.innerHTML='<span class="gate-err">이메일 또는 비밀번호가 올바르지 않습니다.</span>';
+      } else if(/Email not confirmed/i.test(e.message)){
+        msg.innerHTML='<span class="gate-err">이메일 확인이 필요합니다. 메일함을 확인해 주세요.</span>';
+      } else {
+        msg.innerHTML='<span class="gate-err">로그인 실패: '+esc(e.message)+'</span>';
+      }
+      return;
+    }
+  }
+  // 폴백(로컬 모드)
+  const acc=state.accounts.find(a=>a.email.toLowerCase()===email);
   if(!acc){ msg.innerHTML='<span class="gate-err">등록되지 않은 이메일입니다. 회원가입을 해주세요.</span>'; return; }
   if(acc.pw&&acc.pw!==pw){ msg.innerHTML='<span class="gate-err">비밀번호가 일치하지 않습니다.</span>'; return; }
   loginAs(acc);
 }
 // 소셜 회원가입 (Gmail·Naver·Kakao·Apple) — 데모: 간이 계정 생성. 실제 OAuth는 서버 붙일 때 이 함수만 교체.
-function socialSignup(provider){
-  const domain={Gmail:"gmail.com",Naver:"naver.com",Kakao:"kakao.com",Apple:"icloud.com"}[provider]||"example.com";
-  const email=prompt(provider+" 계정 이메일을 입력하세요","@"+domain);
-  if(!email||!email.includes("@"))return;
-  const existing=state.accounts.find(a=>a.email.toLowerCase()===email.toLowerCase());
-  if(existing){ toast(provider+" 계정으로 로그인합니다"); loginAs(existing); return; }
-  // 초대 확인 — 초대받지 않은 이메일은 가입 불가
-  if(!isInvited(email)){
-    const msg=$("authMsg");
-    if(msg)msg.innerHTML='<span class="gate-err">초대된 이메일이 아닙니다. 회의 개최자에게 초대를 요청해 주세요.</span>';
-    else toast("초대된 이메일이 아닙니다");
-    return;
-  }
-  const name=prompt("표시할 이름","")||email.split("@")[0];
-  const role=invitedRole(email);
-  const acc={id:"u_"+Date.now(),name,email,role,pw:"",provider};
-  state.accounts.push(acc); scheduleSave();
-  toast(provider+" 계정으로 가입되었습니다"); loginAs(acc);
+
+// ==================== 진짜 로그인 (Supabase Auth) ====================
+let sb=null;                       // Supabase 클라이언트
+let authReady=false;
+
+function initAuth(){
+  if(!SUPABASE_URL||!SUPABASE_ANON_KEY)return false;
+  if(!window.supabase){ console.warn("Supabase 라이브러리 로드 실패"); return false; }
+  try{
+    sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+    authReady=true;
+    return true;
+  }catch(e){ console.warn("Auth 초기화 실패:",e.message); return false; }
 }
-function doSignup(){
+
+// 소셜 로그인 (진짜 OAuth — Google/Kakao 등)
+async function oauthLogin(provider){
+  if(!authReady){ toast("인증 설정이 필요합니다 (Supabase Auth)"); return; }
+  const map={Gmail:"google",Google:"google",Kakao:"kakao",Apple:"apple",Naver:"google"};
+  const p=map[provider]||"google";
+  if(provider==="Naver"){ toast("네이버는 준비 중입니다. Google 또는 이메일을 사용해 주세요."); return; }
+  try{
+    const {error}=await sb.auth.signInWithOAuth({
+      provider:p,
+      options:{ redirectTo: window.location.origin+window.location.pathname }
+    });
+    if(error)throw error;
+    // 성공 시 브라우저가 provider로 이동 → 돌아오면 restoreSession()이 처리
+  }catch(e){
+    toast("로그인 실패: "+e.message);
+    console.error(e);
+  }
+}
+
+// 이메일 회원가입 (진짜)
+async function emailSignUp(email,pw,name){
+  if(!authReady) throw new Error("인증 설정이 필요합니다");
+  const {data,error}=await sb.auth.signUp({
+    email, password:pw,
+    options:{ data:{ full_name:name }, emailRedirectTo: window.location.origin+window.location.pathname }
+  });
+  if(error) throw error;
+  return data;
+}
+// 이메일 로그인 (진짜)
+async function emailSignIn(email,pw){
+  if(!authReady) throw new Error("인증 설정이 필요합니다");
+  const {data,error}=await sb.auth.signInWithPassword({email,password:pw});
+  if(error) throw error;
+  return data;
+}
+async function authSignOut(){
+  if(sb) { try{ await sb.auth.signOut(); }catch(e){} }
+}
+
+// 로그인된 Supabase 사용자를 허브 사용자로 변환
+function userFromAuth(u){
+  const email=(u.email||"").toLowerCase();
+  const meta=u.user_metadata||{};
+  const name=meta.full_name||meta.name||email.split("@")[0];
+  // 기존 계정에 역할이 있으면 그 역할, 없으면 초대 여부로 판단
+  const acc=state.accounts.find(a=>(a.email||"").toLowerCase()===email);
+  const role=acc?acc.role:invitedRole(email);
+  return {role,name:acc&&acc.claimed?acc.name:name,email,id:u.id};
+}
+
+// 페이지 로드 시 세션 복원 (OAuth 리다이렉트 포함) — 진짜 자동 로그인
+async function restoreSession(){
+  if(!authReady)return null;
+  try{
+    const {data:{session}}=await sb.auth.getSession();
+    if(session&&session.user){
+      const u=userFromAuth(session.user);
+      // 계정 목록에 없으면 등록 (초대 명단과 연결)
+      let acc=state.accounts.find(a=>(a.email||"").toLowerCase()===u.email);
+      if(!acc){
+        acc={id:u.id,name:u.name,email:u.email,role:u.role,pw:"",claimed:true,authUser:true};
+        state.accounts.push(acc); scheduleSave();
+      } else if(!acc.claimed){
+        acc.claimed=true; acc.name=u.name||acc.name; scheduleSave();
+      }
+      state.user={role:acc.role,name:acc.name,email:acc.email,id:acc.id};
+      return state.user;
+    }
+  }catch(e){ console.warn("세션 복원 실패:",e.message); }
+  return null;
+}
+
+function socialSignup(provider){
+  // 진짜 OAuth 로그인 (Supabase Auth)
+  if(authReady){ oauthLogin(provider); return; }
+  const msg=$("authMsg");
+  if(msg)msg.innerHTML='<span class="gate-err">소셜 로그인을 사용하려면 Supabase Auth 설정이 필요합니다. 이메일로 가입해 주세요.</span>';
+  else toast("이메일로 가입해 주세요");
+}
+async function doSignup(){
   const name=($("suName").value||"").trim();
   const email=($("suEmail").value||"").trim();
   const pw=($("suPw").value||"").trim();
   const msg=$("authMsg");
   if(!name||!email){ msg.innerHTML='<span class="gate-err">이름과 이메일을 입력하세요.</span>'; return; }
-  if(!pw){ msg.innerHTML='<span class="gate-err">비밀번호를 입력하세요.</span>'; return; }
+  if(!pw||pw.length<6){ msg.innerHTML='<span class="gate-err">비밀번호는 6자 이상 입력하세요.</span>'; return; }
   if(!isInvited(email)){
-    msg.innerHTML='<span class="gate-err">초대된 이메일이 아닙니다. 회의 개최자에게 초대를 요청해 주세요.</span>';
-    return;
+    msg.innerHTML='<span class="gate-err">초대된 이메일이 아닙니다. 회의 개최자에게 초대를 요청해 주세요.</span>'; return;
   }
+  // 진짜 인증 (Supabase Auth)
+  if(authReady){
+    msg.innerHTML='<span style="color:#8FD9D2">가입 중…</span>';
+    try{
+      await emailSignUp(email,pw,name);
+      // 이메일 확인이 켜져 있으면 확인 메일 발송됨
+      const u=await restoreSession();
+      if(u){ showMeetingList(); return; }
+      msg.innerHTML='<span class="gate-ok">가입되었습니다. 확인 메일이 발송되었다면 메일함을 확인한 뒤 로그인해 주세요.</span>';
+      return;
+    }catch(e){
+      if(/already registered|already exists/i.test(e.message)){
+        msg.innerHTML='<span class="gate-err">이미 가입된 이메일입니다. 로그인해 주세요.</span>';
+      } else {
+        msg.innerHTML='<span class="gate-err">가입 실패: '+esc(e.message)+'</span>';
+      }
+      return;
+    }
+  }
+  // 폴백(로컬 모드)
   const existing=state.accounts.find(a=>a.email.toLowerCase()===email.toLowerCase());
   if(existing){
-    // 미사용(시드) 계정이면 본인이 이어받아 사용 — 이름·비밀번호를 본인 것으로 설정
-    if(existing.claimed){
-      msg.innerHTML='<span class="gate-err">이미 가입된 이메일입니다. 로그인해주세요.</span>'; return;
-    }
+    if(existing.claimed){ msg.innerHTML='<span class="gate-err">이미 가입된 이메일입니다. 로그인해주세요.</span>'; return; }
     existing.name=name; existing.pw=pw; existing.claimed=true;
     scheduleSave(); loginAs(existing); return;
   }
-  const role=invitedRole(email);   // 역할은 초대에 따라 자동 지정
+  const role=invitedRole(email);
   const acc={id:"u_"+Date.now(),name,email,role,pw,claimed:true};
   state.accounts.push(acc); scheduleSave(); loginAs(acc);
 }
@@ -1949,7 +2065,7 @@ function showMeetingList(){
     </div>
     <div class="backup-hint" id="storeHint"></div>`;
   renderMeetingCards(list);
-  $("logoutBtn").onclick=()=>{state.user={role:null,name:"",email:"",id:null};clearUser();authMode="login";renderAuth();};
+  $("logoutBtn").onclick=async()=>{await authSignOut();state.user={role:null,name:"",email:"",id:null};clearUser();authMode="login";renderAuth();};
   $("mlSearch").onclick=async()=>{ const r=await searchMeetings($("mlQuery").value); renderMeetingCards(r.length?r:[], r.length?"":"검색 결과가 없습니다."); };
   $("mlQuery").addEventListener("keydown",async e=>{if(e.key==='Enter'){const r=await searchMeetings($("mlQuery").value);renderMeetingCards(r.length?r:[],r.length?"":"검색 결과가 없습니다.");}});
   $("mlVoice").onclick=()=>voiceSearch(async t=>{$("mlQuery").value=t;const r=await searchMeetings(t);renderMeetingCards(r.length?r:[],r.length?"":"검색 결과가 없습니다.");});
@@ -2007,22 +2123,44 @@ function enterHub(){
   switchTab("home");
 }
 // ==================== INIT ====================
-(async function(){await loadAll();
+(async function(){
+  await loadAll();
   const m=currentMeeting();
   if(m&&m.started&&!m.ended)setPill("live","회의 진행 중");else setPill("idle","회의 대기");
-  // 저장된 로그인 세션 복원 — 새로고침해도 로그인 유지
+
+  // 1) Supabase Auth 초기화
+  initAuth();
+
+  // 2) 진짜 세션 복원 (Google 로그인·이메일 로그인 모두 여기서 자동 로그인)
+  if(authReady){
+    // OAuth 리다이렉트로 돌아온 경우 URL 정리
+    const u=await restoreSession();
+    if(u){
+      if(window.history&&window.location.hash){ history.replaceState(null,"",window.location.pathname+window.location.search); }
+      saveUser();
+      showMeetingList();
+      // 로그인 상태 변화 감지 (로그아웃·토큰 갱신)
+      sb.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT"){ state.user={role:null,name:"",email:"",id:null}; clearUser(); authMode="login"; renderAuth(); } });
+      return;
+    }
+    sb.auth.onAuthStateChange(async(ev)=>{
+      if(ev==="SIGNED_IN"){ const uu=await restoreSession(); if(uu){ saveUser(); showMeetingList(); } }
+    });
+  }
+
+  // 3) 로컬 세션 복원 (Auth 미설정 시)
   try{
     const saved=await loadUser();
     if(saved && saved.role && saved.email){
-      // 계정이 아직 존재하는지 확인 (삭제·초기화된 경우 대비)
       const acc=state.accounts.find(a=>(a.email||"").toLowerCase()===(saved.email||"").toLowerCase());
       if(acc){
         state.user={role:acc.role,name:acc.name,email:acc.email,id:acc.id};
-        showMeetingList();          // 로그인 화면 건너뛰고 회의 목록으로
+        showMeetingList();
         return;
       }
     }
   }catch(e){ console.warn("세션 복원 실패:",e.message); }
+
   renderAuth();
 })();
 </script>
