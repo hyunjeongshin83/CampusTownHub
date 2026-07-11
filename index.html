@@ -495,7 +495,7 @@ function seedData(){
       {id:"p_app", title:"복약·접종 앱", desc:"MediNote — 5탭 복약·예방접종 관리 앱. 한국어·영어 자동 감지, 건강 데이터는 기기 안에만 저장.",
        status:"데모", url:"MediNote_app.html", meeting:"m_0710", tags:["모바일","복약","예방접종"]},
       {id:"p_site", title:"약사 참여 연구 사이트", desc:"지역사회·전국의 약사·제약사·의사가 등록해 약 디자인(제제 설계)에 참여하는 연구 창구.",
-       status:"제안", url:"", meeting:"m_0710", tags:["연구","등록","약 디자인"]},
+       status:"제안", url:"registry.html", detail:"registry", meeting:"m_0710", tags:["연구","등록","약 디자인"]},
     ];
   }
   if(!state.jobs.length){
@@ -1021,16 +1021,6 @@ function prepHTML(){
      <div class="mini" id="upStatus" style="margin-top:8px"></div>`:''}
    </div>
 
-   <div class="glass tile" style="margin-bottom:14px">
-     <h4>관련 자료 업로드 (선택)</h4>
-     <div class="dropzone" id="drop">
-       클릭 또는 드래그하여 업로드<br><span class="mini">스크립트·발표 DOC/PDF/TXT · 발표 영상 · 관련 문서</span>
-       <input type="file" id="fileInput" multiple style="display:none">
-     </div>
-     <div id="upList" style="margin-top:12px"></div>
-     <div class="mini" style="margin-top:8px">※ 문서(txt·md·스크립트)는 내용을 읽어 AI 회의 정리에 반영합니다. Word/PDF·영상은 목록 보관(내용 자동추출은 향후 STT/파서 연동).</div>
-   </div>
-
    <div class="glass tile">
      <h4>회의 정보 <span class="aibadge"><span class="dot"></span>회의 후 AI 자동 수정</span></h4>
      <div class="field" style="margin-bottom:8px"><label style="font-size:11px;font-weight:800;color:var(--soft)">제목</label>
@@ -1329,18 +1319,32 @@ function renderProjects(){
       <div class="p-desc">${esc(p.desc||"")}</div>
       ${(p.tags&&p.tags.length)?`<div class="p-tags">${p.tags.map(t=>`<span>${esc(t)}</span>`).join("")}</div>`:""}
       <div class="p-acts">
-        ${p.url?`<button class="b-mint" data-open="${p.id}">열어보기</button>`
-               :`<span class="mini" style="align-self:center">아직 만들어지지 않았습니다</span>`}
+        ${p.url?`<button class="b-mint" data-open="${p.id}">열어보기</button>`:""}
+        ${p.detail?`<button class="${p.url?'b-ghost':'b-mint'}" data-detail="${p.id}">내용 보기</button>`:""}
+        ${(!p.url&&!p.detail)?`<span class="mini" style="align-self:center">아직 만들어지지 않았습니다</span>`:""}
         ${canEdit?`<button class="b-ghost" data-edit="${p.id}">수정</button>`:""}
         ${canEdit?`<button class="b-ghost" data-rm="${p.id}">삭제</button>`:""}
       </div>
     </div>`).join("")+'</div><div id="projView"></div>';
 
   box.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openProject(b.dataset.open));
+  box.querySelectorAll("[data-detail]").forEach(b=>b.onclick=()=>showDetail(b.dataset.detail));
   box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>editProject(b.dataset.edit));
   box.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>removeProject(b.dataset.rm));
 }
 
+function showDetail(kind){
+  const v=$("projView"); if(!v) return;
+  if(kind==="registry"){
+    v.innerHTML='<div class="glass tile" style="margin-top:14px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
+      '<b>약사 참여 연구 사이트 — 제안 내용</b>'+
+      '<button class="b-ghost" id="dvClose">닫기</button></div>'+
+      registryHTML()+'</div>';
+    const c=$("dvClose"); if(c)c.onclick=()=>{v.innerHTML="";};
+    v.scrollIntoView({behavior:"smooth",block:"nearest"});
+  }
+}
 function openProject(id){
   const p=(state.projects||[]).find(x=>x.id===id); if(!p||!p.url) return;
   const v=$("projView"); if(!v) return;
