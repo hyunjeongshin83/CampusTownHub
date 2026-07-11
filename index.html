@@ -383,6 +383,29 @@ body{letter-spacing:-0.015em;}
 /* headings scale up a touch */
 .hero h2{font-size:24px;}
 .gate-title{font-size:23px;letter-spacing:-0.03em;}
+
+.filerow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 13px;background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:7px;}
+.f-name{font-size:14px;font-weight:700;color:var(--ink);word-break:break-all;}
+.f-meta{font-size:11.5px;color:var(--soft);margin-top:2px;}
+.f-acts{display:flex;gap:6px;flex:0 0 auto;}
+.f-acts button{font-size:12px;padding:7px 11px;}
+.upzone{border:2px dashed var(--line);border-radius:14px;padding:20px;text-align:center;font-size:13.5px;color:var(--soft);cursor:pointer;transition:all .15s;}
+.upzone:hover,.upzone.drag{border-color:var(--mint);background:var(--mist);}
+
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;}
+.pcard{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;}
+.p-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.p-title{font-size:16px;font-weight:800;color:var(--ink);letter-spacing:-.02em;}
+.p-status{flex:0 0 auto;font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;color:#fff;}
+.st-demo{background:var(--mint);}
+.st-design{background:var(--deep);}
+.st-idea{background:#9AA8A5;}
+.st-run{background:#E8A33D;}
+.p-desc{font-size:13px;color:var(--soft);line-height:1.55;margin-top:8px;flex:1;}
+.p-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;}
+.p-tags span{font-size:11px;font-weight:600;color:var(--deep);background:var(--mist);padding:3px 9px;border-radius:20px;}
+.p-acts{display:flex;gap:6px;margin-top:12px;}
+.p-acts button{font-size:12.5px;padding:8px 12px;}
 </style>
 </head>
 <body>
@@ -412,8 +435,7 @@ body{letter-spacing:-0.015em;}
   <div class="tab" data-tab="prep">사전 준비 <span class="badge" id="prepBadge">0</span></div>
   <div class="tab" data-tab="deck">슬라이드</div>
   <div class="tab" data-tab="video">화상회의</div>
-  <div class="tab" data-tab="app">복약·접종 앱</div>
-  <div class="tab" data-tab="registry">약사 참여 사이트</div>
+  <div class="tab" data-tab="projects">프로젝트</div>
   <div class="tab" data-tab="console">진행 콘솔 <span class="badge" id="segBadge">0</span></div>
   <div class="tab" data-tab="email">회의록·이메일</div>
 </div>
@@ -445,6 +467,7 @@ const state={
   // 캠퍼스타운 허브에 등록된 기업 (MedIT 등)
   companies:[],          // {id,name,role,desc}
   // 잡(Job): 회의에서 이어지는 제안·과업. 다음 회의로 연결 가능.
+  projects:[],           // 회의에서 나온 프로젝트 (카드)
   jobs:[],               // {id,title,desc,fromMeetingId,linkedMeetingIds:[],status}
   meeting:null,          // = 현재 회의 (currentMeetingId로 참조, 하위호환)
   attendees:[],          // 현재 회의 참석자 (meeting.attendees 미러)
@@ -466,6 +489,14 @@ function seedData(){
   }
   if(!state.companies.length){
     state.companies=[{id:"c_medit",name:"MedIT",role:"입점 기업",desc:"고령친화 Age-Tech 약료·복약·예방접종"}];
+  }
+  if(!state.projects || !state.projects.length){
+    state.projects=[
+      {id:"p_app", title:"복약·접종 앱", desc:"MediNote — 5탭 복약·예방접종 관리 앱. 한국어·영어 자동 감지, 건강 데이터는 기기 안에만 저장.",
+       status:"데모", url:"MediNote_app.html", meeting:"m_0710", tags:["모바일","복약","예방접종"]},
+      {id:"p_site", title:"약사 참여 연구 사이트", desc:"지역사회·전국의 약사·제약사·의사가 등록해 약 디자인(제제 설계)에 참여하는 연구 창구.",
+       status:"제안", url:"", meeting:"m_0710", tags:["연구","등록","약 디자인"]},
+    ];
   }
   if(!state.jobs.length){
     state.jobs=[
@@ -598,7 +629,7 @@ function storageMode(){
 let saveTimer=null;
 function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveSession,1200);}
 async function saveSession(){await store.set("medit:hub1",{
-  accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,currentMeetingId:state.currentMeetingId,
+  accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,currentMeetingId:state.currentMeetingId,
   uploads:state.uploads.map(u=>({name:u.name,type:u.type,size:u.size,text:u.text})),
   tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
   nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart});}
@@ -620,13 +651,13 @@ async function loadAll(){
   const rec=await store.get("medit:records2");if(rec)state.records=rec;
   const s=await store.get("medit:hub1");
   if(s && typeof s==="object"){
-    Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],
+    Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],projects:s.projects||[],
       currentMeetingId:s.currentMeetingId||null,uploads:s.uploads||[],
       tabNotes:s.tabNotes||state.tabNotes,segments:s.segments||[],notes:s.notes||null,research:s.research||[],
       nextActions:s.nextActions||[],topicTags:s.topicTags||[],meetingStart:s.meetingStart||null});
   }
   // 배열이 아닌 값이 들어와도 안전하게 정규화 (데이터가 비었거나 깨진 경우)
-  ["accounts","meetings","companies","jobs","uploads","segments","research","nextActions","topicTags","records"].forEach(k=>{
+  ["accounts","meetings","companies","jobs","projects","uploads","segments","research","nextActions","topicTags","records"].forEach(k=>{
     if(!Array.isArray(state[k]))state[k]=[];
   });
   if(!state.tabNotes||typeof state.tabNotes!=="object")state.tabNotes={deck:[],app:[],registry:[],console:[]};
@@ -660,8 +691,7 @@ function renderStage(tab){
   else if(tab==="deck")st.innerHTML=deckHTML();
   else if(tab==="video")st.innerHTML=videoHTML();
   else if(tab==="today")st.innerHTML=todayHTML();
-  else if(tab==="app")st.innerHTML=appHTML();
-  else if(tab==="registry")st.innerHTML=registryHTML();
+  else if(tab==="projects")st.innerHTML=projectsHTML();
   else if(tab==="console")st.innerHTML=consoleHTML();
   else if(tab==="email")st.innerHTML=emailHTML();
   if(tab==="home")bindHome();
@@ -669,6 +699,7 @@ function renderStage(tab){
   if(tab==="deck")bindDeck();
   if(tab==="video")bindVideo();
   if(tab==="today")bindToday();
+  if(tab==="projects")bindProjects();
   if(tab==="console")bindConsole();
   if(tab==="email")bindEmail();
   refreshBadges();
@@ -772,12 +803,7 @@ function homeHTML(){
    <div id="jobList" style="margin-bottom:14px"></div>
 
    <div class="section-title">회의 자료</div>
-   <div class="grid g2" style="margin-bottom:14px">
-     <a class="glass tile docdl" href="MedIT_금요일미팅_AgeTech_모바일앱_약사참여.pptx" download><h4>금요일 미팅 PPT</h4><div class="muted">플랫폼·모바일앱·약사 참여 사이트·입법 제안 (12슬라이드)</div></a>
-     <a class="glass tile docdl" href="MedIT_고령친화AgeTech_약료플랫폼.pptx" download><h4>고령친화 Age-Tech PPT</h4><div class="muted">6대 축·검증 근거·의사결정 지원 (10슬라이드)</div></a>
-     <a class="glass tile docdl" href="MedIT_고령친화AgeTech_약료플랫폼_검토자료.docx" download><h4>검토자료 DOCX</h4><div class="muted">1차 출처·효돌 정정·근거 위계 (9쪽)</div></a>
-     <a class="glass tile docdl" href="MedIT_약국자동화_학술리서치.pdf" download><h4>약국 자동화 리서치 PDF</h4><div class="muted">MCP·Ego4D·약국 운영 자동화 (8쪽)</div></a>
-   </div>
+   <div id="homeFileList" style="margin-bottom:14px"></div>
 
    <div class="section-title">캠퍼스타운 허브 입점 기업</div>
    <div id="companyList" style="margin-bottom:14px"></div>
@@ -795,6 +821,7 @@ function bindHome(){
   const hnx=$("homeNext");if(hnx)hnx.onclick=()=>{stopPlay();state.deckIdx=(state.deckIdx+1)%SLIDES.length;renderStage("home");};
   const htd=$("homeToDeck");if(htd)htd.onclick=()=>switchTab("deck");
   renderJobs();
+  renderFiles("homeFileList");
   renderCompanies();
   renderRecords();
 }
@@ -865,6 +892,105 @@ function startMeeting(){
 }
 
 // ==================== PREP (attendees + uploads) ====================
+
+// ==================== 자료 저장소 (Supabase Storage · 무료 1GB) ====================
+const BUCKET="documents";
+function canUpload(){ return state.user.role==="operator"||state.user.role==="host"; }
+
+async function listFiles(){
+  if(!sb) return null;
+  try{
+    const {data,error}=await sb.storage.from(BUCKET).list("",{limit:100,sortBy:{column:"created_at",order:"desc"}});
+    if(error) throw error;
+    return (data||[]).filter(f=>f.name && f.name!==".emptyFolderPlaceholder");
+  }catch(e){ console.warn("자료 목록 실패:",e.message); return null; }
+}
+async function uploadFiles(files){
+  const st=$("upStatus");
+  if(!sb){ if(st)st.textContent="클라우드에 연결되지 않았습니다."; return; }
+  for(const f of files){
+    if(f.size > 50*1024*1024){ if(st)st.textContent=f.name+" — 50MB를 초과합니다."; continue; }
+    if(st)st.textContent=f.name+" 업로드 중…";
+    try{
+      const safe=Date.now()+"_"+f.name.replace(/[^\w.\-가-힣]/g,"_");
+      const {error}=await sb.storage.from(BUCKET).upload(safe,f,{upsert:false});
+      if(error) throw error;
+      if(st)st.textContent=f.name+" 업로드 완료";
+    }catch(e){
+      if(st)st.textContent="업로드 실패: "+e.message;
+      if(/Bucket not found/i.test(e.message)&&st) st.textContent="Supabase Storage에 '"+BUCKET+"' 버킷을 먼저 만들어 주세요.";
+      return;
+    }
+  }
+  renderFiles();
+}
+async function downloadFile(name){
+  if(!sb){ toast("클라우드에 연결되지 않았습니다"); return; }
+  try{
+    const {data,error}=await sb.storage.from(BUCKET).createSignedUrl(name,60,{download:true});
+    if(error) throw error;
+    window.open(data.signedUrl,"_blank");
+  }catch(e){ toast("다운로드 실패: "+e.message); }
+}
+async function viewFile(name){
+  if(!sb){ toast("클라우드에 연결되지 않았습니다"); return; }
+  try{
+    const {data,error}=await sb.storage.from(BUCKET).createSignedUrl(name,3600);
+    if(error) throw error;
+    const url=data.signedUrl, ext=(name.split(".").pop()||"").toLowerCase();
+    if(["ppt","pptx","doc","docx","xls","xlsx"].includes(ext)){
+      window.open("https://docs.google.com/viewer?url="+encodeURIComponent(url),"_blank");
+    } else {
+      window.open(url,"_blank");   // PDF·이미지·텍스트는 브라우저가 바로 열어줌
+    }
+  }catch(e){ toast("열기 실패: "+e.message); }
+}
+async function deleteFile(name){
+  if(!sb||!canUpload()) return;
+  if(!confirm("이 자료를 삭제할까요?")) return;
+  try{
+    const {error}=await sb.storage.from(BUCKET).remove([name]);
+    if(error) throw error;
+    toast("삭제되었습니다"); renderFiles();
+  }catch(e){ toast("삭제 실패: "+e.message); }
+}
+function prettySize(b){ if(!b)return""; if(b<1024)return b+" B"; if(b<1048576)return (b/1024).toFixed(0)+" KB"; return (b/1048576).toFixed(1)+" MB"; }
+function prettyName(n){ return n.replace(/^\d{10,}_/,""); }
+
+async function renderFiles(boxId){
+  const box=$(boxId||"fileList"); if(!box) return;
+  box.innerHTML='<div class="mini">불러오는 중…</div>';
+  const files=await listFiles();
+  if(files===null){
+    box.innerHTML='<div class="mini">자료를 불러오지 못했습니다. Supabase Storage에 <b>'+BUCKET+'</b> 버킷을 만들어 주세요.</div>';
+    return;
+  }
+  if(!files.length){
+    box.innerHTML='<div class="mini">아직 등록된 자료가 없습니다.'+(canUpload()?" 아래에서 업로드하세요.":"")+'</div>';
+    return;
+  }
+  box.innerHTML=files.map(f=>`<div class="filerow">
+    <div class="f-info"><div class="f-name">${esc(prettyName(f.name))}</div><div class="f-meta">${prettySize(f.metadata&&f.metadata.size)}</div></div>
+    <div class="f-acts">
+      <button class="b-ghost" data-view="${esc(f.name)}">바로보기</button>
+      <button class="b-mint" data-dl="${esc(f.name)}">다운로드</button>
+      ${canUpload()?`<button class="b-ghost" data-del="${esc(f.name)}">삭제</button>`:""}
+    </div></div>`).join("");
+  box.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>viewFile(b.dataset.view));
+  box.querySelectorAll("[data-dl]").forEach(b=>b.onclick=()=>downloadFile(b.dataset.dl));
+  box.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteFile(b.dataset.del));
+}
+function bindFiles(){
+  renderFiles();
+  const z=$("upZone"), inp=$("docInput");
+  if(!z||!inp) return;
+  z.onclick=()=>inp.click();
+  inp.onchange=()=>{ if(inp.files.length) uploadFiles([...inp.files]); inp.value=""; };
+  z.ondragover=e=>{e.preventDefault();z.classList.add("drag");};
+  z.ondragleave=()=>z.classList.remove("drag");
+  z.ondrop=e=>{e.preventDefault();z.classList.remove("drag"); if(e.dataTransfer.files.length) uploadFiles([...e.dataTransfer.files]);};
+}
+
 function prepHTML(){
   return `<div class="hero">
    <div class="section-title">Before the meeting</div>
@@ -882,14 +1008,17 @@ function prepHTML(){
    </div>
 
    <div class="glass tile" style="margin-bottom:14px">
-     <h4>회의 자료</h4>
-     <div class="mini" style="margin-bottom:10px">발표·검토 자료입니다. (허브와 같은 폴더에 있으면 바로 열람·다운로드됩니다)</div>
-     <div class="grid g2" style="gap:8px">
-       <a class="glass tile docdl" href="MedIT_금요일미팅_AgeTech_모바일앱_약사참여.pptx" download><h4>금요일 미팅 PPT</h4><div class="muted">플랫폼·앱·약사 참여 사이트·입법 제안</div></a>
-       <a class="glass tile docdl" href="MedIT_고령친화AgeTech_약료플랫폼.pptx" download><h4>고령친화 Age-Tech PPT</h4><div class="muted">6대 축·검증 근거</div></a>
-       <a class="glass tile docdl" href="MedIT_고령친화AgeTech_약료플랫폼_검토자료.docx" download><h4>검토자료 DOCX</h4><div class="muted">1차 출처·근거 위계</div></a>
-       <a class="glass tile docdl" href="MedIT_약국자동화_학술리서치.pdf" download><h4>약국 자동화 PDF</h4><div class="muted">MCP·Ego4D·운영 자동화</div></a>
+     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+       <h4 style="margin:0">회의 자료</h4>
+       <span class="mini">로그인한 참석자만 열람·다운로드</span>
      </div>
+     <div id="fileList" style="margin-top:10px"></div>
+     ${canUpload()?`
+     <div class="upzone" id="upZone" style="margin-top:12px">
+       클릭 또는 드래그하여 자료 업로드<br><span class="mini">논문 PDF · 발표 PPT · 검토자료 DOC (최대 50MB)</span>
+       <input type="file" id="docInput" multiple style="display:none">
+     </div>
+     <div class="mini" id="upStatus" style="margin-top:8px"></div>`:''}
    </div>
 
    <div class="glass tile" style="margin-bottom:14px">
@@ -913,6 +1042,7 @@ function prepHTML(){
   </div>`;
 }
 function bindPrep(){
+  bindFiles();
   renderAtList();renderUpList();
   $("atAdd").onclick=()=>{const n=$("atName").value.trim(),e=$("atEmail").value.trim();
     if(!n&&!e)return;state.attendees.push({name:n||e,email:e});$("atName").value="";$("atEmail").value="";renderAtList();scheduleSave();refreshBadges();};
@@ -1170,6 +1300,96 @@ function jitsiRoom(){
   // 회의 id 기반 고유 룸 이름 (공백·특수문자 제거)
   return "CampusTownHub-"+(m.id||"room").replace(/[^a-zA-Z0-9]/g,"");
 }
+
+// ==================== 프로젝트 (회의에서 나온 것들) ====================
+function statusColor(s){ return {"데모":"st-demo","설계":"st-design","제안":"st-idea","진행":"st-run"}[s]||"st-idea"; }
+
+function projectsHTML(){
+  const canEdit=state.user.role==="operator"||state.user.role==="host";
+  return `<div class="hero">
+   <div class="section-title">Projects · 이 회의에서 나온 것들</div>
+   <h2 style="font-size:23px;color:var(--ink);margin-bottom:4px">프로젝트</h2>
+   <div class="mini" style="margin-bottom:16px">회의를 진행하며 나온 제안과 만들어진 결과물입니다. 새 아이디어가 나오면 여기에 추가하세요.</div>
+   <div id="projGrid"></div>
+   ${canEdit?'<button class="b-deep" id="projAdd" style="margin-top:14px">+ 프로젝트 추가</button>':''}
+  </div>`;
+}
+
+function renderProjects(){
+  const box=$("projGrid"); if(!box) return;
+  const canEdit=state.user.role==="operator"||state.user.role==="host";
+  const ps=state.projects||[];
+  if(!ps.length){ box.innerHTML='<div class="mini">아직 프로젝트가 없습니다.</div>'; return; }
+  box.innerHTML='<div class="pgrid">'+ps.map(p=>`
+    <div class="pcard">
+      <div class="p-top">
+        <div class="p-title">${esc(p.title)}</div>
+        <span class="p-status ${statusColor(p.status)}">${esc(p.status||"제안")}</span>
+      </div>
+      <div class="p-desc">${esc(p.desc||"")}</div>
+      ${(p.tags&&p.tags.length)?`<div class="p-tags">${p.tags.map(t=>`<span>${esc(t)}</span>`).join("")}</div>`:""}
+      <div class="p-acts">
+        ${p.url?`<button class="b-mint" data-open="${p.id}">열어보기</button>`
+               :`<span class="mini" style="align-self:center">아직 만들어지지 않았습니다</span>`}
+        ${canEdit?`<button class="b-ghost" data-edit="${p.id}">수정</button>`:""}
+        ${canEdit?`<button class="b-ghost" data-rm="${p.id}">삭제</button>`:""}
+      </div>
+    </div>`).join("")+'</div><div id="projView"></div>';
+
+  box.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openProject(b.dataset.open));
+  box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>editProject(b.dataset.edit));
+  box.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>removeProject(b.dataset.rm));
+}
+
+function openProject(id){
+  const p=(state.projects||[]).find(x=>x.id===id); if(!p||!p.url) return;
+  const v=$("projView"); if(!v) return;
+  v.innerHTML=`<div class="glass tile" style="margin-top:14px;padding:0;overflow:hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
+      <b>${esc(p.title)}</b>
+      <div style="display:flex;gap:7px">
+        <button class="b-ghost" id="pvNew">새 탭에서 열기</button>
+        <button class="b-ghost" id="pvClose">닫기</button>
+      </div>
+    </div>
+    <iframe src="${esc(p.url)}" style="width:100%;height:640px;border:0;display:block"></iframe>
+  </div>`;
+  $("pvClose").onclick=()=>{v.innerHTML="";};
+  $("pvNew").onclick=()=>window.open(p.url,"_blank");
+  v.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+function editProject(id){
+  const p=(state.projects||[]).find(x=>x.id===id); if(!p) return;
+  const title=prompt("제목",p.title); if(title===null) return;
+  const desc=prompt("설명",p.desc||""); if(desc===null) return;
+  const status=prompt("상태 (제안 / 설계 / 데모 / 진행)",p.status||"제안"); if(status===null) return;
+  const url=prompt("HTML 파일명 또는 주소 (없으면 비워두세요)\n예: MediNote_app.html",p.url||"");
+  if(url===null) return;
+  Object.assign(p,{title:title.trim(),desc:desc.trim(),status:status.trim(),url:url.trim()});
+  scheduleSave(); renderProjects(); toast("수정되었습니다");
+}
+function removeProject(id){
+  const p=(state.projects||[]).find(x=>x.id===id); if(!p) return;
+  if(!confirm("'"+p.title+"' 프로젝트를 삭제할까요?")) return;
+  state.projects=state.projects.filter(x=>x.id!==id);
+  scheduleSave(); renderProjects(); toast("삭제되었습니다");
+}
+function addProject(){
+  const title=prompt("프로젝트 제목 (예: 약국 재고 관리)"); if(!title) return;
+  const desc=prompt("한 줄 설명","")||"";
+  const status=prompt("상태 (제안 / 설계 / 데모 / 진행)","제안")||"제안";
+  const url=prompt("HTML 파일명 또는 주소 (없으면 비워두세요)\n예: MediNote_app.html","")||"";
+  state.projects=state.projects||[];
+  state.projects.push({id:"p_"+Date.now(),title:title.trim(),desc:desc.trim(),status:status.trim(),
+    url:url.trim(),meeting:state.currentMeetingId,tags:[]});
+  scheduleSave(); renderProjects(); toast("프로젝트가 추가되었습니다");
+}
+function bindProjects(){
+  renderProjects();
+  const a=$("projAdd"); if(a) a.onclick=addProject;
+}
+
 function videoHTML(){
   const m=currentMeeting()||{};
   const room=jitsiRoom();
