@@ -1,0 +1,2003 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>캠퍼스타운 허브 · CampusTown Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>
+.tabsep{align-self:center;font-size:11px;font-weight:800;color:var(--soft);letter-spacing:1px;
+  padding:0 4px 0 10px;border-left:1px solid var(--line);margin-left:4px;white-space:nowrap;opacity:.75;}
+.gate{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(1000px 500px at 80% -10%,rgba(18,189,176,.20),transparent 60%),
+    radial-gradient(800px 450px at -10% 110%,rgba(14,124,116,.16),transparent 55%),var(--ink);}
+.gate-inner{width:min(560px,92vw);background:rgba(255,255,255,.06);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:34px 30px;box-shadow:0 20px 60px rgba(0,0,0,.4);}
+.gate-brand{display:flex;align-items:center;gap:13px;margin-bottom:22px;}
+.gate-title{font-size:22px;font-weight:800;color:#fff;}.gate-title b{color:var(--mint2);}
+.gate-sub{font-size:13px;color:#8FD9D2;margin-top:2px;}
+.gate-search{display:flex;gap:8px;}
+.gate-search input{flex:1;font-family:inherit;font-size:15px;padding:13px 15px;border-radius:12px;
+  border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.9);outline:none;}
+.gate-result{margin-top:16px;}
+.gate-hint{margin-top:18px;font-size:12px;color:#8FD9D2;line-height:1.6;text-align:center;}
+.gate-card{background:rgba(255,255,255,.95);border-radius:14px;padding:16px 18px;margin-bottom:10px;}
+.gate-card h4{font-size:16px;color:var(--ink);margin-bottom:4px;}
+.gate-card .m{font-size:12.5px;color:var(--soft);margin-bottom:12px;}
+.gate-name{display:flex;gap:8px;}
+.gate-name input{flex:1;font-family:inherit;font-size:14px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);outline:none;}
+.gate-err{font-size:12.5px;color:#e03131;margin-top:8px;}
+.gate-ok{font-size:12.5px;color:var(--deep);margin-top:8px;}
+.auth-tabs{display:flex;gap:0;margin-bottom:18px;background:rgba(255,255,255,.08);border-radius:13px;padding:4px;}
+.at{flex:1;font-family:inherit;font-size:14px;font-weight:700;padding:10px 0;border-radius:10px;
+  border:none;background:transparent;color:#b8e6e1;cursor:pointer;transition:all .18s ease;}
+.at.on{background:#fff;color:var(--deep);box-shadow:0 2px 8px rgba(0,0,0,.14);}
+.auth-in{width:100%;font-family:inherit;font-size:15px;padding:14px 16px;margin-bottom:11px;border-radius:13px;
+  border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.95);outline:none;box-sizing:border-box;transition:border .15s ease;}
+.auth-in:focus{border-color:var(--mint);box-shadow:0 0 0 3px rgba(18,189,176,.18);}
+.auth-btn{width:100%;margin-top:6px;padding:15px;font-size:15.5px;font-weight:800;border-radius:13px;letter-spacing:-0.01em;
+  background:linear-gradient(135deg,#12BDB0,#0E7C74);box-shadow:0 8px 22px rgba(18,189,176,.38);}
+.auth-btn:hover{transform:translateY(-1px);box-shadow:0 12px 28px rgba(18,189,176,.46);}
+.auth-msg{margin-top:10px;font-size:13px;min-height:16px;}
+.auth-hint{margin-top:12px;font-size:11.5px;color:#8FD9D2;line-height:1.55;}
+.auth-roles{display:flex;flex-direction:column;gap:7px;margin:4px 0 12px;}
+.rolepick{display:flex;align-items:center;gap:8px;font-size:14px;color:#eafffb;cursor:pointer;}
+.social-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+.social{font-family:inherit;font-size:13.5px;font-weight:700;padding:11px;border-radius:11px;border:none;cursor:pointer;color:#fff;transition:transform .12s ease;}
+.social:hover{transform:translateY(-1px);}
+.social.gmail{background:#EA4335;}
+.social.naver{background:#03C75A;}
+.social.kakao{background:#FEE500;color:#3A1D1D;}
+.social.apple{background:#111;}
+.social-or{text-align:center;font-size:12px;color:#8FD9D2;margin:2px 0 12px;}
+.auth-roles-top{margin:0 0 14px;}
+.social-list{display:flex;flex-direction:column;gap:9px;}
+.social2{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;
+  font-family:inherit;font-size:14px;font-weight:700;padding:12px;border-radius:12px;border:none;cursor:pointer;
+  transition:transform .12s ease,box-shadow .12s ease;}
+.social2:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.18);}
+.social2 svg{flex:0 0 auto;}
+.s-google{background:#fff;color:#3c4043;border:1px solid #dadce0;}
+.s-naver{background:#03C75A;color:#fff;}
+.s-kakao{background:#FEE500;color:#3A1D1D;}
+.s-apple{background:#111;color:#fff;}
+.s-email{background:var(--mint);color:#fff;}
+.email-form{margin-top:12px;}
+.today-sum{font-size:14px;color:var(--soft);line-height:1.6;}
+.today-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px;}
+.today-tags span{font-size:11.5px;font-weight:700;color:var(--deep);background:var(--mist);padding:4px 11px;border-radius:20px;}
+.ocard{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin-bottom:11px;}
+.oc-top b{font-size:15.5px;color:var(--ink);}
+.oc-body{font-size:13px;color:var(--soft);line-height:1.65;margin-top:9px;background:var(--mist);border-radius:11px;padding:12px 14px;max-height:180px;overflow-y:auto;}
+.oc-actions{display:flex;gap:8px;margin-top:11px;}
+.backup-row{display:flex;gap:7px;margin-top:12px;}
+.backup-row button{flex:1;font-size:12.5px;padding:9px;}
+.backup-hint{font-size:11.5px;color:#8FD9D2;margin-top:9px;line-height:1.5;text-align:center;}
+.invite-notice{font-size:12.5px;color:#cfeeeb;background:rgba(255,255,255,.08);border-radius:11px;padding:11px 13px;margin-bottom:14px;line-height:1.55;}
+.privacy-note{font-size:12px;color:var(--deep);background:var(--mist);border-radius:9px;padding:9px 12px;margin-bottom:10px;line-height:1.5;}
+.purge-badge{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--deep);padding:3px 9px;border-radius:20px;margin-left:6px;}
+.ml-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;color:#eafffb;font-size:14px;}
+.ml-search{display:flex;gap:7px;margin-bottom:14px;}
+.ml-search .auth-in{flex:1;}
+.ml-search .b-ghost,.ml-search .b-mint{white-space:nowrap;padding:0 14px;}
+.ml-list{display:flex;flex-direction:column;gap:10px;max-height:44vh;overflow-y:auto;}
+.mcard2{background:rgba(255,255,255,.96);border-radius:16px;padding:15px 17px;}
+.mc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.mc-top h4{font-size:16px;color:var(--ink);margin:0;line-height:1.3;}
+.mc-badge{flex:0 0 auto;font-size:10.5px;font-weight:700;color:#fff;background:var(--deep);padding:3px 9px;border-radius:20px;}
+.mc-meta{font-size:12.5px;color:var(--soft);margin-top:5px;}
+.mc-enter{margin-top:11px;width:100%;padding:10px;}
+.home-slide{border-radius:14px;overflow:hidden;min-height:230px;display:flex;position:relative;margin-bottom:10px;}
+.home-slide .pad{padding:22px 24px;width:100%;}
+.home-slide h1{font-size:22px;line-height:1.25;}.home-slide h2{font-size:19px;}
+.home-slide .kick{font-size:11px;letter-spacing:2px;font-weight:800;opacity:.8;}
+.home-slide .sub{font-size:13px;margin-top:8px;line-height:1.5;}
+.home-cap{background:var(--ink);color:#fff;border-radius:10px;padding:10px 14px;font-size:14px;font-weight:600;line-height:1.5;}
+.home-terms{font-size:12px;color:var(--mint2);font-weight:400;margin-top:5px;}
+.home-nav{display:flex;align-items:center;gap:9px;margin-top:10px;}
+.home-num{font-size:13px;font-weight:700;color:var(--deep);}
+.vrow{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
+.vframe-empty{min-height:300px;display:flex;align-items:center;justify-content:center;text-align:center;
+  background:linear-gradient(135deg,var(--mist),#eafaf8);border-radius:16px;padding:30px;}
+.jobcard{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:9px;}
+.job-top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.job-top b{font-size:15px;color:var(--ink);}
+.job-status{flex:0 0 auto;font-size:11px;font-weight:700;color:#fff;background:var(--mint);padding:3px 10px;border-radius:20px;}
+.job-desc{font-size:13px;color:var(--soft);margin-top:5px;line-height:1.45;}
+.job-meta{font-size:12px;color:var(--deep);margin-top:6px;font-weight:600;}
+.job-actions{margin-top:9px;}
+.cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;}
+.ccard{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;}
+.c-name{font-size:16px;font-weight:800;color:var(--deep);}
+.c-role{font-size:11px;font-weight:700;color:#fff;background:var(--mint);display:inline-block;padding:2px 9px;border-radius:20px;margin-top:5px;}
+.c-desc{font-size:12.5px;color:var(--soft);margin-top:7px;line-height:1.45;}
+.docdl{display:block;text-decoration:none;transition:.15s;cursor:pointer;}
+.docdl:hover{transform:translateY(-2px);box-shadow:0 12px 34px rgba(12,38,34,.16);}
+.docdl h4{color:var(--deep);}
+.docdl::after{content:"다운로드";font-size:11px;color:var(--mint);font-weight:700;display:block;margin-top:8px;}
+.slide-illo{position:absolute;top:5%;right:6%;width:88px;height:88px;opacity:.9;}
+.slide-illo svg{width:100%;height:100%;}
+.s-ink .slide-illo,.s-deep .slide-illo{opacity:.95;}
+.caption-box{max-width:960px;margin:0 auto;width:100%;background:var(--ink);border-radius:12px;padding:12px 18px;}
+.caption-box .cap-line{font-size:16px;font-weight:700;color:#fff;line-height:1.5;}
+.caption-box .cap-terms{font-size:12.5px;color:var(--mint2);margin-top:6px;}
+:root{
+  --mint:#12BDB0;--mint2:#0FD6C6;--deep:#0E7C74;--ink:#0C2622;--ink2:#123430;
+  --gray:#41504D;--soft:#6B7C79;--light:#E7F7F5;--mist:#F4FBFA;--gold:#0B5F59;
+  --line:#DCEEEB;--glass:rgba(255,255,255,.72);--shadow:0 8px 30px rgba(12,38,34,.10);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Pretendard','IBM Plex Sans KR','Noto Sans KR',-apple-system,sans-serif;
+  font-size:17px;letter-spacing:-0.01em;color:var(--gray);height:100vh;overflow:hidden;
+  background:
+    radial-gradient(1200px 600px at 85% -10%,rgba(18,189,176,.18),transparent 60%),
+    radial-gradient(900px 500px at -10% 110%,rgba(14,124,116,.14),transparent 55%),
+    var(--mist);}
+.app{display:flex;flex-direction:column;height:100vh;}
+
+/* ===== top bar ===== */
+header{backdrop-filter:blur(14px);background:rgba(12,38,34,.86);color:#fff;
+  padding:14px 22px;display:flex;align-items:center;gap:14px;flex-shrink:0;
+  border-bottom:1px solid rgba(255,255,255,.06);}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand svg{width:30px;height:30px;filter:drop-shadow(0 2px 6px rgba(18,189,176,.5));}
+.brand .name{font-size:24px;font-weight:800;letter-spacing:.2px;}
+.brand .name b{color:var(--mint2);}
+.brand .sub{font-size:13px;color:#8FD9D2;margin-top:2px;}
+.hspace{flex:1;}
+.pill{display:flex;align-items:center;gap:7px;font-size:12px;padding:5px 12px;
+  border-radius:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);}
+.pill .led{width:8px;height:8px;border-radius:50%;background:#7d8;transition:.3s;}
+.pill.idle .led{background:#F5B301;}
+.pill.live .led{background:#ff5b5b;animation:pulse 1.2s infinite;box-shadow:0 0 0 0 rgba(255,91,91,.6);}
+.pill.wait .led{background:var(--mint2);animation:spin 1s linear infinite;border-radius:2px;}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,91,91,.6);}70%{box-shadow:0 0 0 7px rgba(255,91,91,0);}100%{box-shadow:0 0 0 0 rgba(255,91,91,0);}}
+@keyframes spin{to{transform:rotate(360deg);}}
+.clock{font-size:12px;color:#9FD9D3;font-variant-numeric:tabular-nums;}
+
+/* ===== tab bar ===== */
+.tabs{display:flex;gap:4px;padding:8px 14px;flex-shrink:0;overflow-x:auto;
+  background:var(--glass);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);}
+.tab{padding:11px 18px;font-size:15.5px;font-weight:700;color:var(--soft);cursor:pointer;
+  border-radius:11px;white-space:nowrap;display:flex;align-items:center;gap:7px;transition:.15s;}
+.tab:hover{background:#fff;color:var(--deep);}
+.tab.active{background:linear-gradient(135deg,var(--mint),var(--deep));color:#fff;
+  box-shadow:0 4px 14px rgba(18,189,176,.35);}
+.tab .badge{font-size:10px;background:rgba(255,255,255,.28);color:#fff;border-radius:9px;padding:1px 7px;}
+.tab:not(.active) .badge{background:var(--mint);color:#fff;}
+
+/* ===== body ===== */
+.body{flex:1;display:grid;grid-template-columns:1fr 340px;min-height:0;}
+.body.solo{grid-template-columns:1fr;}
+.stage{overflow-y:auto;min-height:0;padding:22px;}
+.rail{border-left:1px solid var(--line);background:var(--glass);backdrop-filter:blur(10px);
+  display:flex;flex-direction:column;min-height:0;}
+.rail h3{font-size:12px;font-weight:800;color:var(--deep);padding:12px 15px;
+  border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;}
+.rail h3 .tag{margin-left:auto;font-size:10px;color:#fff;background:var(--mint);padding:2px 8px;border-radius:9px;}
+.notelist{flex:1;overflow-y:auto;padding:11px 13px;}
+.notelist .empty{color:#9fb3b0;font-size:12px;font-style:italic;padding:6px 2px;}
+.note{background:#fff;border-left:3px solid var(--mint);border-radius:9px;padding:9px 11px;
+  margin-bottom:7px;font-size:13.5px;line-height:1.5;box-shadow:0 2px 6px rgba(12,38,34,.05);}
+.note.me{border-left-color:var(--gold);background:#FBF8EF;}
+.note .who{font-size:10px;font-weight:700;color:var(--deep);display:block;margin-bottom:2px;}
+.noteinput{display:flex;gap:6px;padding:10px 13px;border-top:1px solid var(--line);}
+.noteinput input{flex:1;font-family:inherit;font-size:12.5px;padding:9px 11px;
+  border:1px solid var(--line);border-radius:9px;outline:none;background:#fff;}
+.noteinput input:focus{border-color:var(--mint);box-shadow:0 0 0 3px rgba(18,189,176,.12);}
+
+button{font-family:inherit;font-size:14px;font-weight:700;border:none;border-radius:10px;
+  padding:9px 15px;cursor:pointer;transition:.15s;letter-spacing:.2px;}
+.b-mint{background:linear-gradient(135deg,var(--mint),var(--deep));color:#fff;box-shadow:0 4px 14px rgba(18,189,176,.3);}
+.b-mint.on{background:linear-gradient(135deg,#ff6b6b,#e03131);box-shadow:0 4px 14px rgba(224,49,49,.3);}
+.b-ghost{background:#fff;color:var(--deep);border:1px solid var(--line);}
+.b-deep{background:var(--ink2);color:#fff;}
+.b-gold{background:linear-gradient(135deg,#0f8f85,var(--gold));color:#fff;}
+button:hover{filter:brightness(1.05);transform:translateY(-1px);}
+button:active{transform:translateY(0);}
+button:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+
+/* ===== cards / glass ===== */
+.glass{background:var(--glass);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.6);
+  border-radius:18px;box-shadow:var(--shadow);}
+.section-title{font-size:14px;letter-spacing:1.5px;font-weight:800;color:var(--mint);margin-bottom:8px;}
+.hero h2{font-size:27px;}
+.mini{font-size:13.5px;}
+
+/* ===== HERO (home / meeting cover) ===== */
+.hero{max-width:1000px;margin:0 auto;}
+.cover{position:relative;overflow:hidden;border-radius:24px;padding:34px 36px;color:#fff;
+  background:linear-gradient(135deg,var(--ink) 0%,var(--ink2) 55%,var(--deep) 120%);
+  box-shadow:0 18px 50px rgba(12,38,34,.28);margin-bottom:18px;}
+.cover .orb{position:absolute;border-radius:50%;filter:blur(2px);opacity:.5;}
+.cover .orb1{width:220px;height:220px;background:radial-gradient(circle,var(--mint),transparent 65%);top:-70px;right:-40px;}
+.cover .orb2{width:160px;height:160px;background:radial-gradient(circle,var(--deep),transparent 60%);bottom:-60px;right:120px;}
+.cover .status-chip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);padding:5px 12px;border-radius:20px;margin-bottom:14px;}
+.cover .status-chip .d{width:8px;height:8px;border-radius:50%;background:#F5B301;}
+.cover.live .status-chip .d{background:#ff5b5b;animation:pulse 1.2s infinite;}
+.cover h1{font-size:33px;font-weight:800;line-height:1.2;margin-bottom:8px;position:relative;}
+.cover .meta{font-size:14.5px;display:flex;flex-wrap:wrap;gap:18px;margin-top:14px;font-size:13px;color:#CFEDEA;position:relative;}
+.cover .meta b{color:#fff;font-weight:700;}
+.cover .aiedit{position:absolute;top:16px;right:18px;font-size:10.5px;color:#8FD9D2;
+  display:flex;align-items:center;gap:5px;}
+.cover .aiedit .dot{width:6px;height:6px;border-radius:50%;background:var(--mint2);animation:pulse 1.6s infinite;}
+
+.grid{display:grid;gap:14px;}
+.g2{grid-template-columns:1fr 1fr;}.g3{grid-template-columns:repeat(3,1fr);}
+.tile{padding:16px 18px;border-radius:16px;}
+.tile h4{font-size:16.5px;font-weight:800;color:var(--ink);margin-bottom:8px;display:flex;align-items:center;gap:7px;}
+.tile .muted{font-size:14.5px;color:var(--soft);line-height:1.6;}
+.kv{font-size:12.5px;line-height:1.8;}
+.kv b{color:var(--deep);}
+
+.startbtn{width:100%;padding:15px;font-size:15px;border-radius:14px;margin-top:4px;}
+.stepline{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--soft);margin:8px 0;}
+.stepline .num{width:20px;height:20px;border-radius:50%;background:var(--mint);color:#fff;
+  font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+
+/* attendees & uploads */
+.chip{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);
+  border-radius:20px;padding:5px 10px 5px 12px;font-size:12px;margin:3px;box-shadow:0 1px 4px rgba(0,0,0,.04);}
+.chip .x{cursor:pointer;color:#b9c;font-weight:700;}
+.chip .av{width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--mint),var(--deep));
+  color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+.uprow{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);
+  border-radius:11px;padding:9px 12px;margin-bottom:7px;font-size:12.5px;}
+.uprow .ic{font-size:18px;}
+.uprow .nm{font-weight:700;color:var(--ink);}
+.uprow .mt{font-size:11px;color:var(--soft);}
+.uprow .x{margin-left:auto;cursor:pointer;color:#c9a;font-weight:700;}
+.dropzone{border:2px dashed var(--line);border-radius:14px;padding:20px;text-align:center;
+  color:var(--soft);font-size:12.5px;background:rgba(255,255,255,.5);cursor:pointer;transition:.15s;}
+.dropzone:hover,.dropzone.over{border-color:var(--mint);background:var(--light);color:var(--deep);}
+
+/* slides */
+.slidewrap{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}
+.slide{width:100%;aspect-ratio:16/9;border-radius:18px;overflow:hidden;position:relative;color:#fff;
+  box-shadow:0 12px 40px rgba(12,38,34,.18);}
+.s-ink{background:linear-gradient(135deg,var(--ink),var(--ink2));}
+.s-mist{background:linear-gradient(135deg,#fff,var(--mist));color:var(--gray);}
+.s-deep{background:linear-gradient(135deg,var(--deep),#0a5f58);}
+.slide .pad{position:absolute;inset:0;padding:5.5% 6.5%;}
+.slide h1{font-size:30px;font-weight:800;line-height:1.16;}
+.slide h2{font-size:23px;font-weight:800;color:var(--ink);}
+.s-ink h2,.s-deep h2{color:#fff;}
+.slide .kick{font-size:11px;letter-spacing:2px;font-weight:800;color:var(--mint2);text-transform:uppercase;}
+.s-mist .kick{color:var(--mint);}
+.slide .sub{font-size:13px;opacity:.92;margin-top:8px;line-height:1.5;}
+.mint{color:var(--mint2);}.s-mist .mint{color:var(--mint);}
+.sgrid3{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:13px;}
+.sgrid2{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:13px;}
+.sc{background:#fff;border-radius:10px;padding:9px 11px;box-shadow:0 2px 8px rgba(0,0,0,.09);}
+.s-ink .sc,.s-deep .sc{background:rgba(255,255,255,.09);}
+.sc .n{font-size:19px;font-weight:800;color:var(--mint);}.s-ink .sc .n,.s-deep .sc .n{color:var(--mint2);}
+.sc .t{font-size:12.5px;font-weight:700;color:var(--ink);margin-top:2px;}
+.s-ink .sc .t,.s-deep .sc .t{color:#fff;}
+.sc .d{font-size:10.5px;color:#678;margin-top:3px;line-height:1.35;}
+.s-ink .sc .d,.s-deep .sc .d{color:#cfe;}
+.lrow{display:flex;align-items:center;gap:10px;background:#fff;border-radius:9px;padding:8px 11px;
+  margin-top:7px;box-shadow:0 1px 5px rgba(0,0,0,.06);}
+.lrow .ln{background:var(--mint);color:#fff;font-weight:800;border-radius:6px;padding:5px 10px;font-size:13px;flex-shrink:0;}
+.lrow .lt{font-size:12.5px;font-weight:700;color:var(--ink);}
+.lrow .ld{font-size:10.5px;color:#678;margin-left:auto;text-align:right;max-width:46%;}
+.slide-nav{display:flex;gap:10px;align-items:center;justify-content:center;}
+.slide-nav span{font-size:13px;color:var(--deep);font-weight:700;font-variant-numeric:tabular-nums;}
+.autobtn{font-size:12px;padding:7px 12px;}
+.progress{height:4px;background:var(--line);border-radius:3px;overflow:hidden;max-width:960px;margin:0 auto;width:100%;}
+.progress .bar{height:100%;background:linear-gradient(90deg,var(--mint),var(--deep));width:0;transition:width .4s;}
+
+/* med app */
+.appwrap{max-width:900px;margin:0 auto;display:flex;gap:26px;flex-wrap:wrap;justify-content:center;}
+.phone{width:264px;height:528px;background:var(--ink);border-radius:30px;padding:13px;
+  box-shadow:0 16px 44px rgba(12,38,34,.28);flex-shrink:0;}
+.phone .screen{background:#fff;border-radius:20px;height:100%;overflow:hidden;display:flex;flex-direction:column;}
+.phone .top{background:linear-gradient(135deg,var(--mint),var(--deep));color:#fff;padding:15px;font-weight:800;font-size:16px;}
+.phone .top small{display:block;font-weight:400;font-size:11px;opacity:.9;margin-top:2px;}
+.phone .content{flex:1;padding:12px;overflow-y:auto;}
+.mcard{background:var(--mist);border-radius:11px;padding:10px;margin-bottom:8px;}
+.mcard .h{font-weight:700;font-size:13px;color:var(--deep);}
+.mcard .b{font-size:11px;color:#567;margin-top:3px;line-height:1.4;}
+.tabbar{display:flex;border-top:1px solid var(--line);}
+.tabbar .tb{flex:1;text-align:center;padding:8px 2px;font-size:9px;color:#789;}
+.tabbar .tb.on{color:var(--mint);font-weight:700;}
+.tabbar .tb .ic{font-size:16px;display:block;}
+.appinfo{flex:1;min-width:300px;max-width:440px;}
+.appinfo h2{font-size:20px;color:var(--ink);margin-bottom:12px;}
+.feat{border-radius:12px;padding:12px 14px;margin-bottom:9px;}
+.feat .ft{font-size:14px;font-weight:800;color:var(--deep);}
+.feat .fd{font-size:12px;color:#567;margin-top:3px;line-height:1.42;}
+
+/* console */
+.console{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:1100px;margin:0 auto;height:100%;}
+.cpanel{border-radius:16px;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+.cpanel h3{font-size:12px;font-weight:800;color:var(--deep);padding:11px 14px;
+  border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;}
+.cpanel h3 .tag{margin-left:auto;font-size:10px;color:#fff;background:var(--mint);padding:2px 8px;border-radius:9px;}
+.cscroll{flex:1;overflow-y:auto;padding:12px 14px;min-height:80px;}
+.crow{padding:10px 14px;border-top:1px solid var(--line);display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
+.crow input{flex:1;font-family:inherit;font-size:12.5px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;outline:none;}
+.crow input:focus{border-color:var(--mint);box-shadow:0 0 0 3px rgba(18,189,176,.12);}
+.rcard{background:var(--light);border-radius:9px;padding:9px 11px;margin-bottom:7px;font-size:12px;line-height:1.5;}
+.rcard .q{font-weight:700;color:var(--deep);}
+.nsec{margin-bottom:12px;}
+.nsec h4{font-size:12px;font-weight:800;color:var(--ink);margin-bottom:5px;}
+.nsec ul{list-style:none;}
+.nsec li{font-size:12.5px;line-height:1.5;padding:4px 0 4px 15px;position:relative;border-bottom:1px dashed #eaf2f0;}
+.nsec li::before{content:'▸';color:var(--mint);position:absolute;left:0;}
+
+/* email tab */
+.email{max-width:820px;margin:0 auto;}
+.email .field{margin-bottom:12px;}
+.email label{font-size:11px;font-weight:800;color:var(--soft);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px;}
+.email input,.email textarea{width:100%;font-family:inherit;font-size:13px;padding:11px 13px;
+  border:1px solid var(--line);border-radius:11px;outline:none;background:#fff;}
+.email textarea{min-height:260px;line-height:1.6;resize:vertical;}
+.email input:focus,.email textarea:focus{border-color:var(--mint);box-shadow:0 0 0 3px rgba(18,189,176,.12);}
+
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+  background:var(--ink);color:#fff;padding:11px 20px;border-radius:11px;font-size:13px;
+  opacity:0;transition:.3s;pointer-events:none;z-index:99;box-shadow:0 8px 24px rgba(0,0,0,.25);}
+.toast.show{opacity:1;}
+.mini{font-size:11px;color:var(--soft);}
+.aibadge{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:var(--deep);
+  background:var(--light);border-radius:9px;padding:2px 8px;}
+.aibadge .dot{width:6px;height:6px;border-radius:50%;background:var(--mint);animation:pulse 1.6s infinite;}
+@media(max-width:860px){.body{grid-template-columns:1fr;}.rail{display:none;}
+  .console{grid-template-columns:1fr;}.g2,.g3{grid-template-columns:1fr;}.appwrap{flex-direction:column;align-items:center;}}
+
+:root{--r-lg:22px;--r-xl:26px;}
+.glass{border-radius:var(--r-lg);}
+.cover{border-radius:28px;box-shadow:0 22px 60px rgba(12,38,34,.32),inset 0 1px 0 rgba(255,255,255,.06);}
+.tile{border-radius:var(--r-lg);}
+.b-mint{box-shadow:0 6px 20px rgba(18,189,176,.34);}
+.tab.active{box-shadow:0 6px 18px rgba(18,189,176,.4);}
+header{box-shadow:0 2px 20px rgba(0,0,0,.25);}
+.slide{box-shadow:0 16px 46px rgba(12,38,34,.22);}
+
+.ct-logo{display:flex;align-items:center;gap:12px;}
+.ct-mark{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;
+  font-weight:900;font-size:18px;color:#fff;letter-spacing:.5px;
+  background:linear-gradient(135deg,#12BDB0,#0E7C74);box-shadow:0 6px 18px rgba(18,189,176,.4);}
+
+/* ===== Startup style layer (Stage 7) ===== */
+body{letter-spacing:-0.015em;}
+.name,.gate-title,.hero h2,.cover h1,.mc-top h4,.c-name{font-weight:800;letter-spacing:-0.03em;}
+.section-title{font-family:'Space Grotesk','Pretendard',sans-serif;text-transform:uppercase;letter-spacing:2px;font-size:12px;font-weight:700;}
+.kick{font-family:'Space Grotesk','Pretendard',sans-serif;}
+.home-num,.job-status,.c-role,.mc-badge,.badge{font-family:'Space Grotesk','Pretendard',sans-serif;font-feature-settings:'tnum';}
+.ct-mark{font-family:'Space Grotesk',sans-serif;}
+/* buttons: crisp startup feel */
+.b-mint,.b-deep,.b-gold,.b-ghost{border-radius:12px;font-weight:700;letter-spacing:-0.01em;transition:transform .12s ease,box-shadow .12s ease;}
+.b-mint:hover,.b-deep:hover,.b-gold:hover{transform:translateY(-1px);}
+.b-mint:active,.b-deep:active,.b-gold:active{transform:translateY(0);}
+/* tiles: softer, larger radius, subtle lift */
+.tile,.glass{border-radius:20px;}
+.tile:hover{box-shadow:0 10px 30px rgba(12,38,34,.10);}
+/* tabs: pill startup style */
+.tab{border-radius:11px;font-weight:600;}
+.tab.active{font-weight:700;}
+/* headings scale up a touch */
+.hero h2{font-size:24px;}
+.gate-title{font-size:23px;letter-spacing:-0.03em;}
+</style>
+</head>
+<body>
+<div class="gate" id="gate">
+  <div class="gate-inner">
+    <div class="gate-brand">
+      <div><div class="gate-title">캠퍼스타운 허브</div><div class="gate-sub">CampusTown Hub · 회의 협업 플랫폼</div></div>
+    </div>
+    <div id="authArea"></div>
+    <div class="gate-hint">숙명 스타트업 캠퍼스 입점기업·거래처·기관·교수·학생을 위해 작성된 회의 운영 사이트입니다.<br><span style="opacity:.7">© 2026 MedIT. All rights reserved.</span></div>
+  </div>
+</div>
+<div class="app" id="appMain" style="display:none;">
+<header>
+  <div class="brand">
+    <div class="ct-logo"><span class="ct-mark">CT</span><div><div class="name">캠퍼스타운 허브</div><div class="sub">CampusTown Hub · 회의 협업 플랫폼</div></div></div>
+  </div>
+  <div class="hspace"></div>
+  <div class="pill idle" id="pill"><span class="led"></span><span id="pillText">회의 대기</span></div>
+  <span class="clock" id="clock"></span>
+</header>
+
+<div class="tabs" id="tabs">
+  <div class="tab active" data-tab="home">회의 홈</div>
+  <div class="tab" data-tab="today">금일 회의</div>
+  <div class="tabsep">이번 회의</div>
+  <div class="tab" data-tab="prep">사전 준비 <span class="badge" id="prepBadge">0</span></div>
+  <div class="tab" data-tab="deck">슬라이드</div>
+  <div class="tab" data-tab="video">화상회의</div>
+  <div class="tab" data-tab="app">복약·접종 앱</div>
+  <div class="tab" data-tab="registry">약사 참여 사이트</div>
+  <div class="tab" data-tab="console">진행 콘솔 <span class="badge" id="segBadge">0</span></div>
+  <div class="tab" data-tab="email">회의록·이메일</div>
+</div>
+
+<div class="body solo" id="bodyEl">
+  <div class="stage" id="stage"></div>
+  <div class="rail" id="rail">
+    <h3>이 페이지 메모 <span class="tag" id="railTag">홈</span></h3>
+    <div class="notelist" id="railNotes"></div>
+    <div style="padding:8px 13px 0"><button class="b-mint" id="railAI" style="width:100%">AI 자동 작성 (녹취 요약)</button></div>
+    <div class="noteinput"><input id="railInput" placeholder="메모 · Enter"><button class="b-deep" id="railAdd">추가</button></div>
+  </div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ==================== STATE ====================
+const state={
+  activeTab:"home",
+  // 계정 (간이 회원). 실제 서버 인증은 추후 연결.
+  accounts:[],           // {id,name,email,role,pw}  role: operator|host|guest
+  // 현재 로그인한 사용자
+  user:{ role:null, name:"", email:"", id:null },
+  // 여러 회의 목록. 각 회의는 초대자(참석자)만 열람 가능.
+  meetings:[],           // {id,title,purpose,place,date,time,host,company,attendees:[],jobs:[],zoom:"",started,ended}
+  currentMeetingId:null,
+  // 캠퍼스타운 허브에 등록된 기업 (MedIT 등)
+  companies:[],          // {id,name,role,desc}
+  // 잡(Job): 회의에서 이어지는 제안·과업. 다음 회의로 연결 가능.
+  jobs:[],               // {id,title,desc,fromMeetingId,linkedMeetingIds:[],status}
+  meeting:null,          // = 현재 회의 (currentMeetingId로 참조, 하위호환)
+  attendees:[],          // 현재 회의 참석자 (meeting.attendees 미러)
+  uploads:[],
+  tabNotes:{deck:[],app:[],registry:[],console:[]},
+  segments:[], notes:null, research:[], nextActions:[], topicTags:[],
+  deckIdx:0, records:[], meetingStart:null,
+};
+// 기본 데이터 시드 (최초 1회)
+function seedData(){
+  if(!state.accounts.length){
+    state.accounts=[
+      {id:"u_op",  name:"운영자",       email:"operator@campustown.hub", role:"operator", pw:"1234"},
+      {id:"u_host",name:"신현정",       email:"twinky0509@gmail.com",     role:"host",     pw:"1234"},
+      {id:"u_bang",name:"방준석 교수님", email:"jsbang@sookmyung.ac.kr",   role:"guest",    pw:"1234"},
+      {id:"u_jin", name:"진인혜",        email:"jih4154@sookmyung.ac.kr",   role:"guest",    pw:"1234"},
+      {id:"u_hj",  name:"신현정",        email:"hyunjeong.shin@sookmyung.ac.kr", role:"guest", pw:"1234"},
+    ];
+  }
+  if(!state.companies.length){
+    state.companies=[{id:"c_medit",name:"MedIT",role:"입점 기업",desc:"고령친화 Age-Tech 약료·복약·예방접종"}];
+  }
+  if(!state.jobs.length){
+    state.jobs=[
+      {id:"job_app",title:"복약·접종 앱",desc:"MediNote — 5탭 복약·예방접종 관리 앱",fromMeetingId:"m_0710",linkedMeetingIds:["m_0710"],status:"제안"},
+      {id:"job_site",title:"약사 참여 연구 사이트",desc:"지역사회·전국 약사·제약사·의사 등록 → 약 디자인",fromMeetingId:"m_0710",linkedMeetingIds:["m_0710"],status:"제안"},
+    ];
+  }
+  if(!state.meetings.length){
+    state.meetings=[{
+      id:"m_0710",
+      title:"MedIT × 약학대학 (2026.07.10) — 고령화 Age-Tech",
+      purpose:"고령화 Age-Tech 약료·복약관리·예방접종 방향 논의",
+      place:"숙명캠퍼스타운 209호 미팅룸 1호",
+      date:"2026-07-10", time:"10:00", host:"신현정", company:"MedIT",
+      zoom:"",
+      attendees:[{name:"방준석 교수님",email:"jsbang@sookmyung.ac.kr"},{name:"진인혜",email:"jih4154@sookmyung.ac.kr"},{name:"신현정",email:""}],
+      jobs:["job_app","job_site"],
+      started:null, ended:null,
+    }];
+  }
+  state.currentMeetingId=state.currentMeetingId||"m_0710";
+  syncCurrentMeeting();
+}
+function currentMeeting(){ return state.meetings.find(m=>m.id===state.currentMeetingId)||state.meetings[0]||null; }
+function syncCurrentMeeting(){
+  const m=currentMeeting(); if(!m)return;
+  state.meeting=m; state.attendees=m.attendees||[];
+}
+// 현재 사용자가 이 회의를 볼 수 있는가 (운영자=전체, 개최자=자기 회의, 초대자=초대된 회의)
+function canView(m){
+  const u=state.user;
+  if(!u||!u.role)return false;
+  if(u.role==="operator")return true;                 // 운영자: 전체
+  if(u.role==="host"){                                 // 개최자: 자신이 만든 회의 + 초대된 회의
+    if(m.host && u.name && m.host===u.name)return true;
+  }
+  const email=(u.email||"").trim().toLowerCase();
+  const name=(u.name||"").replace(/\s|교수님|님/g,"");
+  return (m.attendees||[]).some(a=>{
+    // 1순위: 이메일 일치 (가장 정확 — 신규 가입자도 매칭됨)
+    const ae=(a.email||"").trim().toLowerCase();
+    if(email && ae && ae===email)return true;
+    // 2순위: 이름 일치 (이메일이 등록 안 된 참석자용)
+    const an=(a.name||"").replace(/\s|교수님|님/g,"");
+    return an && name && (an===name || an.includes(name) || name.includes(an));
+  });
+}
+const $=id=>document.getElementById(id);
+const esc=s=>(s||"").replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2400);}
+setInterval(()=>{$("clock").textContent=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});},1000);
+function initials(s){s=(s||"").trim();return s?s.slice(0,2):"?";}
+
+// pill status: idle / live / wait
+function setPill(mode,txt){const p=$("pill");p.className="pill "+mode;$("pillText").textContent=txt;}
+
+// ==================== PERSISTENCE ====================
+// ==================== 저장소 (Supabase 연동 · 무료) ====================
+// [설정] Supabase 무료 계정에서 복사한 값 2개를 여기에 넣으세요.
+//   1) https://supabase.com 무료 가입 → New Project
+//   2) Project Settings → API 에서 아래 두 값 복사
+//   비워두면(빈 문자열) 이 브라우저에만 저장하는 로컬 모드로 동작합니다.
+const SUPABASE_URL = "https://xaclqvveppvccdpebzsz.supabase.co";        // 예: "https://abcdefgh.supabase.co"
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhY2xxdnZlcHB2Y2NkcGVienN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkzNzEsImV4cCI6MjA5OTMzNTM3MX0.qZ9qWV3kVmJW4hUwjP8N_PGddO37sJvLCHx-XaYLJ9U";   // 예: "eyJhbGciOi..."  (anon public 키 — 공개해도 되는 키입니다)
+
+const memStore={};
+let storageOK=true;
+let cloudOK=false;
+
+// Supabase REST 호출 (라이브러리 없이 fetch만 사용)
+async function sbFetch(path, opts={}){
+  const url=SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/"+path;
+  const res=await fetch(url,{
+    ...opts,
+    headers:{
+      "apikey":SUPABASE_ANON_KEY,
+      "Authorization":"Bearer "+SUPABASE_ANON_KEY,
+      "Content-Type":"application/json",
+      "Prefer":"resolution=merge-duplicates,return=representation",
+      ...(opts.headers||{}),
+    },
+  });
+  if(!res.ok) throw new Error("Supabase "+res.status+" "+(await res.text()).slice(0,120));
+  const txt=await res.text();
+  return txt?JSON.parse(txt):null;
+}
+const cloud={
+  enabled(){ return !!(SUPABASE_URL && SUPABASE_ANON_KEY); },
+  async get(k){
+    const rows=await sbFetch("hub_state?key=eq."+encodeURIComponent(k)+"&select=value");
+    return (rows&&rows[0])?rows[0].value:null;
+  },
+  async set(k,v){
+    await sbFetch("hub_state",{method:"POST",body:JSON.stringify([{key:k,value:v,updated_at:new Date().toISOString()}])});
+    return true;
+  },
+};
+
+const store={
+  async get(k){
+    // 1순위: Supabase (여러 사람이 같은 데이터를 봄)
+    if(cloud.enabled()){
+      try{ const v=await cloud.get(k); cloudOK=true; if(v!==null&&v!==undefined)return v; }
+      catch(e){ cloudOK=false; console.warn("Supabase 읽기 실패, 로컬로 대체:",e.message); }
+    }
+    // 2순위: 브라우저 저장소
+    try{
+      if(window.storage){const r=await window.storage.get(k);return r?JSON.parse(r.value):null;}
+    }catch(e){ storageOK=false; }
+    // 3순위: 메모리 (이번 세션)
+    return (k in memStore)?memStore[k]:null;
+  },
+  async set(k,v){
+    memStore[k]=v;
+    let ok=false;
+    if(cloud.enabled()){
+      try{ await cloud.set(k,v); cloudOK=true; ok=true; }
+      catch(e){ cloudOK=false; console.warn("Supabase 쓰기 실패, 로컬에 저장:",e.message); }
+    }
+    try{
+      if(window.storage){await window.storage.set(k,JSON.stringify(v)); ok=true;}
+    }catch(e){ storageOK=false; }
+    return ok;
+  },
+};
+function storageMode(){
+  if(cloud.enabled()) return cloudOK?"cloud":"cloud-error";
+  return "local";
+}
+let saveTimer=null;
+function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveSession,1200);}
+async function saveSession(){await store.set("medit:hub1",{
+  accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,currentMeetingId:state.currentMeetingId,
+  uploads:state.uploads.map(u=>({name:u.name,type:u.type,size:u.size,text:u.text})),
+  tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
+  nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart});}
+async function saveRecords(){await store.set("medit:records2",state.records);}
+async function loadAll(){
+  const rec=await store.get("medit:records2");if(rec)state.records=rec;
+  const s=await store.get("medit:hub1");
+  if(s && typeof s==="object"){
+    Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],
+      currentMeetingId:s.currentMeetingId||null,uploads:s.uploads||[],
+      tabNotes:s.tabNotes||state.tabNotes,segments:s.segments||[],notes:s.notes||null,research:s.research||[],
+      nextActions:s.nextActions||[],topicTags:s.topicTags||[],meetingStart:s.meetingStart||null});
+  }
+  // 배열이 아닌 값이 들어와도 안전하게 정규화 (데이터가 비었거나 깨진 경우)
+  ["accounts","meetings","companies","jobs","uploads","segments","research","nextActions","topicTags","records"].forEach(k=>{
+    if(!Array.isArray(state[k]))state[k]=[];
+  });
+  if(!state.tabNotes||typeof state.tabNotes!=="object")state.tabNotes={deck:[],app:[],registry:[],console:[]};
+  seedData();
+}
+
+// ==================== CLAUDE ====================
+async function callClaude(system,user,maxTokens){
+  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:maxTokens||1000,system,messages:[{role:"user",content:user}]})});
+  if(!res.ok)throw new Error("API "+res.status);
+  const d=await res.json();return d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");
+}
+
+// ==================== TABS ====================
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
+function switchTab(tab){
+  state.activeTab=tab;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.tab===tab));
+  const showRail=(tab==="deck"||tab==="app"||tab==="registry");
+  $("bodyEl").classList.toggle("solo",!showRail);
+  $("rail").style.display=showRail?"flex":"none";
+  if(showRail){$("railTag").textContent=({deck:"슬라이드",app:"복약앱",registry:"약사사이트"})[tab];renderRail(tab);}
+  renderStage(tab);
+}
+function renderStage(tab){
+  const st=$("stage");
+  if(tab==="home")st.innerHTML=homeHTML();
+  else if(tab==="prep")st.innerHTML=prepHTML();
+  else if(tab==="deck")st.innerHTML=deckHTML();
+  else if(tab==="video")st.innerHTML=videoHTML();
+  else if(tab==="today")st.innerHTML=todayHTML();
+  else if(tab==="app")st.innerHTML=appHTML();
+  else if(tab==="registry")st.innerHTML=registryHTML();
+  else if(tab==="console")st.innerHTML=consoleHTML();
+  else if(tab==="email")st.innerHTML=emailHTML();
+  if(tab==="home")bindHome();
+  if(tab==="prep")bindPrep();
+  if(tab==="deck")bindDeck();
+  if(tab==="video")bindVideo();
+  if(tab==="today")bindToday();
+  if(tab==="console")bindConsole();
+  if(tab==="email")bindEmail();
+  refreshBadges();
+}
+
+// ==================== RAIL ====================
+function renderRail(tab){const box=$("railNotes");const arr=state.tabNotes[tab]||[];
+  box.innerHTML=arr.length?arr.map(n=>`<div class="note ${n.me?'me':''}"><span class="who">${esc(n.who)} · ${n.time}</span>${esc(n.text)}</div>`).join(""):'<div class="empty">이 탭에서 논의된 내용을 기록하세요.</div>';
+  box.scrollTop=box.scrollHeight;}
+function addRail(){const tab=state.activeTab;const v=$("railInput").value.trim();if(!v)return;
+  state.tabNotes[tab].push({text:v,who:"메모",me:true,time:new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})});
+  $("railInput").value="";renderRail(tab);scheduleSave();}
+$("railAdd").onclick=addRail;
+$("railInput").addEventListener("keydown",e=>{if(e.key==='Enter')addRail();});
+async function railAIGenerate(){
+  const tab=state.activeTab;
+  if(!state.segments.length){ toast("녹취 내용이 없습니다"); return; }
+  const b=$("railAI"); if(b){b.disabled=true;b.textContent="작성 중…";}
+  const tabName={deck:"슬라이드",app:"복약앱",registry:"약사 참여 사이트"}[tab]||tab;
+  const tr=state.segments.map(s=>`[${s.who}] ${s.text}`).join("\n");
+  const sys=`너는 회의 서기다. 아래 녹취에서 '${tabName}' 주제와 관련된 핵심을 3-5개의 짧은 한국어 메모로 요약해라. 순수 JSON 배열만 출력: ["메모1","메모2",...]. 관련 내용이 없으면 전체 회의의 핵심을 요약.`;
+  try{
+    let o=await callClaude(sys,tr,600); o=o.replace(/```json|```/g,"").trim();
+    const arr=JSON.parse(o);
+    const time=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+    arr.forEach(t=>state.tabNotes[tab].push({text:t,who:"AI 요약",me:false,time}));
+    renderRail(tab); scheduleSave(); toast("AI가 메모를 작성했습니다");
+  }catch(e){ toast("작성 실패: "+e.message); }
+  finally{ if(b){b.disabled=false;b.textContent="AI 자동 작성 (녹취 요약)";} }
+}
+const railAIBtn=$("railAI"); if(railAIBtn)railAIBtn.onclick=railAIGenerate;
+
+// ==================== HOME (cover, AI-editable, start/stop) ====================
+function fmtTime(ts){return ts?new Date(ts).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):"—";}
+function homeHTML(){
+  const m=state.meeting;const live=!!m.started&&!m.ended;
+  const dur=m.started?Math.round(((m.ended||Date.now())-m.started)/60000):0;
+  return `<div class="hero">
+   <div class="cover ${live?'live':''}">
+     <div class="orb orb1"></div><div class="orb orb2"></div>
+     <div class="aiedit"><span class="dot"></span>AI 실시간 편집</div>
+     <div class="status-chip"><span class="d"></span>${live?'회의 진행 중':(m.ended?'회의 종료됨':'회의 대기 중')}</div>
+     <h1 id="coverTitle">${esc(m.title)}</h1>
+     <div class="meta">
+       <div>목적 <b id="coverPurpose">${esc(m.purpose)}</b></div>
+       <div>시작 <b>${fmtTime(m.started)}</b></div>
+       <div><b>${dur}분</b></div>
+       <div>참석 <b>${state.attendees.length}명</b></div>
+     </div>
+   </div>
+
+   <div class="glass tile" style="margin-bottom:14px">
+     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+       <h4 style="margin:0">발표 슬라이드</h4>
+       <div style="display:flex;gap:7px">
+         <button class="b-mint" id="homePlay">${playing?'정지':'자동 발표'}</button>
+         <button class="b-ghost" id="homeToDeck">슬라이드 탭 열기</button>
+       </div>
+     </div>
+     <div class="home-slide ${SLIDES[state.deckIdx].cls}">${SLIDES[state.deckIdx].html}</div>
+     <div class="home-cap">${SLIDES[state.deckIdx].caption||""}${SLIDES[state.deckIdx].terms?`<div class="home-terms">용어: ${SLIDES[state.deckIdx].terms}</div>`:""}</div>
+     <div class="home-nav">
+       <button class="b-ghost" id="homePrev">이전</button>
+       <span class="home-num">${state.deckIdx+1} / ${SLIDES.length}</span>
+       <button class="b-ghost" id="homeNext">다음</button>
+       <span class="mini" style="margin-left:auto">음성(TTS)으로 스크립트를 읽고 자막·용어와 함께 자동으로 넘어갑니다 · 약 3분</span>
+     </div>
+   </div>
+
+   <div class="grid g2" style="margin-bottom:14px">
+     <div class="glass tile">
+       <h4>회의 진행</h4>
+       ${live?
+         `<button class="b-mint on startbtn" id="endMeetingBtn">회의 종료 · AI 정리·이메일</button>
+          <div class="stepline" style="margin-top:10px"><span class="num">●</span> 녹취·기록이 백그라운드로 진행 중입니다. 어느 탭에 있어도 계속 기록됩니다.</div>`
+         :
+         `<button class="b-mint startbtn" id="startMeetingBtn">회의 스타트</button>
+          <div class="stepline" style="margin-top:10px"><span class="num">1</span> 사전 준비 탭에서 참석자·자료 등록</div>
+          <div class="stepline"><span class="num">2</span> 회의 스타트 → 콘솔에서 자동 녹취</div>
+          <div class="stepline"><span class="num">3</span> 종료 시 AI가 회의록·이메일 자동 작성</div>`}
+     </div>
+     <div class="glass tile">
+       <h4>빠른 이동</h4>
+       <div class="grid g2" style="gap:8px">
+         <button class="b-ghost" onclick="switchTab('prep')">사전 준비</button>
+         <button class="b-ghost" onclick="switchTab('deck')">슬라이드</button>
+         <button class="b-ghost" onclick="switchTab('console')">진행 콘솔</button>
+         <button class="b-ghost" onclick="switchTab('email')">회의록</button>
+       </div>
+       <div class="mini" style="margin-top:10px">화면을 그대로 공유하면 참석자와 함께 보실 수 있습니다.</div>
+     </div>
+   </div>
+
+   <div class="glass tile" style="margin-bottom:14px">
+     <h4>이번 회의 개요 <span class="aibadge"><span class="dot"></span>AI 자동 갱신</span></h4>
+     <div id="homeSummary" class="muted">${state.notes&&state.notes.summary?esc(state.notes.summary):"회의가 시작되면 논의 내용을 바탕으로 제목·목적·개요가 자동으로 갱신됩니다."}</div>
+     <div id="homeTags" style="margin-top:10px">${(state.topicTags||[]).map(t=>`<span class="chip"><span class="av">#</span>${esc(t)}</span>`).join("")}</div>
+   </div>
+
+   <div class="section-title">진행 중인 잡 (Job) · 다음 회의로 연결</div>
+   <div id="jobList" style="margin-bottom:14px"></div>
+
+   <div class="section-title">회의 자료</div>
+   <div class="grid g2" style="margin-bottom:14px">
+     <a class="glass tile docdl" href="MedIT_금요일미팅_AgeTech_모바일앱_약사참여.pptx" download><h4>금요일 미팅 PPT</h4><div class="muted">플랫폼·모바일앱·약사 참여 사이트·입법 제안 (12슬라이드)</div></a>
+     <a class="glass tile docdl" href="MedIT_고령친화AgeTech_약료플랫폼.pptx" download><h4>고령친화 Age-Tech PPT</h4><div class="muted">6대 축·검증 근거·의사결정 지원 (10슬라이드)</div></a>
+     <a class="glass tile docdl" href="MedIT_고령친화AgeTech_약료플랫폼_검토자료.docx" download><h4>검토자료 DOCX</h4><div class="muted">1차 출처·효돌 정정·근거 위계 (9쪽)</div></a>
+     <a class="glass tile docdl" href="MedIT_약국자동화_학술리서치.pdf" download><h4>약국 자동화 리서치 PDF</h4><div class="muted">MCP·Ego4D·약국 운영 자동화 (8쪽)</div></a>
+   </div>
+
+   <div class="section-title">캠퍼스타운 허브 입점 기업</div>
+   <div id="companyList" style="margin-bottom:14px"></div>
+
+   <div class="section-title">최근 회의 기록</div>
+   <div id="reclist"></div>
+  </div>`;
+}
+function bindHome(){
+  const sb=$("startMeetingBtn");if(sb)sb.onclick=startMeeting;
+  const eb=$("endMeetingBtn");if(eb)eb.onclick=endMeeting;
+  // 첫 페이지 슬라이드 컨트롤
+  const hp=$("homePlay");if(hp)hp.onclick=()=>playing?stopPlay():startPlay();
+  const hpr=$("homePrev");if(hpr)hpr.onclick=()=>{stopPlay();state.deckIdx=(state.deckIdx-1+SLIDES.length)%SLIDES.length;renderStage("home");};
+  const hnx=$("homeNext");if(hnx)hnx.onclick=()=>{stopPlay();state.deckIdx=(state.deckIdx+1)%SLIDES.length;renderStage("home");};
+  const htd=$("homeToDeck");if(htd)htd.onclick=()=>switchTab("deck");
+  renderJobs();
+  renderCompanies();
+  renderRecords();
+}
+function renderCompanies(){
+  const box=$("companyList"); if(!box)return;
+  const canManage=state.user.role==="operator";
+  if(!state.companies.length){ box.innerHTML='<div class="mini">등록된 입점 기업이 없습니다.</div>'; }
+  else {
+    box.innerHTML=`<div class="cgrid">`+state.companies.map(c=>`<div class="ccard">
+      <div class="c-name">${esc(c.name)}</div>
+      <div class="c-role">${esc(c.role||"입점 기업")}</div>
+      <div class="c-desc">${esc(c.desc||"")}</div>
+    </div>`).join("")+`</div>`;
+  }
+  if(canManage){
+    box.innerHTML+=`<button class="b-ghost" id="addCompany" style="margin-top:9px">+ 기업 등록</button>`;
+    const ac=$("addCompany"); if(ac)ac.onclick=()=>{
+      const name=prompt("기업명"); if(!name)return;
+      const desc=prompt("한 줄 소개","")||"";
+      state.companies.push({id:"c_"+Date.now(),name,role:"입점 기업",desc});
+      scheduleSave(); renderCompanies();
+    };
+  }
+}
+function renderJobs(){
+  const box=$("jobList"); if(!box)return;
+  const cm=currentMeeting();
+  if(!state.jobs.length){ box.innerHTML='<div class="mini">진행 중인 잡이 없습니다.</div>'; return; }
+  const canManage=state.user.role==="operator"||state.user.role==="host";
+  box.innerHTML=state.jobs.map(j=>{
+    const linked=(j.linkedMeetingIds||[]).length;
+    const here=cm&&(j.linkedMeetingIds||[]).includes(cm.id);
+    return `<div class="jobcard">
+      <div class="job-top"><b>${esc(j.title)}</b><span class="job-status">${esc(j.status||"")}</span></div>
+      <div class="job-desc">${esc(j.desc||"")}</div>
+      <div class="job-meta">연결된 회의 ${linked}개${here?' · 이번 회의 포함':''}</div>
+      ${canManage?`<div class="job-actions">
+        <button class="b-ghost" data-link="${j.id}">다음 회의로 연결</button>
+      </div>`:''}
+    </div>`;
+  }).join("");
+  if(canManage){
+    box.querySelectorAll("[data-link]").forEach(b=>b.onclick=()=>linkJobToMeeting(b.dataset.link));
+  }
+}
+function linkJobToMeeting(jobId){
+  const j=state.jobs.find(x=>x.id===jobId); if(!j)return;
+  // 연결할 수 있는 다른 회의 목록
+  const others=state.meetings.filter(m=>!(j.linkedMeetingIds||[]).includes(m.id));
+  if(!others.length){ toast("연결할 다른 회의가 없습니다. 먼저 회의를 만들어 주세요."); return; }
+  const list=others.map((m,i)=>`${i+1}. ${m.title} (${fmtDate(m.date)})`).join("\n");
+  const pick=prompt("이 잡을 연결할 회의 번호를 입력하세요:\n\n"+list,"1");
+  const idx=parseInt(pick,10)-1;
+  if(isNaN(idx)||idx<0||idx>=others.length)return;
+  const target=others[idx];
+  j.linkedMeetingIds=j.linkedMeetingIds||[]; j.linkedMeetingIds.push(target.id);
+  target.jobs=target.jobs||[]; if(!target.jobs.includes(j.id))target.jobs.push(j.id);
+  scheduleSave(); renderJobs();
+  toast(`'${j.title}'을(를) '${target.title}'에 연결했습니다`);
+}
+function startMeeting(){
+  state.meeting.started=Date.now();state.meeting.ended=null;state.meetingStart=Date.now();
+  setPill("live","회의 진행 중");
+  scheduleSave();renderStage("home");
+  toast("회의를 시작했습니다 · 콘솔에서 녹취가 진행됩니다");
+  switchTab("console");
+  setTimeout(()=>{if(typeof startMic==='function')startMic();},400);
+}
+
+// ==================== PREP (attendees + uploads) ====================
+function prepHTML(){
+  return `<div class="hero">
+   <div class="section-title">Before the meeting</div>
+   <h2 style="font-size:22px;color:var(--ink);margin-bottom:4px">사전 준비</h2>
+   <div class="mini" style="margin-bottom:16px">회의 전에 참석자 이메일과 관련 자료(스크립트·발표 DOC·영상·관련 문서)를 등록하세요. 문서는 AI 정리에 반영되고, 영상은 목록에 보관됩니다.</div>
+
+   <div class="glass tile" style="margin-bottom:14px">
+     <h4>참석자 등록 (이메일)</h4>
+     <div class="grid" style="grid-template-columns:1fr 1.4fr auto;gap:8px;margin-bottom:10px">
+       <input id="atName" placeholder="이름 (예: 방준석 교수님)" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
+       <input id="atEmail" placeholder="이메일" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
+       <button class="b-deep" id="atAdd">추가</button>
+     </div>
+     <div id="atList"></div>
+   </div>
+
+   <div class="glass tile" style="margin-bottom:14px">
+     <h4>회의 자료</h4>
+     <div class="mini" style="margin-bottom:10px">발표·검토 자료입니다. (허브와 같은 폴더에 있으면 바로 열람·다운로드됩니다)</div>
+     <div class="grid g2" style="gap:8px">
+       <a class="glass tile docdl" href="MedIT_금요일미팅_AgeTech_모바일앱_약사참여.pptx" download><h4>금요일 미팅 PPT</h4><div class="muted">플랫폼·앱·약사 참여 사이트·입법 제안</div></a>
+       <a class="glass tile docdl" href="MedIT_고령친화AgeTech_약료플랫폼.pptx" download><h4>고령친화 Age-Tech PPT</h4><div class="muted">6대 축·검증 근거</div></a>
+       <a class="glass tile docdl" href="MedIT_고령친화AgeTech_약료플랫폼_검토자료.docx" download><h4>검토자료 DOCX</h4><div class="muted">1차 출처·근거 위계</div></a>
+       <a class="glass tile docdl" href="MedIT_약국자동화_학술리서치.pdf" download><h4>약국 자동화 PDF</h4><div class="muted">MCP·Ego4D·운영 자동화</div></a>
+     </div>
+   </div>
+
+   <div class="glass tile" style="margin-bottom:14px">
+     <h4>관련 자료 업로드 (선택)</h4>
+     <div class="dropzone" id="drop">
+       클릭 또는 드래그하여 업로드<br><span class="mini">스크립트·발표 DOC/PDF/TXT · 발표 영상 · 관련 문서</span>
+       <input type="file" id="fileInput" multiple style="display:none">
+     </div>
+     <div id="upList" style="margin-top:12px"></div>
+     <div class="mini" style="margin-top:8px">※ 문서(txt·md·스크립트)는 내용을 읽어 AI 회의 정리에 반영합니다. Word/PDF·영상은 목록 보관(내용 자동추출은 향후 STT/파서 연동).</div>
+   </div>
+
+   <div class="glass tile">
+     <h4>회의 정보 <span class="aibadge"><span class="dot"></span>회의 후 AI 자동 수정</span></h4>
+     <div class="field" style="margin-bottom:8px"><label style="font-size:11px;font-weight:800;color:var(--soft)">제목</label>
+       <input id="mTitle" value="${esc(state.meeting.title)}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
+     <div class="field"><label style="font-size:11px;font-weight:800;color:var(--soft)">목적</label>
+       <input id="mPurpose" value="${esc(state.meeting.purpose)}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
+     <button class="b-ghost" id="mSave" style="margin-top:10px">저장</button>
+   </div>
+  </div>`;
+}
+function bindPrep(){
+  renderAtList();renderUpList();
+  $("atAdd").onclick=()=>{const n=$("atName").value.trim(),e=$("atEmail").value.trim();
+    if(!n&&!e)return;state.attendees.push({name:n||e,email:e});$("atName").value="";$("atEmail").value="";renderAtList();scheduleSave();refreshBadges();};
+  $("atEmail").addEventListener("keydown",e=>{if(e.key==='Enter')$("atAdd").click();});
+  const drop=$("drop"),fi=$("fileInput");
+  drop.onclick=()=>fi.click();
+  drop.ondragover=e=>{e.preventDefault();drop.classList.add("over");};
+  drop.ondragleave=()=>drop.classList.remove("over");
+  drop.ondrop=e=>{e.preventDefault();drop.classList.remove("over");handleFiles(e.dataTransfer.files);};
+  fi.onchange=e=>handleFiles(e.target.files);
+  $("mSave").onclick=()=>{state.meeting.title=$("mTitle").value.trim()||state.meeting.title;
+    state.meeting.purpose=$("mPurpose").value.trim()||state.meeting.purpose;scheduleSave();toast("회의 정보 저장됨");};
+}
+function renderAtList(){const box=$("atList");if(!box)return;
+  box.innerHTML=state.attendees.length?state.attendees.map((a,i)=>`<span class="chip"><span class="av">${esc(initials(a.name))}</span>${esc(a.name)}${a.email?` · ${esc(a.email)}`:""}<span class="x" onclick="rmAt(${i})">삭제</span></span>`).join(""):'<div class="mini">아직 등록된 참석자가 없습니다.</div>';}
+function rmAt(i){state.attendees.splice(i,1);renderAtList();scheduleSave();refreshBadges();}
+window.rmAt=rmAt;
+function handleFiles(files){
+  [...files].forEach(f=>{
+    const readable=/\.(txt|md|csv|json|js|py|html|srt|vtt)$/i.test(f.name)||f.type.startsWith("text");
+    const rec={name:f.name,type:f.type||"file",size:f.size,text:null};
+    if(readable&&f.size<400000){const fr=new FileReader();fr.onload=()=>{rec.text=fr.result;scheduleSave();};fr.readAsText(f);}
+    state.uploads.push(rec);
+  });
+  renderUpList();scheduleSave();refreshBadges();
+}
+function fileIcon(t,n){if(/video|\.mp4|\.mov/i.test(t+n))return"영상";if(/pdf/i.test(t+n))return"PDF";
+  if(/word|doc/i.test(t+n))return"DOC";if(/\.(txt|md|srt|vtt)/i.test(n))return"문서";if(/image/i.test(t))return"이미지";return"파일";}
+function renderUpList(){const box=$("upList");if(!box)return;
+  box.innerHTML=state.uploads.length?state.uploads.map((u,i)=>`<div class="uprow"><span class="ic" style="font-size:11px;font-weight:700;color:var(--deep);background:var(--light);padding:3px 7px;border-radius:6px;">${fileIcon(u.type,u.name)}</span>
+    <div><div class="nm">${esc(u.name)}</div><div class="mt">${(u.size/1024).toFixed(0)}KB ${u.text?'· 내용 반영됨':(/video/i.test(u.type)?'· 영상 보관':'· 보관')}</div></div>
+    <span class="x" onclick="rmUp(${i})">삭제</span></div>`).join(""):'<div class="mini">업로드된 자료가 없습니다.</div>';}
+function rmUp(i){state.uploads.splice(i,1);renderUpList();scheduleSave();refreshBadges();}
+window.rmUp=rmUp;
+
+// ==================== DECK (auto-advance) ====================
+const SLIDES=[
+ {cls:"s-ink",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><rect x="38" y="16" width="44" height="16" rx="4" fill="#0FD6C6"/><rect x="34" y="30" width="52" height="66" rx="9" fill="#12BDB0"/><rect x="46" y="66" width="30" height="18" rx="9" fill="#fff"/><rect x="46" y="66" width="15" height="18" rx="9" fill="#E7F7F5"/></svg></div><div class="kick">MedIT · Friday</div>
+   <h1 style="margin-top:14px">고령친화 Age-Tech 약료 플랫폼<br><span class="mint">+ 모바일 복약·접종 앱 + 약사 참여 연구 사이트</span></h1>
+   <div class="sub">하드웨어 · 로봇 협업 · 센싱 데이터 · AI 의사결정 지원 · 예방접종 · 모바일 앱 · 약사연구참여</div></div>`,
+   script:"안녕하세요. MedIT와 약학대학의 회의 내용에 대한 자료를 짧게 정리해 보았습니다. 오늘은 이미 설계한 모바일 복약·접종 앱과, 새로 제안드리는 약사 참여 연구 사이트를 말씀드리겠습니다.",
+   caption:"고령친화 Age-Tech 약료 플랫폼 — 모바일 앱 + 약사 참여 사이트",
+   terms:"Age-Tech: 고령자를 위한 기술"},
+ {cls:"s-mist",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><circle cx="60" cy="52" r="20" fill="none" stroke="#12BDB0" stroke-width="5"/><path d="M60 72 L60 96" stroke="#12BDB0" stroke-width="5" stroke-linecap="round"/><circle cx="60" cy="52" r="7" fill="#12BDB0"/></svg></div><div class="kick">Agenda</div><h2 style="margin-top:6px">오늘 논의 지도</h2>
+   <div class="sgrid3">
+   <div class="sc"><div class="n">A</div><div class="t">플랫폼 개요</div><div class="d">6대 축 + 원칙</div></div>
+   <div class="sc"><div class="n">B</div><div class="t">모바일 앱</div><div class="d">복약·접종 시연</div></div>
+   <div class="sc"><div class="n">C</div><div class="t">약사 참여 사이트</div><div class="d">FIP · 4층</div></div>
+   <div class="sc"><div class="n">D</div><div class="t">데이터·규제</div><div class="d">IRB·약사 승인</div></div>
+   <div class="sc"><div class="n">E</div><div class="t">실증·다음</div><div class="d">우선순위</div></div>
+   <div class="sc"><div class="n">F</div><div class="t">협업</div><div class="d">역할·일정</div></div></div></div>`,
+   script:"오늘은 개요와 원칙, 모바일 앱, 약사 참여 사이트 제안, 데이터와 규제, 그리고 다음 단계 순서로 말씀드리겠습니다.",
+   caption:"논의 순서: 개요 · 모바일 앱 · 약사 사이트 · 데이터·규제 · 실증 · 협업",
+   terms:"IRB: 기관생명윤리위원회 (인체 대상 연구 심의)"},
+ {cls:"s-deep",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><path d="M46 34 Q30 34 30 52 Q22 60 30 72 Q28 88 46 88 V34Z" fill="#0FD6C6"/><path d="M74 34 Q90 34 90 52 Q98 60 90 72 Q92 88 74 88 V34Z" fill="#E7F7F5"/><circle cx="50" cy="56" r="4" fill="#fff"/><circle cx="70" cy="56" r="4" fill="#12BDB0"/></svg></div><div class="kick">Principle</div><h2 style="margin-top:6px">AI는 보조하고, 약사·의사가 결정한다</h2>
+   <div class="sub" style="margin-top:12px">개인 맞춤형 \u2018처방\u2019을 직접 추천하지 않는다. 약사·의사 검토를 전제로 한 상담 보조·상호작용 확인·부작용 알림에 한정하며, 환자 대상 메시지·중재는 약사 승인 후에만 실행한다.</div>
+   <div class="sgrid3">
+   <div class="sc"><div class="n">1</div><div class="t">제안</div><div class="d">AI가 위험·근거 제시</div></div>
+   <div class="sc"><div class="n">2</div><div class="t">검토</div><div class="d">약사·의사 판단</div></div>
+   <div class="sc"><div class="n">3</div><div class="t">실행</div><div class="d">승인 후 전달</div></div></div></div>`,
+   script:"가장 중요한 원칙입니다. 기본 원칙입니다. 인공지능은 보조하고, 결정은 약사와 의사가 합니다. 인공지능이 위험과 근거를 제시하면, 전문가가 판단하고 승인한 뒤에만 환자에게 전달됩니다.",
+   caption:"원칙: AI는 보조, 약사·의사가 결정 — 제안 → 검토 → 승인 후 실행",
+   terms:"상호작용: 약물끼리 서로 영향을 주는 것 (DDI)"},
+ {cls:"s-mist",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><rect x="44" y="44" width="32" height="32" rx="8" fill="#12BDB0"/><path d="M52 60 h6 l4-8 4 16 4-8 h6" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="kick">A · Platform</div><h2 style="margin-top:6px">고령친화 Age-Tech 6대 축</h2>
+   <div class="sgrid3">
+   <div class="sc"><div class="n">01</div><div class="t">하드웨어</div><div class="d">스마트약통·웨어러블·IoT</div></div>
+   <div class="sc"><div class="n">02</div><div class="t">돌봄 로봇</div><div class="d">효돌·ElliQ 백엔드 연계</div></div>
+   <div class="sc"><div class="n">03</div><div class="t">센싱 데이터</div><div class="d">복약·생체·수면·낙상</div></div>
+   <div class="sc"><div class="n">04</div><div class="t">예방접종</div><div class="d">이력 + 접종후 반응</div></div>
+   <div class="sc"><div class="n">05</div><div class="t">AI 의사결정</div><div class="d">상호작용·부작용(검토 전제)</div></div>
+   <div class="sc"><div class="n">06</div><div class="t">측정난이 데이터</div><div class="d">자가보고·보호자·상담</div></div></div></div>`,
+   script:"제안 방향은 여섯 축입니다. 하드웨어, 돌봄 로봇, 센싱 데이터, 예방접종, 인공지능 의사결정 지원, 그리고 측정이 어려운 데이터입니다.",
+   caption:"6대 축: 하드웨어 · 돌봄로봇 · 센싱 · 예방접종 · AI 의사결정 · 측정난이 데이터",
+   terms:"웨어러블: 몸에 착용하는 기기 · IoT: 사물인터넷 · ePRO: 환자 자가보고"},
+ {cls:"s-mist",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><rect x="42" y="18" width="36" height="84" rx="8" fill="#16332F"/><rect x="47" y="26" width="26" height="60" rx="3" fill="#fff"/><rect x="47" y="26" width="26" height="14" fill="#12BDB0"/><circle cx="60" cy="94" r="3" fill="#fff"/></svg></div><div class="kick">B · Mobile App</div><h2 style="margin-top:6px">모바일 복약·접종 앱 — 이미 설계</h2>
+   <div class="sgrid2">
+   <div class="sc"><div class="t">5탭 구성</div><div class="d">홈·백신·AI도우미·애프터케어·기록</div></div>
+   <div class="sc"><div class="t">이중언어 자동</div><div class="d">한국어/영어 자동감지</div></div>
+   <div class="sc"><div class="t">오프라인 우선</div><div class="d">HTML 번들·온디바이스 저장</div></div>
+   <div class="sc"><div class="t">원코드 3플랫폼</div><div class="d">WebView: Android·iOS·웹</div></div>
+   <div class="sc"><div class="t">건강 연동</div><div class="d">HealthConnect·HealthKit</div></div>
+   <div class="sc"><div class="t">소셜 로그인</div><div class="d">Google·Kakao·Naver</div></div></div></div>`,
+   script:"모바일 앱은 이미 설계했습니다. 다섯 개 탭으로 구성되고, 건강 데이터는 기기 안에만 저장해 개인정보가 밖으로 나가지 않습니다. 한 코드로 안드로이드·아이폰·웹에서 작동합니다.",
+   caption:"이미 설계한 앱: 5탭 · 이중언어 · 오프라인 우선 · 원코드 3플랫폼 · 건강연동",
+   terms:"온디바이스: 데이터를 기기 안에만 저장 · HealthKit/HealthConnect: 건강데이터 연동 규격"},
+ {cls:"s-deep",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><line x1="60" y1="60" x2="34" y2="34" stroke="#0FD6C6" stroke-width="3"/><line x1="60" y1="60" x2="86" y2="34" stroke="#0FD6C6" stroke-width="3"/><line x1="60" y1="60" x2="60" y2="92" stroke="#0FD6C6" stroke-width="3"/><circle cx="60" cy="60" r="12" fill="#fff"/><circle cx="34" cy="34" r="8" fill="#0FD6C6"/><circle cx="86" cy="34" r="8" fill="#0FD6C6"/><circle cx="60" cy="92" r="8" fill="#E7F7F5"/></svg></div><div class="kick">C · Proposal</div><h2 style="margin-top:6px">약사 참여 연구 사이트 — 제안</h2>
+   <div class="sub" style="margin-top:8px">약사가 연구에 동참하고, 그 인사이트가 연구·제약으로 이어지는 창구. 국제·전국·대학 3축.</div>
+   <div class="sgrid3">
+   <div class="sc"><div class="t">약사 등록</div><div class="d">지역사회·전국 약사 — 실무·복약 데이터 참여</div></div>
+   <div class="sc"><div class="t">제약사·의사 등록</div><div class="d">제제 설계 수요·임상 관점 — 약 디자인 협력</div></div>
+   <div class="sc"><div class="t">대학 연구 연계</div><div class="d">여러 대학 연구실 — 제제 설계·연구 설계 지원</div></div></div>
+   <div class="sub" style="margin-top:10px" class="mint">FIP·대한약사회 등록 모델 참고. 참여 장벽 1위는 시간 → 자동화로 부담을 줄이는 방향</div></div>`,
+   script:"약사 참여 연구 사이트를 제안드립니다. 지역사회와 전국의 약사, 제약사, 의사가 함께 등록해, 약을 더 잘 설계하는 약 디자인을 목적으로 합니다. 참여 장벽인 시간을 자동화로 줄이는 방향입니다.",
+   caption:"약사 참여 사이트 제안: 지역사회·전국 약사 + 제약사·의사 등록 → 약 디자인",
+   terms:"FIP: 국제약사연맹 · SIG: 특별관심그룹 · ECHO: 경제·임상·인문 성과 평가"},
+ {cls:"s-mist",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><rect x="36" y="24" width="48" height="72" rx="6" fill="#fff" stroke="#0E7C74" stroke-width="3"/><rect x="36" y="24" width="48" height="16" rx="6" fill="#12BDB0"/><line x1="46" y1="52" x2="74" y2="52" stroke="#0E7C74" stroke-width="3"/><line x1="46" y1="64" x2="74" y2="64" stroke="#E7F7F5" stroke-width="3"/><line x1="46" y1="76" x2="66" y2="76" stroke="#E7F7F5" stroke-width="3"/></svg></div><div class="kick">C · Architecture</div><h2 style="margin-top:6px">약사연구참여 플랫폼 4층</h2>
+   <div class="lrow"><span class="ln">L1</span><span class="lt">약사 등록 (Registry)</span><span class="ld">면허·동의·데이터이용 라이선스</span></div>
+   <div class="lrow"><span class="ln">L2</span><span class="lt">데이터 전송 (Web→Repo)</span><span class="ld">POS 커넥터 비식별·표준화</span></div>
+   <div class="lrow"><span class="ln">L3</span><span class="lt">모바일 수집</span><span class="ld">약사 앱 + 환자 ePRO</span></div>
+   <div class="lrow"><span class="ln" style="background:var(--gold)">L4</span><span class="lt">인사이트 (Research)</span><span class="ld">substitution·순응·AE → 제약사 연계</span></div></div>`,
+   script:"사이트 구조는 네 층입니다. 약사 등록, 약국 데이터를 비식별로 전송, 모바일 수집, 그리고 연구 인사이트입니다. 비식별은 개인을 알아볼 수 없게 처리하는 것을 뜻합니다.",
+   caption:"백엔드 4층: 등록 → 비식별 전송 → 모바일 수집 → 연구 인사이트",
+   terms:"POS: 약국 판매시점관리 시스템 · 비식별: 개인 식별 불가 처리 · AE: 이상반응"},
+ {cls:"s-ink",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><path d="M60 20 L92 34 V64 Q92 88 60 100 Q28 88 28 64 V34Z" fill="#0FD6C6"/><path d="M48 60 L57 69 L74 50" stroke="#fff" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="kick">E·F · Next</div><h2 style="margin-top:6px">논의 & 다음 단계</h2>
+   <div class="sgrid3">
+   <div class="sc"><div class="n">01</div><div class="t">실증 우선순위</div><div class="d">무엇을 먼저</div></div>
+   <div class="sc"><div class="n">02</div><div class="t">REDCap 접근</div><div class="d">연구소 인스턴스</div></div>
+   <div class="sc"><div class="n">03</div><div class="t">약사 등록 파일럿</div><div class="d">협력약국 5~10곳</div></div>
+   <div class="sc"><div class="n">04</div><div class="t">앱 연동</div><div class="d">MediNote→L3</div></div>
+   <div class="sc"><div class="n">05</div><div class="t">IRB 사전상담</div><div class="d">등록·동의</div></div>
+   <div class="sc"><div class="n">06</div><div class="t">역할·일정</div><div class="d">분담 확정</div></div></div></div>`,
+   script:"다음 단계입니다. 실증 우선순위를 정하고, 협력 약국 시범과 앱 연동, 기관 생명윤리위원회 상담을 거쳐 역할과 일정을 확정하겠습니다. 감사합니다.",
+   caption:"다음 단계: 실증 우선순위 · REDCap · 약국 파일럿 · 앱 연동 · IRB · 역할·일정",
+   terms:"REDCap: 연구 데이터 수집 시스템 · IRB: 기관생명윤리위원회 · 파일럿: 소규모 시범"},
+];
+let autoAdv=null, playing=false;
+function deckHTML(){
+  const sl=SLIDES[state.deckIdx];
+  return `<div class="slidewrap">
+    <div class="slide ${sl.cls}">${sl.html}</div>
+    <div class="progress"><div class="bar" id="progBar" style="width:${(state.deckIdx+1)/SLIDES.length*100}%"></div></div>
+    <div class="caption-box" id="captionBox">
+      <div class="cap-line">${sl.caption||""}</div>
+      ${sl.terms?`<div class="cap-terms">용어: ${sl.terms}</div>`:""}
+    </div>
+    <div class="slide-nav">
+      <button class="b-ghost" id="prevS">이전</button>
+      <span id="slideNum">${state.deckIdx+1} / ${SLIDES.length}</span>
+      <button class="b-ghost" id="nextS">다음</button>
+      <button class="b-mint autobtn" id="playS">${playing?'정지':'자동 발표'}</button>
+      <button class="b-ghost autobtn" id="editScriptS">스크립트 편집</button>
+    </div>
+    <div class="mini" style="text-align:center">자동 발표: 음성(TTS)으로 스크립트를 읽고 자막·용어 설명과 함께 슬라이드가 넘어갑니다 · 약 5분</div>
+    <div id="scriptEditor"></div>
+  </div>`;
+}
+function bindDeck(){
+  $("prevS").onclick=()=>{stopPlay();state.deckIdx=(state.deckIdx-1+SLIDES.length)%SLIDES.length;renderStage("deck");};
+  $("nextS").onclick=()=>{stopPlay();state.deckIdx=(state.deckIdx+1)%SLIDES.length;renderStage("deck");};
+  $("playS").onclick=()=>playing?stopPlay():startPlay();
+  $("editScriptS").onclick=openScriptEditor;
+}
+function pickKoVoice(){
+  const vs=window.speechSynthesis.getVoices()||[];
+  const ko=vs.filter(v=>/ko-KR|ko_KR|ko\b/i.test(v.lang));
+  // 1순위: 자연스러운 남성/뉴럴 계열
+  return ko.find(v=>/(male|남|minsu|injoon|neural|wavenet|google)/i.test(v.name))
+      || ko.find(v=>/(natural|siri|premium|enhanced)/i.test(v.name))
+      || ko[0] || null;
+}
+function speakKo(text,onend){
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang="ko-KR";
+  u.rate=0.9;   // 조금 느리게 — 차분하고 어른스럽게
+  u.pitch=0.88; // 낮은 톤 — 무게감 있는 목소리
+  const v=pickKoVoice(); if(v)u.voice=v;
+  if(onend)u.onend=onend;
+  window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+  return u;
+}
+function speakSlide(idx){
+  if(!("speechSynthesis" in window)){
+    autoAdv=setTimeout(()=>{ if(playing){ const next=(idx+1)%SLIDES.length;
+      if(next===0){stopPlay();return;} state.deckIdx=next; if(state.activeTab==="deck"||state.activeTab==="home")renderStage(state.activeTab); advance(); } },8000);
+    return;
+  }
+  const sl=SLIDES[idx];
+  speakKo(sl.script||sl.caption||"", ()=>{ if(!playing)return;
+    const next=(idx+1)%SLIDES.length;
+    if(next===0){ stopPlay(); return; }
+    state.deckIdx=next; if(state.activeTab==="deck"||state.activeTab==="home")renderStage(state.activeTab); advance();
+  });
+}
+function advance(){ speakSlide(state.deckIdx); }
+function startPlay(){ playing=true; if(state.activeTab==="deck"||state.activeTab==="home")renderStage(state.activeTab); toast("자동 발표 시작"); advance(); }
+function stopPlay(){ playing=false; if(autoAdv){clearTimeout(autoAdv);autoAdv=null;}
+  if("speechSynthesis" in window) window.speechSynthesis.cancel();
+  const b=$("playS"); if(b)b.textContent="자동 발표"; }
+function openScriptEditor(){
+  const box=$("scriptEditor"); if(!box)return;
+  if(box.innerHTML){ box.innerHTML=""; return; }
+  const sl=SLIDES[state.deckIdx];
+  box.innerHTML=`<div class="glass tile" style="margin-top:12px">
+    <div class="mini" style="margin-bottom:6px">이 슬라이드 발표 스크립트 (편집 후 자동 발표에 반영)</div>
+    <textarea id="scriptTA" style="width:100%;min-height:90px;font-family:inherit;font-size:14px;padding:10px;border:1px solid var(--line);border-radius:10px;">${esc(sl.script||"")}</textarea>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="b-mint" id="scriptSave">저장</button>
+      <button class="b-ghost" id="scriptTest">이 슬라이드 읽기</button>
+    </div></div>`;
+  $("scriptSave").onclick=()=>{ SLIDES[state.deckIdx].script=$("scriptTA").value; toast("스크립트 저장됨"); box.innerHTML=""; };
+  $("scriptTest").onclick=()=>{ if("speechSynthesis" in window){ const u=new SpeechSynthesisUtterance($("scriptTA").value); u.lang="ko-KR"; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);} };
+}
+
+// ==================== APP ====================
+// ==================== 금일 회의 페이지 ====================
+const OUTREACH={
+  invite:{title:"진인혜 님·방준석 교수님 초대 + 가입 요청",to:"jsbang@sookmyung.ac.kr,jih4154@sookmyung.ac.kr",subj:"[초대] MedIT × 약학대학 (2026.07.10) — 캠퍼스타운 허브 가입 요청",
+    body:`방준석 교수님, 진인혜 님께\n\n안녕하세요. 2026년 7월 10일(금) 오전 10시, 숙명캠퍼스타운 209호 미팅룸 1호에서 진행한 고령화 Age-Tech 회의 내용을 정리해 공유드립니다.\n\n아래 회의 운영 사이트(캠퍼스타운 허브)에서 회의 요약과 자료를 확인하실 수 있도록, 이메일로 가입해 주시기를 요청드립니다.\n\n- 사이트: 캠퍼스타운 허브 (CampusTown Hub)\n- 가입: 개인 이메일 또는 소셜 계정(Google·Naver 등)\n- 역할: '초대자'로 가입하시면 초대된 회의의 요약·자료·회의록을 열람하실 수 있습니다\n\n서면·비대면으로 편하게 확인·회신해 주시면 됩니다.\n\n감사합니다.`},
+  lg:{title:"LG U+ 복약지도 셋톱 협업 제안",to:"",subj:"[제안] 복약지도 U+ 셋톱박스(webOS) 탑재 협업 검토 요청",
+    body:`안녕하세요. 숙명여자대학교 약학대학 연구팀(연구 주도: 방준석 교수)에서 고령친화 복약관리 연구와 관련하여 LG U+에 협업을 제안드립니다.\n\n고령자의 복약지도 접근성을 높이기 위해, 이미 가정에 보급된 U+ 통신 셋톱박스를 활용하는 방안을 검토하고 있습니다.\n\n문의드립니다.\n1. U+ 통신 셋톱박스의 webOS에 복약지도 기능을 변경·탑재하는 것이 기술적으로 가능한지\n2. 기존 셋톱 UI를 유지하며 복약 안내 모듈을 추가하는 협업이 가능한지\n3. 협업이 가능하다면, 정식 제안서를 제출드려도 될지\n\n복약 안내는 약사·의사의 검토를 전제로 하며, 시스템은 보조 역할에 한정합니다.\n서면으로 검토·회신해 주시면 감사하겠습니다.\n\n숙명여자대학교 약학대학 연구팀`},
+  hu:{title:"휴베이스·온누리 협업 페이지·코웍 요청",to:"",subj:"[문의] 휴베이스·온누리 협업 페이지 및 코웍 요청",
+    body:`안녕하세요. 숙명여자대학교 약학대학 연구팀(연구 주도: 방준석 교수)에서 고령친화 복약관리 연구와 관련하여 휴베이스 및 온누리와의 협업을 문의드립니다.\n\n금일 휴베이스-나라약국에 가입하였으며, 약국 현장의 복약·판매 데이터를 비식별 처리하여 고령자 복약관리 연구에 활용하는 방안을 검토하고 있습니다.\n\n문의드립니다.\n1. 휴베이스·온누리와 협업 페이지(공동 작업 공간)를 개설할 수 있는지\n2. 약국 POS·데이터 연계 관련 코웍(co-work) 요청이 가능한지\n3. 협업이 가능하다면 진행 방식과 필요 절차\n\n데이터는 비식별 처리하며, 개인 매칭·상업화는 법적 검토를 최우선으로 진행합니다.\n서면·비대면으로 편하게 회신해 주시면 됩니다.\n\n숙명여자대학교 약학대학 연구팀`},
+};
+function todayHTML(){
+  const m=currentMeeting()||{};
+  return `<div class="today">
+   <div class="section-title">Today · 금일 회의</div>
+   <h2 style="font-size:23px;color:var(--ink);margin-bottom:4px">${esc(m.title||"금일 회의")}</h2>
+   <div class="mini" style="margin-bottom:14px">${esc(fmtDate(m.date))} ${esc(m.time||"")} · ${esc(m.place||"")}</div>
+
+   <div class="glass tile" style="margin-bottom:14px">
+     <h4 style="margin:0 0 8px">회의 요약</h4>
+     <div class="today-sum">백신 접종 앱의 국내·해외 사례를 검토해 최적화 모델·요구사항을 도출하고, 상용화를 전제로 의사·약사·의료인의 상호작용을 보완하는 방향을 논의했습니다. AI는 도움·서포트 수준까지 보조하며 전문가 판단 범주를 넘지 않는다는 원칙을 확인했습니다.</div>
+     <div class="today-tags">
+       <span>법적 검토 최우선</span><span>백신 앱 벤치마크</span><span>색상 대조표 AI화</span><span>용산구 파일럿</span><span>11~12월 제안서</span>
+     </div>
+     <button class="b-deep" id="tLoadMinutes" style="margin-top:12px">전체 회의록 → 이메일 탭으로</button>
+   </div>
+
+   <div class="section-title" style="margin-top:6px">초대·아웃리치 (서면·비대면)</div>
+   <div id="outreachCards"></div>
+  </div>`;
+}
+function outreachCard(key){
+  const o=OUTREACH[key];
+  return `<div class="ocard">
+    <div class="oc-top"><b>${esc(o.title)}</b></div>
+    <div class="oc-body">${esc(o.body).replace(/\n/g,"<br>")}</div>
+    <div class="oc-actions">
+      <button class="b-mint" data-mail="${key}">메일 앱으로 열기</button>
+      <button class="b-ghost" data-copy="${key}">본문 복사</button>
+    </div>
+  </div>`;
+}
+function bindToday(){
+  const box=$("outreachCards");
+  if(box){
+    box.innerHTML=Object.keys(OUTREACH).map(outreachCard).join("");
+    box.querySelectorAll("[data-mail]").forEach(b=>b.onclick=()=>{
+      const o=OUTREACH[b.dataset.mail];
+      window.location.href=`mailto:${encodeURIComponent(o.to)}?subject=${encodeURIComponent(o.subj)}&body=${encodeURIComponent(o.body)}`;
+      toast("메일 앱을 엽니다");
+    });
+    box.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{
+      const o=OUTREACH[b.dataset.copy];
+      navigator.clipboard&&navigator.clipboard.writeText(o.body); toast("본문을 복사했습니다");
+    });
+  }
+  const lm=$("tLoadMinutes"); if(lm)lm.onclick=()=>{switchTab("email");setTimeout(()=>{const b=$("emLoad0710");if(b)b.click();},200);};
+}
+
+// ==================== VIDEO (Jitsi 임베드 · 무료·무제한) ====================
+function jitsiRoom(){
+  const m=currentMeeting(); if(!m)return "CampusTownHub";
+  // 회의 id 기반 고유 룸 이름 (공백·특수문자 제거)
+  return "CampusTownHub-"+(m.id||"room").replace(/[^a-zA-Z0-9]/g,"");
+}
+function videoHTML(){
+  const m=currentMeeting()||{};
+  const room=jitsiRoom();
+  const link="https://meet.jit.si/"+room;
+  return `<div class="hero">
+   <div class="section-title">Video · 화상회의 (Jitsi Meet · 무료·무제한)</div>
+   <h2 style="font-size:22px;color:var(--ink);margin-bottom:4px">화상회의</h2>
+   <div class="mini" style="margin-bottom:14px">계정 없이 무료로, 시간 제한 없이 사용할 수 있습니다. 아래에서 바로 시작하거나, 이메일로 참석자를 초대하세요.</div>
+
+   <div class="glass tile" style="margin-bottom:14px">
+     <div class="vrow">
+       <div><b>회의 링크</b><div class="mini" id="vLink">${esc(link)}</div></div>
+       <div style="display:flex;gap:7px;flex-wrap:wrap">
+         <button class="b-mint" id="vStart">화상회의 시작</button>
+         <button class="b-ghost" id="vCopy">링크 복사</button>
+         <button class="b-deep" id="vInvite">이메일로 초대</button>
+       </div>
+     </div>
+   </div>
+
+   <div class="glass tile" style="padding:0;overflow:hidden">
+     <div id="vFrame" class="vframe-empty">
+       <div>
+         <div style="font-size:15px;font-weight:700;color:var(--deep);margin-bottom:6px">화상회의 준비됨</div>
+         <div class="mini" style="margin-bottom:12px">‘화상회의 시작’을 누르면 이 자리에 화상 화면이 나타납니다.<br>카메라·마이크 권한을 허용해 주세요. (Chrome/Edge 권장)</div>
+         <button class="b-mint" id="vStart2">화상회의 시작</button>
+       </div>
+     </div>
+   </div>
+   <div class="mini" style="margin-top:10px">※ 브라우저에서 파일을 직접 열면 임베드가 제한될 수 있습니다. 그럴 땐 ‘링크 복사’로 새 탭에서 여세요.</div>
+  </div>`;
+}
+let jitsiApi=null;
+function startJitsi(){
+  const box=$("vFrame"); if(!box)return;
+  const room=jitsiRoom();
+  box.classList.remove("vframe-empty");
+  box.innerHTML='<iframe allow="camera; microphone; fullscreen; display-capture; autoplay" '+
+    'src="https://meet.jit.si/'+room+'#config.prejoinPageEnabled=false" '+
+    'style="width:100%;height:520px;border:0;border-radius:16px;"></iframe>';
+  toast("화상회의를 시작합니다 · 카메라·마이크를 허용해 주세요");
+}
+function bindVideo(){
+  const m=currentMeeting()||{};
+  const link="https://meet.jit.si/"+jitsiRoom();
+  const s1=$("vStart"),s2=$("vStart2");
+  if(s1)s1.onclick=startJitsi; if(s2)s2.onclick=startJitsi;
+  const cp=$("vCopy");if(cp)cp.onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(link);toast("링크를 복사했습니다");};
+  const inv=$("vInvite");if(inv)inv.onclick=()=>inviteByEmail(link);
+}
+// 이메일 초대 (초대장 생성 + 메일앱 열기)
+function inviteByEmail(link){
+  const m=currentMeeting()||{};
+  const to=(m.attendees||[]).map(a=>a.email).filter(Boolean).join(",");
+  const subj=`[초대] ${m.title||"회의"}`;
+  const body=`안녕하세요,\n\n아래 회의에 초대합니다.\n\n`+
+    `회의: ${m.title||""}\n일시: ${fmtDate(m.date)} ${m.time||""}\n장소: ${m.place||""}\n`+
+    `화상회의 링크: ${link}\n\n감사합니다.`;
+  const url=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+  window.location.href=url;
+  toast("메일 앱으로 초대장을 엽니다");
+}
+
+function appHTML(){
+  return `<div class="appwrap">
+   <div class="phone" style="width:300px;height:600px;padding:10px;"><div class="screen" style="border-radius:16px;overflow:hidden;">
+     <iframe src="MediNote_app.html" style="width:100%;height:100%;border:none;" title="MediNote 복약·접종 앱"></iframe>
+   </div></div>
+   <div class="appinfo"><h2>모바일 복약·접종 앱 (데모)</h2>
+     <div class="glass feat"><div class="ft">5탭 구성</div><div class="fd">홈·백신·AI도우미·애프터케어·기록 — 고령자 친화 큰 글씨·단순 동선</div></div>
+     <div class="glass feat"><div class="ft">이중언어 자동 감지</div><div class="fd">한국어/영어 — 고령자·다문화 대응</div></div>
+     <div class="glass feat"><div class="ft">오프라인 우선 + 원코드 3플랫폼</div><div class="fd">WebView 래퍼로 Android·iOS·웹 단일 코드베이스</div></div>
+     <div class="glass feat"><div class="ft">건강 데이터 연동</div><div class="fd">HealthConnect·HealthKit — 원시데이터 온디바이스 보존</div></div>
+   </div></div>`;
+}
+
+// ==================== REGISTRY ====================
+function registryHTML(){
+  return `<div class="hero">
+   <div class="section-title">이번 회의 안건 · 약사 참여 사이트</div>
+   <h2 style="color:var(--ink);margin-bottom:4px">약사 참여 연구 사이트 — 구현 희망 설계</h2>
+   <div class="mini" style="margin-bottom:16px">약사가 연구에 동참하고, 그 인사이트가 연구·제약으로 이어지는 창구. 국제·전국·대학 세 축으로 설계합니다.</div>
+
+   <div class="grid g3" style="margin-bottom:16px">
+     <div class="glass tile"><h4>국제 약사 참여 창구</h4>
+       <div class="muted"><b>FIP(국제약사연맹)</b> 모델. WHO 공식관계, 158개국·400만 약사. 개인 온라인 등록 → <b>약국실무연구 SIG</b> 참여 → ECHO(경제·임상·인문 성과) 평가 기여. 전 세계 약사가 동참하는 등록·연구 창구.</div></div>
+     <div class="glass tile"><h4>전국 약사 네트워크</h4>
+       <div class="muted"><b>대한약사회</b> 8만 약사 · 커뮤니티케어 다제약물관리·부작용 보고 사업. 지역약사 방문약물관리 시범사업(여러 지자체) 연계. 국내 약사 등록·데이터·인사이트 네트워크(미국 PBRN 구조 참고).</div></div>
+     <div class="glass tile"><h4>숙명 약국 연구실 <span class="mini" style="color:var(--gold)">※기관 확인 필요</span></h4>
+       <div class="muted">숙명여대 <b>제약디자인 + 건강기능식품 제조 요청</b>을 받는 대형 약국 연구실 모델. 제제화·안전성 연구 + 현직 약사 재교육(연수교육) 결합. 대학 약학연구소 사례 참고.</div></div>
+   </div>
+
+   <div class="section-title">공통 백엔드 · 4층 아키텍처</div>
+   <div class="glass tile">
+     <div class="lrow"><span class="ln">L1</span><span class="lt">약사 등록 (Registry)</span><span class="ld">면허·약국·전문관심 + 데이터이용 동의·라이선스 · Data Access Group</span></div>
+     <div class="lrow"><span class="ln">L2</span><span class="lt">데이터 전송 (Web→Repo)</span><span class="ld">POS 브리지 커넥터 비식별 스트림 · ATC/MedDRA 표준화</span></div>
+     <div class="lrow"><span class="ln">L3</span><span class="lt">모바일 수집</span><span class="ld">약사 앱 현장 캡처 + 환자 ePRO · honest broker</span></div>
+     <div class="lrow"><span class="ln" style="background:var(--gold)">L4</span><span class="lt">인사이트 (Research)</span><span class="ld">substitution 근거·순응 장벽·AE → 연구·제약 R&D 연계</span></div>
+   </div>
+   <div class="grid g2" style="margin-top:14px">
+     <div class="glass tile"><h4>구축 권고</h4><div class="muted">REDCap 위에: 감사추적·분석즉시 데이터셋·SPSS/R 내보내기. MedIT는 등록 사이트·POS 커넥터·모바일 앱 담당.</div></div>
+     <div class="glass tile"><h4>규제 유의</h4><div class="muted">식별 환자데이터 포함 시 인체대상연구 → 수집 前 IRB 승인. 등록·동의 아키텍처는 처음부터 IRB와 설계.</div></div>
+   </div>
+   <div class="mini" style="margin-top:12px;color:var(--gold)">※ FIP·대한약사회 정보는 공식 사이트 확인 결과이며, 숙명 약국 연구실의 실제 운영 세부는 기관 확인 후 채워야 합니다.</div>
+  </div>`;
+}
+
+// ==================== CONSOLE ====================
+function consoleHTML(){
+  return `<div class="console">
+   <div class="glass cpanel">
+     <h3>실시간 녹취 <span class="tag" id="segCount">${state.segments.length}</span></h3>
+     <div class="privacy-note">음성은 저장되지 않고 텍스트로만 변환됩니다. 회의 종료 시 녹취 원문은 자동 파기되고, 회의록과 정리된 스크립트만 남습니다.</div>
+     <div class="cscroll" id="transcript"></div>
+     <div class="crow">
+       <button class="b-mint" id="micBtn">녹취 시작</button>
+       <button class="b-ghost" id="clearBtn">지우기</button>
+       <span class="mini" id="micHint">브라우저 음성인식(한국어)</span>
+     </div>
+     <div class="crow" style="border-top:none;padding-top:0">
+       <input id="typeInput" placeholder="직접 입력(내 메모) · Enter">
+       <button class="b-deep" id="addBtn">추가</button>
+     </div>
+   </div>
+   <div class="glass cpanel">
+     <h3>회의록 (AI 반영) <span class="tag">Claude</span></h3>
+     <div class="cscroll" id="notes"></div>
+     <div class="crow">
+       <button class="b-deep" id="syncBtn">AI 반영</button>
+       <label class="mini" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="autoSync">자동(30초)</label>
+       <button class="b-ghost" id="ttsBtn">회의 읽어주기</button>
+       <button class="b-gold" id="endBtn2">종료·정리</button>
+     </div>
+     <h3 style="border-top:1px solid var(--line)">즉석 리서치 <span class="tag">Claude</span></h3>
+     <div class="cscroll" id="research" style="max-height:140px"></div>
+     <div class="crow" style="border-top:none;padding-top:0">
+       <input id="researchInput" placeholder="용어·수치 조사 · Enter">
+       <button class="b-deep" id="researchBtn">조사</button>
+     </div>
+   </div></div>`;
+}
+function bindConsole(){
+  renderTranscript();renderNotes();renderResearch();
+  $("micBtn").onclick=()=>listening?stopMic():startMic();
+  $("clearBtn").onclick=()=>{if(confirm("녹취를 모두 지울까요?")){state.segments=[];renderTranscript();refreshBadges();scheduleSave();}};
+  $("addBtn").onclick=addTyped;$("typeInput").addEventListener("keydown",e=>{if(e.key==='Enter')addTyped();});
+  $("syncBtn").onclick=syncNotes;$("endBtn2").onclick=endMeeting;
+  $("ttsBtn").onclick=toggleTTS;
+  $("researchBtn").onclick=doResearch;$("researchInput").addEventListener("keydown",e=>{if(e.key==='Enter')doResearch();});
+  $("autoSync").onchange=e=>{if(e.target.checked){autoTimer=setInterval(()=>{if(state.segments.length)syncNotes();},30000);toast("30초마다 자동 반영");}else clearInterval(autoTimer);};
+  if(listening){$("micBtn").classList.add("on");$("micBtn").textContent="⏹ 녹취 중지";}
+}
+function renderTranscript(interim){const box=$("transcript");if(!box)return;
+  if(!state.segments.length&&!interim){box.innerHTML='<div class="mini" style="font-style:italic">회의를 시작하면 자동으로 녹취됩니다. 타이핑도 가능합니다.</div>';return;}
+  let h=state.segments.map(s=>`<div class="note ${s.who==='나'?'me':''}"><span class="who">${esc(s.who)} · ${s.time}</span>${esc(s.text)}</div>`).join("");
+  if(interim)h+=`<div class="note" style="opacity:.5;font-style:italic"><span class="who">발화 (인식중…)</span>${esc(interim)}</div>`;
+  box.innerHTML=h;box.scrollTop=box.scrollHeight;const sc=$("segCount");if(sc)sc.textContent=state.segments.length;}
+function addSegment(text,who){if(!text.trim())return;
+  state.segments.push({text:text.trim(),who:who||'교수님',time:new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})});
+  renderTranscript();refreshBadges();scheduleSave();}
+function addTyped(){const v=$("typeInput").value;if(v.trim()){addSegment(v,'나');$("typeInput").value="";}}
+
+let recog=null,listening=false,autoTimer=null;
+function initRecog(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){const h=$("micHint");if(h)h.textContent="음성인식 미지원 — 타이핑 사용";const b=$("micBtn");if(b)b.disabled=true;return;}
+  recog=new SR();recog.lang='ko-KR';recog.continuous=true;recog.interimResults=true;
+  recog.onresult=e=>{let it="";for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];
+    if(r.isFinal)addSegment(r[0].transcript,'교수님');else it+=r[0].transcript;}renderTranscript(it);};
+  recog.onerror=e=>{if(e.error==='not-allowed'){toast("마이크 권한이 필요합니다");stopMic();}};
+  recog.onend=()=>{if(listening){try{recog.start();}catch(_){}}};
+}
+function startMic(){if(!recog)initRecog();if(!recog)return;try{recog.start();}catch(_){}
+  listening=true;const b=$("micBtn");if(b){b.classList.add("on");b.textContent="⏹ 녹취 중지";}
+  setPill("live","녹취 중");}
+function stopMic(){listening=false;if(recog){try{recog.stop();}catch(_){}}
+  const b=$("micBtn");if(b){b.classList.remove("on");b.textContent="녹취 시작";}
+  if(!(state.meeting.started&&!state.meeting.ended))setPill("idle","회의 대기");}
+
+// TTS — 회의 읽어주기 (마이크 불필요, 스피커만)
+let ttsOn=false;
+function toggleTTS(){
+  if(!("speechSynthesis" in window)){ toast("이 브라우저는 음성 읽기를 지원하지 않습니다"); return; }
+  if(ttsOn){ window.speechSynthesis.cancel(); ttsOn=false; const b=$("ttsBtn"); if(b)b.textContent="회의 읽어주기"; return; }
+  // build reading text: notes summary + agenda/decisions, else transcript
+  let text="";
+  if(state.notes){ const n=state.notes;
+    text="회의 요약. "+(n.summary||"")+". ";
+    if(n.agenda&&n.agenda.length) text+="안건. "+n.agenda.join(", ")+". ";
+    if(n.decisions&&n.decisions.length) text+="결정 사항. "+n.decisions.join(", ")+". ";
+    if(n.actions&&n.actions.length) text+="액션 아이템. "+n.actions.join(", ")+". ";
+  } else if(state.segments.length){
+    text="회의 녹취. "+state.segments.slice(-15).map(s=>s.text).join(". ");
+  } else { toast("읽을 회의 내용이 없습니다"); return; }
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang="ko-KR"; u.rate=1.0; u.pitch=1.0;
+  u.onend=()=>{ ttsOn=false; const b=$("ttsBtn"); if(b)b.textContent="회의 읽어주기"; };
+  window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+  ttsOn=true; const b=$("ttsBtn"); if(b)b.textContent="⏹ 읽기 중지";
+}
+function renderNotes(){const box=$("notes");if(!box)return;
+  if(!state.notes){box.innerHTML='<div class="mini" style="font-style:italic">녹취가 쌓이면 \u2018AI 반영\u2019으로 회의록이 생성됩니다.</div>';return;}
+  const n=state.notes,sec=(t,a)=>`<div class="nsec"><h4>${t}</h4>`+(a&&a.length?"<ul>"+a.map(x=>`<li>${esc(x)}</li>`).join("")+"</ul>":'<div class="mini">—</div>')+"</div>";
+  box.innerHTML=(n.summary?`<div class="rcard"><div>${esc(n.summary)}</div></div>`:"")+
+    (state.topicTags.length?`<div style="margin-bottom:8px">${state.topicTags.map(t=>`<span class="chip"><span class="av">#</span>${esc(t)}</span>`).join("")}</div>`:"")+
+    sec("안건",n.agenda)+sec("결정",n.decisions)+sec("액션",n.actions)+sec("후속",n.followups)+
+    (state.nextActions.length?sec("AI 추천 다음 할 일",state.nextActions):"");}
+async function syncNotes(silent){
+  if(!state.segments.length){if(!silent)toast("녹취 내용이 없습니다");return;}
+  const b=$("syncBtn");if(b){b.disabled=true;b.textContent="반영 중…";}
+  setPill("wait","AI 정리 중");
+  const upText=state.uploads.filter(u=>u.text).map(u=>`[자료:${u.name}] ${u.text.slice(0,1500)}`).join("\n");
+  const tr=state.segments.map(s=>`[${s.who}] ${s.text}`).join("\n");
+  const sys="당신은 한국어 회의 서기입니다. 순수 JSON만 출력(설명·코드펜스 없이). "+
+    '스키마:{"title":"회의 제목(간결)","purpose":"목적 한 줄","summary":"1-2문장 개요","tags":["주제태그"],"agenda":[],"decisions":[],"actions":[],"followups":[],"nextActions":["AI가 추천하는 다음 할 일"]}. '+
+    "약학대학 교수와 MedIT(디지털 약료 플랫폼) 대표의 회의입니다. 참석자·자료 맥락을 반영하세요.";
+  try{
+    let o=await callClaude(sys,(upText?("사전자료:\n"+upText+"\n\n"):"")+"녹취:\n"+tr,1400);
+    o=o.replace(/```json|```/g,"").trim();const j=JSON.parse(o);
+    state.notes={summary:j.summary,agenda:j.agenda||[],decisions:j.decisions||[],actions:j.actions||[],followups:j.followups||[]};
+    state.topicTags=j.tags||[];state.nextActions=j.nextActions||[];
+    // AI auto-edit meeting title/purpose
+    if(j.title)state.meeting.title=j.title;
+    if(j.purpose)state.meeting.purpose=j.purpose;
+    renderNotes();scheduleSave();
+    if(!silent)toast("회의록·제목·다음할일 자동 갱신됨");
+  }catch(e){if(!silent)toast("반영 실패: "+e.message);}
+  finally{if(b){b.disabled=false;b.textContent="AI 반영";}
+    setPill(state.meeting.started&&!state.meeting.ended?"live":"idle",state.meeting.started&&!state.meeting.ended?"회의 진행 중":"회의 대기");}
+}
+function renderResearch(){const box=$("research");if(!box)return;
+  box.innerHTML=state.research.length?state.research.map(r=>`<div class="rcard"><div class="q">${esc(r.q)}</div><div>${esc(r.ans)}</div></div>`).join(""):'<div class="mini" style="font-style:italic">용어·수치를 조사합니다.</div>';}
+async function doResearch(){const q=$("researchInput").value.trim();if(!q)return;$("researchInput").value="";
+  state.research.unshift({q,ans:"조사 중…"});renderResearch();
+  const sys="약학·디지털헬스 리서치 보조. 3-4문장 간결한 한국어. 불확실하면 밝히고 수치는 대략치 표시.";
+  try{const a=await callClaude(sys,q,400);state.research[0].ans=a;}catch(e){state.research[0].ans="조사 실패: "+e.message;}
+  renderResearch();scheduleSave();}
+
+// ==================== END MEETING → stats + mood + email draft ====================
+function computeStats(){
+  const prof=state.segments.filter(s=>s.who!=='나').length,me=state.segments.filter(s=>s.who==='나').length;
+  const words=state.segments.map(s=>s.text).join(" ").split(/\s+/).filter(Boolean).length;
+  const dur=state.meeting.started?Math.round(((state.meeting.ended||Date.now())-state.meeting.started)/60000):0;
+  return{segs:state.segments.length,prof,me,words,dur};
+}
+async function endMeeting(){
+  if(listening)stopMic();
+  state.meeting.ended=Date.now();
+  setPill("wait","종료 정리 중");
+  const b2=$("endBtn2");if(b2){b2.disabled=true;b2.textContent="정리 중…";}
+  if(state.segments.length&&!state.notes){try{await syncNotes(true);}catch(_){}}
+  else if(state.segments.length){try{await syncNotes(true);}catch(_){}}
+  const stats=computeStats();
+  let mood="(분위기 요약 없음)";
+  if(state.segments.length){try{
+    const tr=state.segments.map(s=>`[${s.who}] ${s.text}`).join("\n");
+    mood=await callClaude("회의 분위기 분석가. 녹취를 읽고 3-4문장 한국어로 분위기·톤·합의 정도를 요약. 순수 텍스트.",tr,400);
+  }catch(e){mood="분위기 요약 실패: "+e.message;}}
+  // email draft
+  let email="";try{ email=await buildEmailDraft(mood,stats); }catch(e){ email="(이메일 생성 실패: "+e.message+")"; }
+  // 정리된 스크립트 생성 (녹취 원문은 저장하지 않음)
+  let script="";
+  if(state.segments.length){
+    try{
+      const tr=state.segments.map(s=>`[${s.who}] ${s.text}`).join("\n");
+      script=await callClaude("회의 녹취 정리 담당. 녹취를 읽기 쉬운 스크립트로 정리하라. 중복·잡음·군말 제거, 발언 순서 유지, 한국어. 순수 텍스트만 출력.",tr,2000);
+    }catch(e){
+      // AI 정리 실패 시: 원문을 그대로 두지 않고 최소 정리본만 생성
+      script=state.segments.map(s=>`[${s.who}] ${s.text}`).join("\n");
+    }
+  }
+  const purgedAt=new Date().toLocaleString('ko-KR');
+  const segCount=state.segments.length;
+  const rec={id:"m"+Date.now(),dt:new Date().toLocaleString('ko-KR'),
+    title:state.meeting.title,purpose:state.meeting.purpose,mood,stats,
+    notes:state.notes,tags:state.topicTags.slice(),nextActions:state.nextActions.slice(),
+    attendees:state.attendees.slice(),
+    script,                       // 정리된 스크립트 (보존)
+    segments:[],                  // 녹취 원문 — 저장하지 않음 (파기)
+    purged:{at:purgedAt,count:segCount},   // 파기 기록
+    research:state.research.slice(),tabNotes:JSON.parse(JSON.stringify(state.tabNotes)),email};
+  state.records.unshift(rec);await saveRecords();
+  // 녹취 원문 파기 (메모리에서도 즉시 제거)
+  state.segments=[];state.notes=null;state.research=[];state.nextActions=[];state.topicTags=[];
+  state.tabNotes={deck:[],app:[],registry:[],console:[]};
+  state.meeting.started=null;state.meeting.ended=null;state.meetingStart=null;
+  await saveSession();
+  setPill("idle","회의 대기");
+  if(b2){b2.disabled=false;b2.textContent="종료·정리";}
+  toast("회의 종료 · 회의록·스크립트 저장, 녹취 원문은 파기되었습니다");
+  switchTab("email");
+}
+async function buildEmailDraft(mood,stats){
+  const n=state.notes||{};
+  const att=state.attendees.map(a=>a.name+(a.email?` <${a.email}>`:"")).join(", ");
+  const body=
+`제목: [MedIT 회의록] ${state.meeting.title}
+
+안녕하세요, 회의록을 공유드립니다.
+
+■ 회의: ${state.meeting.title}
+■ 목적: ${state.meeting.purpose}
+■ 일시: ${fmtTime(state.meeting.started)} · ${stats.dur}분
+■ 참석: ${att||"—"}
+
+■ 분위기 요약
+${mood}
+
+■ 개요
+${n.summary||"—"}
+
+■ 주요 안건
+${(n.agenda||[]).map(x=>"· "+x).join("\n")||"—"}
+
+■ 결정 사항
+${(n.decisions||[]).map(x=>"· "+x).join("\n")||"—"}
+
+■ 액션 아이템
+${(n.actions||[]).map(x=>"· "+x).join("\n")||"—"}
+
+■ AI 추천 다음 할 일
+${(state.nextActions||[]).map(x=>"· "+x).join("\n")||"—"}
+
+감사합니다.
+바쁘신 중, 감사드립니다 — 신현정 드림`;
+  return body;
+}
+
+// ==================== EMAIL TAB ====================
+function emailHTML(){
+  const last=state.records[0];
+  const to=state.attendees.map(a=>a.email).filter(Boolean).join(", ");
+  const draft=last?last.email:"";
+  const subj=last?`[MedIT 회의록] ${last.title}`:"[MedIT 회의록]";
+  return `<div class="email">
+   <div class="section-title">Minutes & Email</div>
+   <h2 style="font-size:22px;color:var(--ink);margin-bottom:4px">회의록 · 이메일 아카이브</h2>
+   <div class="mini" style="margin-bottom:16px">회의 종료 시 AI가 녹취·참석자·자료를 정리해 이메일 초안을 만듭니다. 지금은 \u2018메일 앱으로 열기\u2019·복사까지 지원하며, 자동 발송은 신뢰도 확인 후 연동 예정입니다.</div>
+   <div class="glass tile">
+     <div class="field"><label>받는 사람</label><input id="emTo" value="${esc(to)}" placeholder="attendee@example.com"></div>
+     <div class="field"><label>제목</label><input id="emSubj" value="${esc(subj)}"></div>
+     <div class="field"><label>본문 <span class="aibadge"><span class="dot"></span>AI 작성</span></label><textarea id="emBody" placeholder="회의를 종료하면 AI가 초안을 채웁니다.">${esc(draft)}</textarea></div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap">
+       <button class="b-mint" id="emOpen">메일 앱으로 열기</button>
+       <button class="b-ghost" id="emCopy">본문 복사</button>
+       <button class="b-ghost" id="emRegen">AI 다시 작성</button>
+       <button class="b-gold" id="emLoad0710">0710 회의록 불러오기</button>
+       <button class="b-deep" id="emMd">회의록 MD</button>
+     </div>
+   </div>
+   <div class="section-title" style="margin-top:18px">이메일 아카이브</div>
+   <div id="archive"></div>
+  </div>`;
+}
+function bindEmail(){
+  renderArchive();
+  $("emOpen").onclick=()=>{const to=$("emTo").value,su=encodeURIComponent($("emSubj").value),bo=encodeURIComponent($("emBody").value);
+    window.location.href=`mailto:${encodeURIComponent(to)}?subject=${su}&body=${bo}`;};
+  $("emCopy").onclick=()=>{navigator.clipboard.writeText($("emBody").value).then(()=>toast("본문을 복사했습니다"));};
+  $("emMd").onclick=()=>{if(state.records[0])exportRecord(state.records[0].id);else toast("종료된 회의가 없습니다");};
+  const el=$("emLoad0710"); if(el)el.onclick=()=>{
+    $("emSubj").value="[회의록] MedIT × 약학대학 (2026.07.10) — 고령화 Age-Tech";
+    $("emBody").value=MINUTES_0710;
+    const to=(currentMeeting()&&currentMeeting().attendees||[]).map(a=>a.email).filter(Boolean).join(", ");
+    if(to)$("emTo").value=to;
+    toast("0710 회의록을 불러왔습니다");
+  };
+  $("emRegen").onclick=async()=>{if(!state.records[0]){toast("종료된 회의가 없습니다");return;}
+    const r=state.records[0];const b=$("emRegen");b.disabled=true;b.textContent="작성 중…";
+    try{const em=await buildEmailFromRecord(r);$("emBody").value=em;r.email=em;await saveRecords();toast("이메일 다시 작성됨");}
+    catch(e){toast("실패: "+e.message);}finally{b.disabled=false;b.textContent="AI 다시 작성";}};
+}
+const MINUTES_0710=`안녕하세요,
+
+2026년 7월 10일(금) 오전 10시, 숙명캠퍼스타운 209호 미팅룸 1호에서 진행한 MedIT × 약학대학 회의(고령화 Age-Tech) 회의록을 정리해 공유드립니다.
+
+[1. 큰 그림·방향]
+- 백신 접종 앱 국내·해외 사례를 검토해 최적화 모델과 요구사항 도출
+- 상용화 전제 개발: 의사·약사·의료인의 상호작용을 보완하는 기술
+- AI는 도움·서포트(디지털 리터러시) 수준까지 — 의사·약사의 범주를 넘지 않음
+- 차별화 서비스로 빠른 도입 가능성 제안(챗봇·예약·Quick response)
+
+[2. 약사 차별화 서비스]
+- 제형 추천·제제 다양화(정제·액제 병행), 영역별 개인 맞춤화
+- 3D 디지털 프린트, 맞춤 의학, 타액 유전자 추출(동의 복잡) 등 향후 검토
+- 건강식품 정보·추천, MBTI 분석 등 부가 서비스
+- 복약지도료·검사·처치·수술 진행 시 수가 발생 구조 고려
+
+[3. 데이터·Real World Data]
+- 건강검진 데이터(체중·혈액 등) 소유권은 병원 — 상품화 시 병원 동의, 국가 지원 시 과제화
+- 네이버·카카오 헬스케어, Amazon Care·세브란스 사례 리서치
+- 약학정보원·약사의 디지털 리터러시 낮음 → 데이터 확보·활용 난이도
+- 데이터 상업화(제약사 디자인·임상·기구) 시 법적 검토 필수(최우선)
+- 랜덤/합성 데이터 생성·패턴 추출 연구 가능성
+
+[4. 표준화·약학정보원]
+- 약학정보원 표준 정보, 식약처 위탁사업형 조제 허가(정제만, 액제 불가)
+- 아세트아미노펜 색상 대조표 → 이미지 데이터 AI화, 약봉투 표기
+- 부작용 데이터는 병원·대한약사회 약물안전본부·보건소·의약품안전관리원으로 수집(개인 매칭 안 됨)
+- 일반의약품 공전(용량 허가 기준), 모약·주약 혼합물 규격 정보
+
+[5. 병원 데이터·소유권·표준화]
+- 건강 프로필 소유권: 병원별 관리(대학병원 표준화 사업 분절) — 통합 과제
+- 병원 간 데이터 교류 불가, 병원별 신뢰성·한계 존재
+- 경영·청구 데이터 전국 수집망·클라우드·익명화 추출/개인화 프로필
+
+[6. 청구·보험·심평원]
+- 수기 처방전 약 청구, 외국인 약 청구·보험(법제도), 약 판매 데이터
+- 건강보험심사평가원 의료비 산정, 데이터 처리 지연, 전문의약품 금융 데이터(OTC 없음)
+- 제약사·병원 가짜 약 판별 조사
+
+[7. 상용화·지원·인프라]
+- 실용화·사회 기여도 우선(산자부), 특허·논문·인재개발(복지부)
+- 앱 임상 실증 테스트 피드백 연구 AI
+- 심평원 데이터 + 온누리·휴베이스, 클라우드(상용화 시 자체 데이터센터)
+- 영상·기기·진단 데이터 솔루션 분리, 약정원 메인 오퍼레이션·약 청구 프로그램
+- 로컬 데이터·개인화 법적 검토, 클라우드 화재 대비
+- 약학정보원 공공기관화·별도 법인 제안, 신평원 데이터 기관
+
+[8. 프로젝트 제안·현장]
+- 프로젝트 제안(생태계·현장 기술, 11~12월): 약사회·약국체인
+- 복약·백신 접종 앱(국가 기록 연동), GPS 입실 자동화, 앱 피드백
+- 용산구 대한노인회·고령친화 약국·경로당·만성질환, 온누리·휴베이스 등 조사
+- 재고 관리·환자 관리, 전자담배 정보화 조사
+
+[다음 액션]
+1. 데이터 상업화·개인화 법적 검토 (최우선)
+2. 백신 앱 국내외 사례 벤치마크 → 요구사항 정리
+3. 약학정보원 이미지 데이터(색상 대조표) AI화 검토
+4. 고령친화 약국·경로당(용산구) 현장 파일럿 방안
+5. 11~12월 프로젝트 제안서(생태계·현장 기술)
+
+감사합니다.`;
+async function buildEmailFromRecord(r){
+  const n=r.notes||{};const att=r.attendees.map(a=>a.name+(a.email?` <${a.email}>`:"")).join(", ");
+  return `제목: [MedIT 회의록] ${r.title}
+
+안녕하세요, 회의록을 공유드립니다.
+
+■ 회의: ${r.title}
+■ 목적: ${r.purpose}
+■ 일시: ${r.dt} · ${r.stats.dur}분
+■ 참석: ${att||"—"}
+
+■ 분위기 요약
+${r.mood}
+
+■ 개요
+${n.summary||"—"}
+
+■ 주요 안건
+${(n.agenda||[]).map(x=>"· "+x).join("\n")||"—"}
+
+■ 결정 사항
+${(n.decisions||[]).map(x=>"· "+x).join("\n")||"—"}
+
+■ 액션 아이템
+${(n.actions||[]).map(x=>"· "+x).join("\n")||"—"}
+
+■ AI 추천 다음 할 일
+${(r.nextActions||[]).map(x=>"· "+x).join("\n")||"—"}
+
+감사합니다.
+바쁘신 중, 감사드립니다 — 신현정 드림`;
+}
+function renderArchive(){const box=$("archive");if(!box)return;
+  box.innerHTML=state.records.length?state.records.map(r=>`
+    <div class="glass tile" style="margin-bottom:10px">
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(r.title)}</div>
+          <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${r.stats.dur}분 · 참석 ${r.attendees.length}명 · ${(r.tags||[]).map(t=>"#"+t).join(" ")}</div>
+          <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(r.mood)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="b-ghost" onclick="loadEmail('${r.id}')">이메일</button>
+          <button class="b-deep" onclick="exportRecord('${r.id}')">MD</button>
+        </div>
+      </div>
+    </div>`).join(""):'<div class="mini">아직 아카이브된 회의가 없습니다.</div>';}
+function loadEmail(id){const r=state.records.find(x=>x.id===id);if(!r)return;
+  $("emTo").value=r.attendees.map(a=>a.email).filter(Boolean).join(", ");
+  $("emSubj").value=`[MedIT 회의록] ${r.title}`;$("emBody").value=r.email||"";toast("아카이브에서 불러왔습니다");}
+window.loadEmail=loadEmail;
+
+// ==================== RECORDS (home) ====================
+function renderRecords(){const list=$("reclist");if(!list)return;
+  refreshBadges();
+  if(!state.records.length){list.innerHTML='<div class="glass tile"><div class="mini">아직 저장된 회의가 없습니다. 회의를 시작하고 종료하면 여기 쌓입니다.</div></div>';return;}
+  list.innerHTML=state.records.map(r=>`
+    <div class="glass tile" style="margin-bottom:10px;display:flex;gap:12px;align-items:flex-start">
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(r.title)}</div>
+        <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${r.stats.dur}분 · 발언 ${r.stats.segs}건 · 참석 ${r.attendees.length}명</div>
+        <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(r.mood)}</div>
+        <div style="margin-top:6px">${(r.tags||[]).map(t=>`<span class="chip"><span class="av">#</span>${esc(t)}</span>`).join("")}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button class="b-ghost" onclick="switchTab('email');setTimeout(()=>loadEmail('${r.id}'),50)">이메일</button>
+        <button class="b-deep" onclick="exportRecord('${r.id}')">MD</button>
+      </div>
+    </div>`).join("");
+}
+function recordToMD(r){let md=`# MedIT 회의록 — ${r.dt}\n\n**${r.title}**\n\n`;
+  md+=`- 목적: ${r.purpose}\n- 소요: ${r.stats.dur}분 · 발언 ${r.stats.segs}건(교수 ${r.stats.prof}/나 ${r.stats.me}) · ${r.stats.words}단어\n- 참석: ${r.attendees.map(a=>a.name+(a.email?`(${a.email})`:"")).join(", ")||"—"}\n- 태그: ${(r.tags||[]).map(t=>"#"+t).join(" ")}\n\n`;
+  md+=`## 회의 분위기\n${r.mood}\n\n`;
+  if(r.notes){const n=r.notes,sec=(t,a)=>a&&a.length?`## ${t}\n`+a.map(x=>"- "+x).join("\n")+"\n\n":"";
+    if(n.summary)md+=`## 개요\n${n.summary}\n\n`;
+    md+=sec("안건",n.agenda)+sec("결정 사항",n.decisions)+sec("액션 아이템",n.actions)+sec("후속",n.followups)+sec("AI 추천 다음 할 일",r.nextActions);}
+  const tn=r.tabNotes||{},nm={deck:"슬라이드",app:"복약앱",registry:"약사사이트",console:"콘솔"};
+  Object.keys(tn).forEach(k=>{if(tn[k]&&tn[k].length)md+=`## [${nm[k]}] 메모\n`+tn[k].map(x=>`- ${x.text}`).join("\n")+"\n\n";});
+  md+=`## 전체 녹취\n`+r.segments.map(s=>`- [${s.who} ${s.time}] ${s.text}`).join("\n")+"\n";
+  if(r.email)md+=`\n## 이메일 초안\n\`\`\`\n${r.email}\n\`\`\`\n`;
+  return md;}
+function exportRecord(id){const r=state.records.find(x=>x.id===id);if(!r)return;
+  const blob=new Blob([recordToMD(r)],{type:"text/markdown"});const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);a.download="MedIT_회의록_"+r.dt.replace(/[^0-9]/g,"").slice(0,12)+".md";a.click();toast("회의록을 내려받았습니다");}
+window.exportRecord=exportRecord;window.switchTab=switchTab;window.endMeeting=endMeeting;
+
+function refreshBadges(){const sb=$("segBadge");if(sb)sb.textContent=state.segments.length;
+  const pb=$("prepBadge");if(pb)pb.textContent=state.attendees.length+state.uploads.length;}
+
+if("speechSynthesis" in window){window.speechSynthesis.onvoiceschanged=()=>{};window.speechSynthesis.getVoices();}
+// ==================== ENTRY GATE (회의 검색 + 이름 확인) ====================
+// 등록된 참석자 명단으로 본인 확인. 비밀번호·이메일 링크 없이 검색+이름으로 입장.
+// 진입 게이트 (로그인 → 회의목록 → 입장)
+// ==================== 검색: 단일 진입점 (타이핑·음성·로봇 공용) ====================
+async function searchMeetings(query){
+  const q=(query||"").trim(); if(!q) return [];
+  const visible=state.meetings.filter(canView);
+  // 1) 이름·키워드 매칭
+  const qn=q.replace(/\s|교수님|님/g,"").toLowerCase();
+  let hits=visible.filter(m=>{
+    const hay=(m.title+" "+m.purpose+" "+m.host+" "+m.company+" "+(m.attendees||[]).map(a=>a.name).join(" ")+" "+m.date+" "+m.time).toLowerCase();
+    const toks=q.toLowerCase().split(/\s+/).filter(Boolean);
+    const nameHit=(m.attendees||[]).some(a=>{const an=a.name.replace(/\s|교수님|님/g,"").toLowerCase();return an.includes(qn)||qn.includes(an);});
+    const timeHit=/오늘|today/i.test(q)&&m.date==="2026-07-10";
+    return nameHit||timeHit||toks.some(t=>hay.includes(t));
+  });
+  // 2) 결과 없으면 AI 매칭 (있을 때만)
+  if(!hits.length){
+    try{
+      const sys="너는 회의 검색기다. 사용자 질의에 맞는 회의 id 배열만 JSON으로 출력: {\"ids\":[...]}. 회의목록: "+JSON.stringify(visible.map(m=>({id:m.id,title:m.title,host:m.host,date:m.date,time:m.time,attendees:(m.attendees||[]).map(a=>a.name)})));
+      let o=await callClaude(sys,"질의: "+q,200); o=o.replace(/```json|```/g,"").trim();
+      const ids=JSON.parse(o).ids||[]; hits=visible.filter(m=>ids.includes(m.id));
+    }catch(e){}
+  }
+  return hits;
+}
+// 음성 검색 훅 (버튼에서 호출) — STT → searchMeetings
+function voiceSearch(onResult){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ toast("이 브라우저는 음성인식을 지원하지 않습니다 (Chrome/Edge 권장)"); return; }
+  const r=new SR(); r.lang="ko-KR"; r.interimResults=false; r.maxAlternatives=1;
+  r.onresult=e=>{ const t=e.results[0][0].transcript; onResult(t); };
+  r.onerror=()=>toast("음성 인식 실패");
+  r.start(); toast("듣고 있습니다… 말씀하세요");
+}
+
+
+// ==================== 백업: JSON 내보내기 / 가져오기 ====================
+// 서버가 없으므로 기기 간 이동·백업은 이 두 기능으로 합니다.
+function exportData(){
+  const dump={
+    version:1, exportedAt:new Date().toISOString(),
+    accounts:state.accounts, meetings:state.meetings, companies:state.companies,
+    jobs:state.jobs, records:state.records, currentMeetingId:state.currentMeetingId,
+  };
+  const blob=new Blob([JSON.stringify(dump,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download="campustown-hub-backup-"+new Date().toISOString().slice(0,10)+".json";
+  a.click(); URL.revokeObjectURL(url);
+  toast("백업 파일을 내려받았습니다");
+}
+function importData(){
+  const inp=document.createElement("input");
+  inp.type="file"; inp.accept="application/json,.json";
+  inp.onchange=async()=>{
+    const f=inp.files&&inp.files[0]; if(!f)return;
+    try{
+      const text=await f.text();
+      const d=JSON.parse(text);
+      if(!d||typeof d!=="object")throw new Error("형식이 올바르지 않습니다");
+      if(!confirm("현재 데이터를 가져온 파일로 덮어씁니다. 계속할까요?"))return;
+      state.accounts=Array.isArray(d.accounts)?d.accounts:[];
+      state.meetings=Array.isArray(d.meetings)?d.meetings:[];
+      state.companies=Array.isArray(d.companies)?d.companies:[];
+      state.jobs=Array.isArray(d.jobs)?d.jobs:[];
+      state.records=Array.isArray(d.records)?d.records:[];
+      state.currentMeetingId=d.currentMeetingId||null;
+      seedData(); await saveSession(); await saveRecords();
+      toast("데이터를 가져왔습니다");
+      if(state.user&&state.user.role)showMeetingList(); else renderAuth();
+    }catch(e){ toast("가져오기 실패: "+e.message); }
+  };
+  inp.click();
+}
+function resetData(){
+  if(!confirm("모든 데이터를 지우고 초기 상태로 되돌립니다. 계속할까요?"))return;
+  state.accounts=[];state.meetings=[];state.companies=[];state.jobs=[];state.records=[];
+  state.currentMeetingId=null;state.segments=[];state.notes=null;
+  seedData(); saveSession(); saveRecords();
+  toast("초기 상태로 되돌렸습니다");
+  renderAuth();
+}
+
+// ==================== 액션 레이어 (MCP·로봇·음성 연동 준비) ====================
+// 나중에 MCP 서버·로봇은 이 함수들만 감싸면 됩니다.
+window.MedITHub={
+  searchMeetings,                                   // (query) → 회의 배열
+  listMeetings:()=>state.meetings.filter(canView),  // 볼 수 있는 회의 목록
+  getMeeting:(id)=>state.meetings.find(m=>m.id===id),
+  getMeetingStatus:(id)=>{const m=state.meetings.find(x=>x.id===id);return m?{id:m.id,title:m.title,started:!!m.started,ended:!!m.ended,segments:state.segments.length,currentSlide:state.deckIdx+1}:null;},
+  getLiveTranscript:()=>state.segments.map(s=>({who:s.who,text:s.text,t:s.t})),
+  getNotes:()=>state.notes,
+  listJobs:()=>state.jobs,
+  currentUser:()=>state.user,
+  joinMeeting:(id)=>{state.currentMeetingId=id;syncCurrentMeeting();enterHub();return true;},
+  exportData, importData,
+  storageOK:()=>storageOK,
+  storageMode,
+  version:"1.1",
+};
+
+// ==================== 로그인 / 회원가입 ====================
+let authMode="login"; // 'login' | 'signup'
+function renderAuth(){
+  const box=$("authArea"); if(!box)return;
+  if(authMode==="login"){
+    box.innerHTML=`
+      <div class="auth-tabs"><button class="at on" id="toLogin">로그인</button><button class="at" id="toSignup">회원가입</button></div>
+      <input class="auth-in" id="loginEmail" placeholder="이메일" autocomplete="off">
+      <input class="auth-in" id="loginPw" type="password" placeholder="비밀번호" autocomplete="off">
+      <button class="b-mint auth-btn" id="doLogin">로그인</button>
+      <div class="auth-msg" id="authMsg"></div>
+      `;
+    $("toSignup").onclick=()=>{authMode="signup";renderAuth();};
+    $("doLogin").onclick=doLogin;
+    $("loginPw").addEventListener("keydown",e=>{if(e.key==='Enter')doLogin();});
+  } else {
+    box.innerHTML=`
+      <div class="auth-tabs"><button class="at" id="toLogin">로그인</button><button class="at on" id="toSignup">회원가입</button></div>
+      <div class="invite-notice">${OPEN_SIGNUP?"본인 이메일로 가입하실 수 있습니다. 가입 후 초대된 회의가 목록에 표시됩니다.":"초대받은 이메일로만 가입할 수 있습니다."}</div>
+      <div class="social-list">
+        <button class="social2 s-google" data-p="Gmail">${ICON.google}<span>Google로 계속하기</span></button>
+        <button class="social2 s-naver" data-p="Naver">${ICON.naver}<span>Naver로 계속하기</span></button>
+        <button class="social2 s-kakao" data-p="Kakao">${ICON.kakao}<span>Kakao로 계속하기</span></button>
+        <button class="social2 s-apple" data-p="Apple">${ICON.apple}<span>Apple로 계속하기</span></button>
+        <button class="social2 s-email" id="emailToggle">${ICON.mail}<span>개인 이메일로 가입</span></button>
+      </div>
+      <div id="emailForm" class="email-form" style="display:none">
+        <div class="social-or">개인 이메일(기타)로 가입</div>
+        <input class="auth-in" id="suName" placeholder="이름" autocomplete="off">
+        <input class="auth-in" id="suEmail" placeholder="이메일" autocomplete="off">
+        <input class="auth-in" id="suPw" type="password" placeholder="비밀번호" autocomplete="off">
+        <button class="b-mint auth-btn" id="doSignup">가입하고 시작</button>
+      </div>
+      <div class="auth-msg" id="authMsg"></div>`;
+    $("toLogin").onclick=()=>{authMode="login";renderAuth();};
+    $("doSignup").onclick=doSignup;
+    $("emailToggle").onclick=()=>{const f=$("emailForm");f.style.display=f.style.display==="none"?"block":"none";if(f.style.display==="block")$("suName").focus();};
+    box.querySelectorAll(".social2[data-p]").forEach(b=>b.onclick=()=>socialSignup(b.dataset.p));
+  }
+}
+const ICON={
+  google:'<svg viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>',
+  naver:'<svg viewBox="0 0 24 24" width="16" height="16"><path fill="#fff" d="M16.27 12.84 7.4 0H0v24h7.73V11.16L16.6 24H24V0h-7.73z"/></svg>',
+  kakao:'<svg viewBox="0 0 24 24" width="18" height="18"><path fill="#3A1D1D" d="M12 3C6.48 3 2 6.48 2 10.8c0 2.8 1.9 5.25 4.75 6.62-.2.72-.74 2.66-.85 3.08-.13.52.19.51.4.37.16-.11 2.6-1.77 3.66-2.49.66.1 1.35.15 2.04.15 5.52 0 10-3.48 10-7.7S17.52 3 12 3z"/></svg>',
+  apple:'<svg viewBox="0 0 24 24" width="17" height="17"><path fill="#fff" d="M17.05 12.6c-.03-2.6 2.12-3.85 2.22-3.9-1.21-1.77-3.1-2.02-3.77-2.05-1.6-.16-3.13.94-3.94.94-.81 0-2.07-.92-3.4-.9-1.75.03-3.36 1.02-4.26 2.58-1.82 3.16-.47 7.83 1.3 10.4.86 1.25 1.89 2.66 3.24 2.61 1.3-.05 1.79-.84 3.36-.84 1.57 0 2.01.84 3.39.81 1.4-.02 2.29-1.28 3.15-2.54.99-1.46 1.4-2.87 1.42-2.94-.03-.01-2.72-1.05-2.75-4.13zM14.54 4.9c.72-.87 1.2-2.08 1.07-3.28-1.03.04-2.28.69-3.02 1.55-.66.77-1.24 2-1.08 3.18 1.15.09 2.32-.58 3.03-1.45z"/></svg>',
+  mail:'<svg viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 6h18v12H3zM3 7l9 6 9-6"/></svg>',
+};
+
+// ==================== 가입 정책 ====================
+// OPEN_SIGNUP=true  : 누구나 본인 이메일로 가입 가능 (기본 역할: 초대자)
+// OPEN_SIGNUP=false : 초대 명단(참석자로 등록된 이메일)에 있는 사람만 가입 가능
+// 기밀 회의로 전환하려면 아래를 false로 바꾸세요.
+let OPEN_SIGNUP = true;
+
+function isInvited(email){
+  const e=(email||"").trim().toLowerCase();
+  if(!e)return false;
+  if(OPEN_SIGNUP)return true;                     // 열린 가입: 본인 이메일로 누구나 가입
+  // 이미 계정이 있으면 허용
+  if(state.accounts.some(a=>a.email.toLowerCase()===e))return true;
+  // 어떤 회의든 참석자 명단에 있으면 초대된 것으로 본다
+  return state.meetings.some(m=>(m.attendees||[]).some(a=>(a.email||"").trim().toLowerCase()===e));
+}
+function invitedRole(email){
+  const e=(email||"").trim().toLowerCase();
+  const acc=state.accounts.find(a=>a.email.toLowerCase()===e);
+  if(acc)return acc.role;              // 이미 역할이 정해져 있으면 그것을 사용
+  return "guest";                       // 초대로 들어오는 사람은 기본 '초대자'
+}
+// [서버 연동 자리] 실제 인증(Supabase 등)을 붙일 때 이 함수를 구현하세요.
+// async function serverAuth(email, pw){ ... return {ok, user} }
+
+function doLogin(){
+  const email=($("loginEmail").value||"").trim().toLowerCase();
+  const pw=($("loginPw").value||"").trim();
+  const acc=state.accounts.find(a=>a.email.toLowerCase()===email);
+  const msg=$("authMsg");
+  if(!acc){ msg.innerHTML='<span class="gate-err">등록되지 않은 이메일입니다. 회원가입을 해주세요.</span>'; return; }
+  if(acc.pw&&acc.pw!==pw){ msg.innerHTML='<span class="gate-err">비밀번호가 일치하지 않습니다.</span>'; return; }
+  loginAs(acc);
+}
+// 소셜 회원가입 (Gmail·Naver·Kakao·Apple) — 데모: 간이 계정 생성. 실제 OAuth는 서버 붙일 때 이 함수만 교체.
+function socialSignup(provider){
+  const domain={Gmail:"gmail.com",Naver:"naver.com",Kakao:"kakao.com",Apple:"icloud.com"}[provider]||"example.com";
+  const email=prompt(provider+" 계정 이메일을 입력하세요","@"+domain);
+  if(!email||!email.includes("@"))return;
+  const existing=state.accounts.find(a=>a.email.toLowerCase()===email.toLowerCase());
+  if(existing){ toast(provider+" 계정으로 로그인합니다"); loginAs(existing); return; }
+  // 초대 확인 — 초대받지 않은 이메일은 가입 불가
+  if(!isInvited(email)){
+    const msg=$("authMsg");
+    if(msg)msg.innerHTML='<span class="gate-err">초대된 이메일이 아닙니다. 회의 개최자에게 초대를 요청해 주세요.</span>';
+    else toast("초대된 이메일이 아닙니다");
+    return;
+  }
+  const name=prompt("표시할 이름","")||email.split("@")[0];
+  const role=invitedRole(email);
+  const acc={id:"u_"+Date.now(),name,email,role,pw:"",provider};
+  state.accounts.push(acc); scheduleSave();
+  toast(provider+" 계정으로 가입되었습니다"); loginAs(acc);
+}
+function doSignup(){
+  const name=($("suName").value||"").trim();
+  const email=($("suEmail").value||"").trim();
+  const pw=($("suPw").value||"").trim();
+  const msg=$("authMsg");
+  if(!name||!email){ msg.innerHTML='<span class="gate-err">이름과 이메일을 입력하세요.</span>'; return; }
+  if(!pw){ msg.innerHTML='<span class="gate-err">비밀번호를 입력하세요.</span>'; return; }
+  if(!isInvited(email)){
+    msg.innerHTML='<span class="gate-err">초대된 이메일이 아닙니다. 회의 개최자에게 초대를 요청해 주세요.</span>';
+    return;
+  }
+  const existing=state.accounts.find(a=>a.email.toLowerCase()===email.toLowerCase());
+  if(existing){
+    // 미사용(시드) 계정이면 본인이 이어받아 사용 — 이름·비밀번호를 본인 것으로 설정
+    if(existing.claimed){
+      msg.innerHTML='<span class="gate-err">이미 가입된 이메일입니다. 로그인해주세요.</span>'; return;
+    }
+    existing.name=name; existing.pw=pw; existing.claimed=true;
+    scheduleSave(); loginAs(existing); return;
+  }
+  const role=invitedRole(email);   // 역할은 초대에 따라 자동 지정
+  const acc={id:"u_"+Date.now(),name,email,role,pw,claimed:true};
+  state.accounts.push(acc); scheduleSave(); loginAs(acc);
+}
+function loginAs(acc){
+  state.user={role:acc.role,name:acc.name,email:acc.email,id:acc.id};
+  showMeetingList();
+}
+
+// ==================== 회의 목록 (역할별 열람) ====================
+function roleLabel(r){return {operator:"운영자(사업자)",host:"개최자",guest:"초대자"}[r]||r;}
+function showMeetingList(){
+  const box=$("authArea"); if(!box)return;
+  const list=state.meetings.filter(canView);
+  const canCreate=state.user.role==="operator"||state.user.role==="host";
+  box.innerHTML=`
+    <div class="ml-head">
+      <div><b>${esc(state.user.name)}</b> · ${roleLabel(state.user.role)}</div>
+      <button class="at" id="logoutBtn">로그아웃</button>
+    </div>
+    <div class="ml-search">
+      <input class="auth-in" id="mlQuery" placeholder="회의 검색 · 예: 오늘 10시 회의, 방준석" autocomplete="off" style="margin:0">
+      <button class="b-ghost" id="mlVoice" title="음성 검색">음성</button>
+      <button class="b-mint" id="mlSearch">검색</button>
+    </div>
+    <div class="ml-list" id="mlList"></div>
+    ${canCreate?'<button class="b-deep auth-btn" id="mlCreate">+ 새 회의 만들기</button>':''}
+    <div class="backup-row">
+      <button class="b-ghost" id="mlExport">백업 내보내기</button>
+      <button class="b-ghost" id="mlImport">백업 가져오기</button>
+      ${state.user.role==="operator"?'<button class="b-ghost" id="mlReset">초기화</button>':''}
+    </div>
+    <div class="backup-hint" id="storeHint"></div>`;
+  renderMeetingCards(list);
+  $("logoutBtn").onclick=()=>{state.user={role:null,name:"",email:"",id:null};authMode="login";renderAuth();};
+  $("mlSearch").onclick=async()=>{ const r=await searchMeetings($("mlQuery").value); renderMeetingCards(r.length?r:[], r.length?"":"검색 결과가 없습니다."); };
+  $("mlQuery").addEventListener("keydown",async e=>{if(e.key==='Enter'){const r=await searchMeetings($("mlQuery").value);renderMeetingCards(r.length?r:[],r.length?"":"검색 결과가 없습니다.");}});
+  $("mlVoice").onclick=()=>voiceSearch(async t=>{$("mlQuery").value=t;const r=await searchMeetings(t);renderMeetingCards(r.length?r:[],r.length?"":"검색 결과가 없습니다.");});
+  if(canCreate&&$("mlCreate"))$("mlCreate").onclick=createMeetingFlow;
+  const sh=$("storeHint");
+  if(sh){
+    const mode=storageMode();
+    if(mode==="cloud")      sh.innerHTML='<span style="color:#5FE3D6">● 클라우드 연결됨</span> — 초대된 분들과 회의·회의록이 공유됩니다.';
+    else if(mode==="cloud-error") sh.innerHTML='<span style="color:#FFB4A2">● 클라우드 연결 실패</span> — 이 브라우저에만 저장 중입니다. 설정을 확인하세요.';
+    else                    sh.innerHTML='<span style="color:#8FD9D2">● 로컬 모드</span> — 이 브라우저에만 저장됩니다. 공유하려면 Supabase 키를 넣으세요. 백업은 내보내기·가져오기를 사용하세요.';
+  }
+  if($("mlExport"))$("mlExport").onclick=exportData;
+  if($("mlImport"))$("mlImport").onclick=importData;
+  if($("mlReset"))$("mlReset").onclick=resetData;
+}
+function renderMeetingCards(list,emptyMsg){
+  const box=$("mlList"); if(!box)return;
+  if(!list.length){
+    const noMeetings=!emptyMsg;
+    box.innerHTML=`<div class="gate-card">
+      <div class="m">${esc(emptyMsg||"아직 초대된 회의가 없습니다.")}</div>
+      ${noMeetings?`<div class="m" style="margin-top:8px;opacity:.75;font-size:12.5px">
+        회의 개최자에게 <b>${esc(state.user.email||"본인 이메일")}</b> 로 초대를 요청해 주세요.<br>
+        개최자가 참석자로 등록하면 이곳에 회의가 표시됩니다.
+      </div>`:""}
+    </div>`;
+    return;
+  }
+  box.innerHTML=list.map(m=>`<div class="mcard2">
+    <div class="mc-top"><h4>${esc(m.title)}</h4><span class="mc-badge">${esc(m.company||"")}</span></div>
+    <div class="mc-meta">${esc(fmtDate(m.date))} ${esc(m.time)} · ${esc(m.place||"")}</div>
+    <div class="mc-meta">개최자 ${esc(m.host)} · 참석 ${(m.attendees||[]).length}명</div>
+    <button class="b-mint mc-enter" data-id="${m.id}">입장</button>
+  </div>`).join("");
+  box.querySelectorAll(".mc-enter").forEach(b=>b.onclick=()=>{ state.currentMeetingId=b.dataset.id; syncCurrentMeeting(); enterHub(); });
+}
+function fmtDate(d){ if(!d)return""; const p=d.split("-"); return p.length===3?`${p[0]}.${p[1]}.${p[2]}`:d; }
+function createMeetingFlow(){
+  const title=prompt("회의 제목",""); if(!title)return;
+  const date=prompt("날짜 (YYYY-MM-DD)","2026-07-10")||"";
+  const time=prompt("시간 (HH:MM)","10:00")||"";
+  const place=prompt("장소","숙명캠퍼스타운 209호 미팅룸 1호")||"";
+  const m={id:"m_"+Date.now(),title,purpose:"",place,date,time,host:state.user.name,company:"",zoom:"",
+    attendees:[{name:state.user.name,email:state.user.email}],jobs:[],started:null,ended:null};
+  state.meetings.push(m); scheduleSave(); showMeetingList();
+}
+
+function enterHub(){
+  $("gate").style.display="none";
+  $("appMain").style.display="flex";
+  syncCurrentMeeting();
+  // 헤더 회의 제목 갱신
+  const m=currentMeeting();
+  if(m){ const t=$("hdrMeetingTitle"); if(t)t.textContent=m.title; }
+  switchTab("home");
+}
+// ==================== INIT ====================
+(async function(){await loadAll();
+  const m=currentMeeting();
+  if(m&&m.started&&!m.ended)setPill("live","회의 진행 중");else setPill("idle","회의 대기");
+  renderAuth();
+})();
+</script>
+</body>
+</html>

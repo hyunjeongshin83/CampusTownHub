@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>캠퍼스타운 허브 · 자가진단</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>
+  :root{--mint:#12BDB0;--deep:#0E7C74;--ink:#16332F;--soft:#5A6B68;--line:#DCEFEC;--mist:#F1FAF9;--ok:#12BDB0;--warn:#E8A33D;--err:#D9534F;}
+  *{box-sizing:border-box;}
+  body{margin:0;padding:28px 18px 60px;font-family:'Pretendard',-apple-system,sans-serif;background:linear-gradient(160deg,#F7FCFB,#EAF6F4);color:var(--ink);}
+  .wrap{max-width:760px;margin:0 auto;}
+  h1{font-size:26px;letter-spacing:-.03em;margin:0 0 6px;}
+  .sub{color:var(--soft);font-size:14px;margin-bottom:24px;line-height:1.6;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px 22px;margin-bottom:14px;box-shadow:0 4px 18px rgba(12,38,34,.05);}
+  .ctop{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .cname{font-size:17px;font-weight:800;letter-spacing:-.02em;}
+  .badge{flex:0 0 auto;font-size:12px;font-weight:800;padding:5px 12px;border-radius:20px;background:#EEF3F2;color:var(--soft);}
+  .badge.run{background:#FFF6E5;color:#9A6B14;}
+  .badge.ok{background:#E4F7F5;color:var(--deep);}
+  .badge.err{background:#FDECEB;color:var(--err);}
+  .badge.warn{background:#FFF6E5;color:#9A6B14;}
+  .desc{font-size:13.5px;color:var(--soft);margin-top:8px;line-height:1.6;}
+  .out{margin-top:12px;background:var(--mist);border-radius:11px;padding:12px 14px;font-size:12.5px;line-height:1.65;color:var(--ink);white-space:pre-wrap;word-break:break-word;display:none;}
+  .out.show{display:block;}
+  .fix{margin-top:10px;background:#FFF9EC;border-left:3px solid var(--warn);border-radius:8px;padding:11px 13px;font-size:12.5px;line-height:1.6;display:none;}
+  .fix.show{display:block;}
+  button{font-family:inherit;font-weight:700;font-size:14px;padding:11px 18px;border-radius:11px;border:none;cursor:pointer;background:var(--mint);color:#fff;transition:transform .12s;}
+  button:hover{transform:translateY(-1px);}
+  button:disabled{opacity:.5;cursor:default;transform:none;}
+  .runall{width:100%;padding:15px;font-size:15.5px;background:linear-gradient(135deg,#12BDB0,#0E7C74);box-shadow:0 8px 22px rgba(18,189,176,.35);margin-bottom:22px;}
+  .row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+  #jitsiBox{margin-top:12px;border-radius:12px;overflow:hidden;display:none;}
+  #jitsiBox.show{display:block;}
+  .foot{text-align:center;color:var(--soft);font-size:12px;margin-top:30px;}
+  .sum{background:var(--ink);color:#fff;border-radius:16px;padding:18px 20px;margin-bottom:20px;display:none;}
+  .sum.show{display:block;}
+  .sum h3{margin:0 0 8px;font-size:16px;}
+  .sum div{font-size:13.5px;line-height:1.7;opacity:.9;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>자가진단</h1>
+  <div class="sub">허브가 제대로 작동하는지 이 페이지에서 확인합니다.<br>아래 버튼을 누르면 4가지를 순서대로 검사합니다.</div>
+
+  <button class="runall" id="runAll">전체 검사 시작</button>
+
+  <div class="sum" id="summary"><h3>검사 결과</h3><div id="sumText"></div></div>
+
+  <!-- 1. Supabase -->
+  <div class="card">
+    <div class="ctop">
+      <div class="cname">1. Supabase 연결</div>
+      <span class="badge" id="b1">대기</span>
+    </div>
+    <div class="desc">회의·회의록을 여러 사람이 공유하려면 필요합니다. 읽기와 쓰기를 모두 시험합니다.</div>
+    <div class="row"><button id="t1">검사</button></div>
+    <div class="out" id="o1"></div>
+    <div class="fix" id="f1"></div>
+  </div>
+
+  <!-- 2. 마이크 -->
+  <div class="card">
+    <div class="ctop">
+      <div class="cname">2. 마이크 · 녹취(음성인식)</div>
+      <span class="badge" id="b2">대기</span>
+    </div>
+    <div class="desc">회의 녹취에 필요합니다. 검사를 누르면 마이크 권한을 묻고, <b>5초 동안 말한 내용</b>을 텍스트로 옮깁니다.</div>
+    <div class="row"><button id="t2">검사 (5초간 말해보세요)</button></div>
+    <div class="out" id="o2"></div>
+    <div class="fix" id="f2"></div>
+  </div>
+
+  <!-- 3. TTS -->
+  <div class="card">
+    <div class="ctop">
+      <div class="cname">3. 음성 발표 (TTS)</div>
+      <span class="badge" id="b3">대기</span>
+    </div>
+    <div class="desc">슬라이드 자동 발표에 필요합니다. 검사를 누르면 <b>소리가 납니다</b>. 스피커를 켜 주세요.</div>
+    <div class="row"><button id="t3">검사 (소리 재생)</button></div>
+    <div class="out" id="o3"></div>
+    <div class="fix" id="f3"></div>
+  </div>
+
+  <!-- 4. Jitsi -->
+  <div class="card">
+    <div class="ctop">
+      <div class="cname">4. 화상회의 (Jitsi)</div>
+      <span class="badge" id="b4">대기</span>
+    </div>
+    <div class="desc">허브 안에 화상회의를 띄울 수 있는지 확인합니다. 카메라 권한을 물을 수 있습니다.</div>
+    <div class="row"><button id="t4">검사</button></div>
+    <div class="out" id="o4"></div>
+    <div class="fix" id="f4"></div>
+    <div id="jitsiBox"></div>
+  </div>
+
+  <div class="foot">© 2026 MedIT. All rights reserved.</div>
+</div>
+
+<script>
+// ===== 여기에 index.html과 같은 값을 넣으세요 =====
+const SUPABASE_URL = "https://xaclqvveppvccdpebzsz.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhY2xxdnZlcHB2Y2NkcGVienN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM3NTkzNzEsImV4cCI6MjA5OTMzNTM3MX0.qZ9qWV3kVmJW4hUwjP8N_PGddO37sJvLCHx-XaYLJ9U";
+
+const $=id=>document.getElementById(id);
+const results={};
+function setB(n,cls,txt){const b=$("b"+n);b.className="badge "+cls;b.textContent=txt;}
+function out(n,t){const o=$("o"+n);o.textContent=t;o.classList.add("show");}
+function fix(n,t){const f=$("f"+n);f.innerHTML=t;f.classList.add("show");}
+
+// ---------- 1. Supabase ----------
+async function test1(){
+  setB(1,"run","검사 중");
+  $("o1").classList.remove("show"); $("f1").classList.remove("show");
+  if(!SUPABASE_URL||!SUPABASE_ANON_KEY){
+    setB(1,"warn","미설정"); results[1]="warn";
+    out(1,"Supabase 키가 비어 있습니다.");
+    fix(1,"<b>해결:</b> 이 파일 상단의 SUPABASE_URL과 SUPABASE_ANON_KEY에 값을 넣으세요. (index.html과 동일한 값)");
+    return;
+  }
+  const H={apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+SUPABASE_ANON_KEY,"Content-Type":"application/json"};
+  const base=SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/";
+  try{
+    // (1) 읽기
+    const r=await fetch(base+"hub_state?select=key&limit=1",{headers:H});
+    const txt=await r.text();
+    if(!r.ok){
+      setB(1,"err","실패"); results[1]="err";
+      out(1,"읽기 실패\nHTTP "+r.status+"\n"+txt.slice(0,300));
+      if(r.status===404||/relation.*does not exist|Could not find the table/i.test(txt)){
+        fix(1,"<b>원인:</b> hub_state 테이블이 없습니다.<br><b>해결:</b> Supabase → SQL Editor에서 SETUP.md의 SQL을 실행하세요.");
+      } else if(r.status===401||r.status===403){
+        fix(1,"<b>원인:</b> 키가 잘못됐거나 권한(RLS) 문제입니다.<br><b>해결:</b> anon public 키가 맞는지 확인하고, SQL의 policy 부분을 실행하세요.");
+      } else {
+        fix(1,"<b>해결:</b> URL이 정확한지 확인하세요 (끝에 / 없이). Project Settings → API");
+      }
+      return;
+    }
+    // (2) 쓰기
+    const key="selftest:"+Date.now();
+    const w=await fetch(base+"hub_state",{method:"POST",headers:{...H,Prefer:"return=representation"},
+      body:JSON.stringify([{key,value:{ok:true,at:new Date().toISOString()}}])});
+    const wtxt=await w.text();
+    if(!w.ok){
+      setB(1,"err","읽기만 됨"); results[1]="err";
+      out(1,"읽기 성공 / 쓰기 실패\nHTTP "+w.status+"\n"+wtxt.slice(0,300));
+      fix(1,"<b>원인:</b> 쓰기 권한(policy)이 없습니다.<br><b>해결:</b> SQL Editor에서 insert/update policy를 실행하세요.");
+      return;
+    }
+    // (3) 정리
+    await fetch(base+"hub_state?key=eq."+encodeURIComponent(key),{method:"DELETE",headers:H});
+    setB(1,"ok","정상"); results[1]="ok";
+    out(1,"읽기 성공 ✓\n쓰기 성공 ✓\n삭제 성공 ✓\n\n여러 사람이 회의·회의록을 공유할 수 있습니다.");
+  }catch(e){
+    setB(1,"err","실패"); results[1]="err";
+    out(1,"연결 오류: "+e.message);
+    if(location.protocol==="file:"){
+      fix(1,"<b>원인:</b> 파일을 직접 열면(file://) 브라우저가 외부 연결을 차단합니다.<br><b>해결:</b> GitHub Pages에 올려서 <b>주소(https://)로 접속</b>하면 정상 작동합니다.");
+    } else {
+      fix(1,"<b>해결:</b> 인터넷 연결과 Supabase URL을 확인하세요.");
+    }
+  }
+}
+
+// ---------- 2. 마이크 ----------
+async function test2(){
+  setB(2,"run","검사 중");
+  $("o2").classList.remove("show"); $("f2").classList.remove("show");
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){
+    setB(2,"err","미지원"); results[2]="err";
+    out(2,"이 브라우저는 음성인식을 지원하지 않습니다.\n브라우저: "+navigator.userAgent.slice(0,80));
+    fix(2,"<b>해결:</b> <b>Chrome</b> 또는 <b>Edge</b>에서 여세요. Safari·Firefox는 음성인식이 불안정합니다.");
+    return;
+  }
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    stream.getTracks().forEach(t=>t.stop());
+  }catch(e){
+    setB(2,"err","권한 거부"); results[2]="err";
+    out(2,"마이크 권한이 거부되었습니다.\n"+e.message);
+    fix(2,"<b>해결:</b> 주소창 왼쪽 자물쇠 아이콘 → 마이크 → <b>허용</b>으로 바꾸고 새로고침하세요.");
+    return;
+  }
+  out(2,"마이크 권한 확인 ✓\n\n지금 말씀해 보세요… (5초)");
+  const r=new SR(); r.lang="ko-KR"; r.interimResults=true; r.continuous=true;
+  let heard="";
+  r.onresult=e=>{
+    let t="";
+    for(let i=0;i<e.results.length;i++) t+=e.results[i][0].transcript;
+    heard=t;
+    out(2,"마이크 권한 확인 ✓\n\n들린 내용: "+t);
+  };
+  r.onerror=e=>{
+    setB(2,"err","오류"); results[2]="err";
+    out(2,"음성인식 오류: "+e.error);
+    if(e.error==="not-allowed") fix(2,"<b>해결:</b> 마이크 권한을 허용하세요.");
+    else if(e.error==="network") fix(2,"<b>원인:</b> 음성인식은 인터넷이 필요합니다.");
+  };
+  r.start();
+  setTimeout(()=>{
+    try{r.stop();}catch(e){}
+    if(heard.trim()){
+      setB(2,"ok","정상"); results[2]="ok";
+      out(2,"마이크 권한 ✓\n음성 → 텍스트 변환 ✓\n\n인식된 문장:\n\""+heard.trim()+"\"\n\n녹취가 정상 작동합니다.");
+    } else {
+      setB(2,"warn","소리 없음"); results[2]="warn";
+      out(2,"마이크는 열렸지만 아무 소리도 인식되지 않았습니다.");
+      fix(2,"<b>확인:</b> 마이크가 음소거인지, 올바른 입력 장치가 선택됐는지 확인하고 다시 시도하세요.");
+    }
+  },5500);
+}
+
+// ---------- 3. TTS ----------
+function test3(){
+  setB(3,"run","검사 중");
+  $("o3").classList.remove("show"); $("f3").classList.remove("show");
+  if(!("speechSynthesis" in window)){
+    setB(3,"err","미지원"); results[3]="err";
+    out(3,"이 브라우저는 음성 합성을 지원하지 않습니다.");
+    fix(3,"<b>해결:</b> Chrome·Edge·Safari 최신 버전을 사용하세요.");
+    return;
+  }
+  const go=()=>{
+    const voices=speechSynthesis.getVoices();
+    const ko=voices.filter(v=>/ko/i.test(v.lang));
+    if(!ko.length){
+      setB(3,"warn","한국어 음성 없음"); results[3]="warn";
+      out(3,"음성 엔진은 있지만 한국어 음성이 설치되어 있지 않습니다.\n\n사용 가능한 음성: "+voices.length+"개");
+      fix(3,"<b>해결:</b> Windows → 설정 → 시간 및 언어 → 음성 → 한국어 음성 추가.<br>또는 Chrome을 사용하면 온라인 한국어 음성을 씁니다.");
+      return;
+    }
+    const u=new SpeechSynthesisUtterance("안녕하세요. 캠퍼스타운 허브 음성 발표 테스트입니다. 이 소리가 들리면 정상입니다.");
+    u.lang="ko-KR"; u.rate=0.9; u.pitch=0.88;
+    u.voice=ko.find(v=>/male|남|neural|google/i.test(v.name))||ko[0];
+    u.onend=()=>{
+      setB(3,"ok","정상"); results[3]="ok";
+      out(3,"한국어 음성 "+ko.length+"개 발견 ✓\n사용된 음성: "+u.voice.name+"\n재생 완료 ✓\n\n소리가 들렸다면 슬라이드 자동 발표가 정상 작동합니다.");
+    };
+    u.onerror=e=>{
+      setB(3,"err","재생 실패"); results[3]="err";
+      out(3,"재생 오류: "+e.error);
+    };
+    out(3,"재생 중… (소리를 들어보세요)\n음성: "+u.voice.name);
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  };
+  if(speechSynthesis.getVoices().length) go();
+  else { speechSynthesis.onvoiceschanged=()=>{speechSynthesis.onvoiceschanged=null;go();}; setTimeout(go,700); }
+}
+
+// ---------- 4. Jitsi ----------
+async function test4(){
+  setB(4,"run","검사 중");
+  $("o4").classList.remove("show"); $("f4").classList.remove("show");
+  if(location.protocol==="file:"){
+    setB(4,"warn","파일 모드"); results[4]="warn";
+    out(4,"파일을 직접 열면(file://) 화상회의 임베드가 차단됩니다.");
+    fix(4,"<b>해결:</b> GitHub Pages에 올려서 <b>주소(https://)로 접속</b>하면 임베드가 작동합니다.<br>지금 당장 쓰시려면 허브의 '링크 복사' 버튼으로 새 탭에서 여세요.");
+    return;
+  }
+  const box=$("jitsiBox");
+  box.classList.add("show");
+  box.innerHTML='<iframe allow="camera; microphone; fullscreen; display-capture; autoplay" src="https://meet.jit.si/CampusTownHub-SelfTest#config.prejoinPageEnabled=false" style="width:100%;height:380px;border:0;"></iframe>';
+  out(4,"화상회의를 불러오는 중…\n아래에 화면이 나타나면 정상입니다.");
+  setTimeout(()=>{
+    setB(4,"ok","불러옴"); results[4]="ok";
+    out(4,"화상회의 화면을 불러왔습니다 ✓\n\n아래에 Jitsi 화면이 보이면 정상 작동합니다.\n(카메라·마이크 권한을 허용하면 영상이 나옵니다)\n\n※ 화면이 비어있다면 회사·학교 네트워크가 Jitsi를 차단했을 수 있습니다.");
+    summarize();
+  },3500);
+}
+
+// ---------- 요약 ----------
+function summarize(){
+  const names={1:"Supabase 연결",2:"마이크·녹취",3:"음성 발표(TTS)",4:"화상회의"};
+  const icon={ok:"정상",warn:"주의",err:"실패"};
+  let t="";
+  for(const k of [1,2,3,4]){
+    const r=results[k];
+    t+= (r? (icon[r]==="정상"?"✓ ":(icon[r]==="주의"?"△ ":"✗ ")) : "· ") + names[k] + " — " + (r?icon[r]:"미검사") + "\n";
+  }
+  const errs=Object.values(results).filter(v=>v==="err").length;
+  const warns=Object.values(results).filter(v=>v==="warn").length;
+  if(Object.keys(results).length===4){
+    if(!errs&&!warns) t+="\n전부 정상입니다. 회의를 진행하셔도 됩니다.";
+    else t+="\n"+(errs?errs+"개 실패":"")+(errs&&warns?", ":"")+(warns?warns+"개 주의":"")+" — 각 항목의 노란 상자에 해결 방법이 있습니다.";
+  }
+  $("sumText").textContent=t;
+  $("summary").classList.add("show");
+}
+
+$("t1").onclick=async()=>{await test1();summarize();};
+$("t2").onclick=async()=>{await test2();setTimeout(summarize,6000);};
+$("t3").onclick=()=>{test3();setTimeout(summarize,4000);};
+$("t4").onclick=()=>{test4();};
+$("runAll").onclick=async()=>{
+  $("runAll").disabled=true; $("runAll").textContent="검사 중…";
+  await test1(); summarize();
+  test3(); await new Promise(r=>setTimeout(r,4500)); summarize();
+  await test2(); await new Promise(r=>setTimeout(r,6000)); summarize();
+  await test4();
+  $("runAll").disabled=false; $("runAll").textContent="다시 검사";
+};
+</script>
+</body>
+</html>
