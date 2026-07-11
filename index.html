@@ -602,6 +602,19 @@ async function saveSession(){await store.set("medit:hub1",{
   tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
   nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart});}
 async function saveRecords(){await store.set("medit:records2",state.records);}
+// 로그인 세션은 이 브라우저에만 저장 (클라우드 공유 X — 남의 기기에 로그인이 옮겨가면 안 됨)
+async function saveUser(){
+  try{ if(window.storage) await window.storage.set("medit:user", JSON.stringify(state.user)); }catch(e){}
+  try{ memStore["medit:user"]=state.user; }catch(e){}
+}
+async function loadUser(){
+  try{ if(window.storage){ const r=await window.storage.get("medit:user"); if(r) return JSON.parse(r.value); } }catch(e){}
+  return memStore["medit:user"]||null;
+}
+async function clearUser(){
+  try{ if(window.storage) await window.storage.delete("medit:user"); }catch(e){}
+  delete memStore["medit:user"];
+}
 async function loadAll(){
   const rec=await store.get("medit:records2");if(rec)state.records=rec;
   const s=await store.get("medit:hub1");
@@ -1907,6 +1920,7 @@ function doSignup(){
 }
 function loginAs(acc){
   state.user={role:acc.role,name:acc.name,email:acc.email,id:acc.id};
+  saveUser();                       // 새로고침해도 로그인 유지
   showMeetingList();
 }
 
@@ -1935,7 +1949,7 @@ function showMeetingList(){
     </div>
     <div class="backup-hint" id="storeHint"></div>`;
   renderMeetingCards(list);
-  $("logoutBtn").onclick=()=>{state.user={role:null,name:"",email:"",id:null};authMode="login";renderAuth();};
+  $("logoutBtn").onclick=()=>{state.user={role:null,name:"",email:"",id:null};clearUser();authMode="login";renderAuth();};
   $("mlSearch").onclick=async()=>{ const r=await searchMeetings($("mlQuery").value); renderMeetingCards(r.length?r:[], r.length?"":"검색 결과가 없습니다."); };
   $("mlQuery").addEventListener("keydown",async e=>{if(e.key==='Enter'){const r=await searchMeetings($("mlQuery").value);renderMeetingCards(r.length?r:[],r.length?"":"검색 결과가 없습니다.");}});
   $("mlVoice").onclick=()=>voiceSearch(async t=>{$("mlQuery").value=t;const r=await searchMeetings(t);renderMeetingCards(r.length?r:[],r.length?"":"검색 결과가 없습니다.");});
@@ -1996,6 +2010,19 @@ function enterHub(){
 (async function(){await loadAll();
   const m=currentMeeting();
   if(m&&m.started&&!m.ended)setPill("live","회의 진행 중");else setPill("idle","회의 대기");
+  // 저장된 로그인 세션 복원 — 새로고침해도 로그인 유지
+  try{
+    const saved=await loadUser();
+    if(saved && saved.role && saved.email){
+      // 계정이 아직 존재하는지 확인 (삭제·초기화된 경우 대비)
+      const acc=state.accounts.find(a=>(a.email||"").toLowerCase()===(saved.email||"").toLowerCase());
+      if(acc){
+        state.user={role:acc.role,name:acc.name,email:acc.email,id:acc.id};
+        showMeetingList();          // 로그인 화면 건너뛰고 회의 목록으로
+        return;
+      }
+    }
+  }catch(e){ console.warn("세션 복원 실패:",e.message); }
   renderAuth();
 })();
 </script>
