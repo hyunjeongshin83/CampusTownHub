@@ -1608,6 +1608,12 @@ function projectsHTML(){
 }
 
 // 파일이 연결 안 된 카드를 제목으로 자동 연결 (registry.html, MediNote_app.html)
+function guessPage(title){
+  const t=title||"";
+  if(/약사|등록|registry/i.test(t)) return "registry.html";
+  if(/복약|접종|MediNote/i.test(t)) return "MediNote_app.html";
+  return "";
+}
 function autoLinkProjects(){
   let changed=false;
   (state.projects||[]).forEach(p=>{
@@ -1645,13 +1651,31 @@ function renderProjects(){
       <div class="p-acts">
         ${p.url?`<button class="b-mint" data-open="${p.id}">열어보기</button>`:""}
         ${p.detail?`<button class="${p.url?'b-ghost':'b-mint'}" data-detail="${p.id}">내용 보기</button>`:""}
-        ${(!p.url&&!p.detail)?`<span class="mini" style="align-self:center">아직 만들어지지 않았습니다</span>`:""}
+        ${(!p.url&&!p.detail&&guessPage(p.title))?`<button class="b-mint" data-openurl="${esc(guessPage(p.title))}">열어보기</button>`:""}
+        ${(!p.url&&!p.detail&&!guessPage(p.title))?`<span class="mini" style="align-self:center">아직 만들어지지 않았습니다</span>`:""}
         ${canEdit?`<button class="b-ghost" data-edit="${p.id}">수정</button>`:""}
         ${canEdit?`<button class="b-ghost" data-rm="${p.id}">삭제</button>`:""}
       </div>
     </div>`).join("")+'</div><div id="projView"></div>';
 
   box.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openProject(b.dataset.open));
+  box.querySelectorAll("[data-openurl]").forEach(b=>b.onclick=()=>{
+    const url=b.dataset.openurl;
+    const v=$("projView"); if(!v) return;
+    v.innerHTML=`<div class="glass tile" style="margin-top:14px;padding:0;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
+        <b>${esc(url)}</b>
+        <div style="display:flex;gap:7px">
+          <button class="b-ghost" id="pv2New">새 탭에서 열기</button>
+          <button class="b-ghost" id="pv2Close">닫기</button>
+        </div>
+      </div>
+      <iframe src="${esc(url)}" style="width:100%;height:640px;border:0;display:block"></iframe>
+    </div>`;
+    $("pv2Close").onclick=()=>{v.innerHTML="";};
+    $("pv2New").onclick=()=>window.open(url,"_blank");
+    v.scrollIntoView({behavior:"smooth",block:"nearest"});
+  });
   box.querySelectorAll("[data-detail]").forEach(b=>b.onclick=()=>showDetail(b.dataset.detail));
   box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openProjectForm(b.dataset.edit));
   box.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>removeProject(b.dataset.rm));
