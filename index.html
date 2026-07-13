@@ -557,46 +557,20 @@ const state={
 };
 // 기본 데이터 시드 (최초 1회)
 function seedData(){
+  // 로그인 계정만 시드 (콘텐츠는 사용자가 직접 만듭니다)
   if(!state.accounts.length){
     state.accounts=[
-      {id:"u_op",  name:"운영자",       email:"operator@campustown.hub", role:"operator", pw:"1234"},
-      {id:"u_host",name:"신현정",       email:"twinky0509@gmail.com",     role:"host",     pw:"1234"},
-      {id:"u_bang",name:"방준석 교수님", email:"jsbang@sookmyung.ac.kr",   role:"guest",    pw:"1234"},
-      {id:"u_jin", name:"진인혜",        email:"jih4154@sookmyung.ac.kr",   role:"guest",    pw:"1234"},
-      {id:"u_hj",  name:"신현정",        email:"hyunjeong.shin@sookmyung.ac.kr", role:"host", pw:"1234"},
+      {id:"u_hj", name:"신현정", email:"hyunjeong.shin@sookmyung.ac.kr", role:"host", pw:"1234"},
     ];
   }
-  if(!state.companies.length){
-    state.companies=[{id:"c_medit",name:"MedIT",role:"입점 기업",desc:"고령친화 Age-Tech 약료·복약·예방접종"}];
+  // 회의·프로젝트·잡·기업·참석자는 비어 있는 상태로 시작합니다.
+  state.meetings = state.meetings || [];
+  state.projects = state.projects || [];
+  state.jobs     = state.jobs     || [];
+  state.companies= state.companies|| [];
+  if(state.currentMeetingId && !state.meetings.some(m=>m.id===state.currentMeetingId)){
+    state.currentMeetingId = state.meetings[0] ? state.meetings[0].id : null;
   }
-  if(!state.projects || !state.projects.length){
-    state.projects=[
-      {id:"p_app", title:"복약·접종 앱", desc:"MediNote — 5탭 복약·예방접종 관리 앱. 한국어·영어 자동 감지, 건강 데이터는 기기 안에만 저장.",
-       status:"데모", url:"MediNote_app.html", meeting:"m_0710", tags:["모바일","복약","예방접종"]},
-      {id:"p_site", title:"약사 참여 연구 사이트", desc:"지역사회·전국의 약사·제약사·의사가 등록해 약 디자인(제제 설계)에 참여하는 연구 창구.",
-       status:"제안", url:"registry.html", detail:"registry", meeting:"m_0710", tags:["연구","등록","약 디자인"]},
-    ];
-  }
-  if(!state.jobs.length){
-    state.jobs=[
-      {id:"job_app",title:"복약·접종 앱",desc:"MediNote — 5탭 복약·예방접종 관리 앱",fromMeetingId:"m_0710",linkedMeetingIds:["m_0710"],status:"제안"},
-      {id:"job_site",title:"약사 참여 연구 사이트",desc:"지역사회·전국 약사·제약사·의사 등록 → 약 디자인",fromMeetingId:"m_0710",linkedMeetingIds:["m_0710"],status:"제안"},
-    ];
-  }
-  if(!state.meetings.length){
-    state.meetings=[{
-      id:"m_0710",
-      title:"MedIT × 약학대학 (2026.07.10) — 고령화 Age-Tech",
-      purpose:"고령화 Age-Tech 약료·복약관리·예방접종 방향 논의",
-      place:"숙명캠퍼스타운 209호 미팅룸 1호",
-      date:"2026-07-10", time:"10:00", host:"신현정", company:"MedIT",
-      zoom:"",
-      attendees:[{name:"방준석 교수님",email:"jsbang@sookmyung.ac.kr"},{name:"진인혜",email:"jih4154@sookmyung.ac.kr"},{name:"신현정",email:""}],
-      jobs:["job_app","job_site"],
-      started:null, ended:null,
-    }];
-  }
-  state.currentMeetingId=state.currentMeetingId||"m_0710";
   syncCurrentMeeting();
 }
 function currentMeeting(){ return state.meetings.find(m=>m.id===state.currentMeetingId)||state.meetings[0]||null; }
@@ -1352,6 +1326,69 @@ const OUTREACH={
   hu:{title:"휴베이스 · 온누리 협업", to:"", subj:"", body:""},
   etc:{title:"기타 기관·기업", to:"", subj:"", body:""},
 };
+
+// ==================== 회의 요약 (직접 쓰기 + AI 반영) ====================
+function canEditMeeting(){ return state.user.role==="operator"||state.user.role==="host"; }
+
+function renderSummary(){
+  const box=$("sumView"); if(!box) return;
+  const m=currentMeeting(); if(!m){ box.innerHTML='<div class="mini">회의를 먼저 만들어 주세요.</div>'; return; }
+  const s=m.summary||"", tags=m.tags||[], acts=m.actions||[];
+  if(!s && !tags.length && !acts.length){
+    box.innerHTML='<div class="mini">아직 요약이 없습니다.'+(canEditMeeting()?' ‘직접 쓰기’로 작성하거나, 녹취 후 ‘AI 반영’을 누르세요.':'')+'</div>';
+    return;
+  }
+  box.innerHTML=
+    (s?`<div class="today-sum">${esc(s)}</div>`:"")+
+    (tags.length?`<div class="today-tags">${tags.map(t=>`<span>${esc(t)}</span>`).join("")}</div>`:"")+
+    (acts.length?`<div style="margin-top:12px"><b style="font-size:13px;color:var(--deep)">다음 액션</b>`+
+      `<ol style="margin:6px 0 0;padding-left:20px;font-size:13px;color:var(--soft);line-height:1.7">`+
+      acts.map(a=>`<li>${esc(a)}</li>`).join("")+`</ol></div>`:"");
+}
+
+function openSummaryEditor(){
+  const m=currentMeeting(); if(!m) return;
+  $("sumView").style.display="none";
+  $("sumEditor").style.display="block";
+  $("sumText").value=m.summary||"";
+  $("sumTags").value=(m.tags||[]).join(", ");
+  $("sumActions").value=(m.actions||[]).join("\n");
+  $("sumText").focus();
+}
+function closeSummaryEditor(){
+  $("sumEditor").style.display="none";
+  $("sumView").style.display="block";
+  $("sumMsg").textContent="";
+}
+async function saveSummary(){
+  const m=currentMeeting(); if(!m) return;
+  m.summary=($("sumText").value||"").trim();
+  m.tags=($("sumTags").value||"").split(",").map(t=>t.trim()).filter(Boolean);
+  m.actions=($("sumActions").value||"").split("\n").map(a=>a.replace(/^\d+[.)]\s*/,"").trim()).filter(Boolean);
+  await saveNow();
+  closeSummaryEditor(); renderSummary();
+  toast("회의 요약이 저장되었습니다");
+}
+// AI 반영 — 녹취를 읽어 요약 생성 (아티팩트/서버 환경에서만 작동)
+async function aiSummary(){
+  const m=currentMeeting(); if(!m) return;
+  const msg=$("sumMsg");
+  if(!state.segments.length){ msg.textContent="녹취 내용이 없습니다. 먼저 회의를 녹취하세요."; return; }
+  msg.textContent="AI가 요약하는 중…";
+  try{
+    const tr=state.segments.map(s=>`[${s.who}] ${s.text}`).join("\n");
+    const sys="회의 녹취를 정리하는 담당자. JSON만 출력: {\"summary\":\"3~4문장 요약\",\"tags\":[\"키워드\"],\"actions\":[\"다음 액션\"]}";
+    let o=await callClaude(sys,tr,1200);
+    o=o.replace(/```json|```/g,"").trim();
+    const r=JSON.parse(o);
+    m.summary=r.summary||""; m.tags=r.tags||[]; m.actions=r.actions||[];
+    await saveNow(); renderSummary();
+    msg.textContent="AI 요약이 반영되었습니다. ‘직접 쓰기’로 수정할 수 있습니다.";
+  }catch(e){
+    msg.textContent="AI 반영 실패: "+e.message+" (직접 쓰기로 작성해 주세요)";
+  }
+}
+
 function todayHTML(){
   const m=currentMeeting()||{};
   return `<div class="today">
@@ -1360,43 +1397,163 @@ function todayHTML(){
    <div class="mini" style="margin-bottom:14px">${esc(fmtDate(m.date))} ${esc(m.time||"")} · ${esc(m.place||"")}</div>
 
    <div class="glass tile" style="margin-bottom:14px">
-     <h4 style="margin:0 0 8px">회의 요약</h4>
-     <div class="today-sum">백신 접종 앱의 국내·해외 사례를 검토해 최적화 모델·요구사항을 도출하고, 상용화를 전제로 의사·약사·의료인의 상호작용을 보완하는 방향을 논의했습니다. AI는 도움·서포트 수준까지 보조하며 전문가 판단 범주를 넘지 않는다는 원칙을 확인했습니다.</div>
-     <div class="today-tags">
-       <span>법적 검토 최우선</span><span>백신 앱 벤치마크</span><span>색상 대조표 AI화</span><span>용산구 파일럿</span><span>11~12월 제안서</span>
+     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+       <h4 style="margin:0">회의 요약</h4>
+       ${canEditMeeting()?`<div style="display:flex;gap:6px">
+         <button class="b-ghost" id="sumEdit">직접 쓰기</button>
+         <button class="b-deep" id="sumAI">AI 반영</button>
+       </div>`:''}
      </div>
-     <button class="b-deep" id="tLoadMinutes" style="margin-top:12px">전체 회의록 → 이메일 탭으로</button>
+     <div id="sumView"></div>
+     <div id="sumEditor" style="display:none">
+       <div class="fld"><label>요약</label>
+         <textarea id="sumText" style="min-height:120px" placeholder="회의에서 논의한 내용을 정리해 적어주세요."></textarea>
+       </div>
+       <div class="fld"><label>핵심 키워드 <span style="font-weight:500">(쉼표로 구분)</span></label>
+         <input id="sumTags" placeholder="예: 법적 검토, 파일럿, 제안서">
+       </div>
+       <div class="fld"><label>다음 액션 <span style="font-weight:500">(한 줄에 하나씩)</span></label>
+         <textarea id="sumActions" style="min-height:90px" placeholder="1. 데이터 법적 검토&#10;2. 벤치마크 정리"></textarea>
+       </div>
+       <div style="display:flex;gap:7px;justify-content:flex-end">
+         <button class="b-ghost" id="sumCancel">취소</button>
+         <button class="b-mint" id="sumSave">저장</button>
+       </div>
+     </div>
+     <div id="sumMsg" class="mini" style="margin-top:8px"></div>
+   </div>
+
+   <div class="glass tile" style="margin-bottom:14px">
+     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+       <h4 style="margin:0">회의 내용 기록</h4>
+       <div style="display:flex;gap:6px">
+         <button class="b-mint" id="tdMic">녹취 시작</button>
+         <button class="b-ghost" id="tdSaveNote">저장</button>
+       </div>
+     </div>
+     <div class="privacy-note">음성은 저장되지 않고 텍스트로만 변환됩니다. 직접 타이핑하셔도 됩니다.</div>
+     <div class="fld" style="margin-bottom:0">
+       <textarea id="tdNote" style="min-height:200px" placeholder="녹취 시작을 누르면 말한 내용이 여기에 쌓입니다.&#10;직접 타이핑하셔도 됩니다.&#10;&#10;작성 후 저장을 누르면 회의록으로 보관됩니다."></textarea>
+     </div>
+     <div class="mini" id="tdMsg" style="margin-top:8px"></div>
    </div>
 
    <div class="section-title" style="margin-top:6px">초대·아웃리치 (서면·비대면)</div>
    <div id="outreachCards"></div>
   </div>`;
 }
-function outreachCard(key){
-  const o=OUTREACH[key];
+function outreachCard(o){
   return `<div class="ocard">
-    <div class="oc-top"><b>${esc(o.title)}</b></div>
-    <div class="oc-body">${esc(o.body).replace(/\n/g,"<br>")}</div>
+    <div class="oc-top"><b>${esc(o.title)}</b>${o.to?`<span class="mini">${esc(o.to)}</span>`:""}</div>
+    <div class="oc-body">${o.body?esc(o.body).replace(/\n/g,"<br>"):'<span class="mini">아직 작성하지 않았습니다. 자료를 올린 뒤 내용을 보며 작성하세요.</span>'}</div>
     <div class="oc-actions">
-      <button class="b-mint" data-mail="${key}">메일 앱으로 열기</button>
-      <button class="b-ghost" data-copy="${key}">본문 복사</button>
+      ${canEditMeeting()?`<button class="b-ghost" data-oedit="${o.id}">작성·수정</button>`:""}
+      ${o.body?`<button class="b-mint" data-omail="${o.id}">메일 앱으로 열기</button>`:""}
+      ${canEditMeeting()?`<button class="b-ghost" data-odel="${o.id}">삭제</button>`:""}
     </div>
   </div>`;
 }
+
+// ==================== 금일 회의: 녹취 + 직접 쓰기 ====================
+let tdRec=null, tdOn=false;
+
+// ==================== 아웃리치 (추가·수정·삭제 + 메일) ====================
+function renderOutreach(){
+  const box=$("outreachCards"); if(!box) return;
+  const m=currentMeeting(); if(!m) return;
+  const list=m.outreach||[];
+  box.innerHTML=(list.length?list.map(outreachCard).join(""):'<div class="mini">아직 등록된 아웃리치가 없습니다.</div>')
+    +(canEditMeeting()?'<button class="b-deep" id="oAdd" style="margin-top:10px">+ 아웃리치 추가</button>':'')
+    +'<div id="oForm" style="display:none;margin-top:12px"></div>';
+
+  box.querySelectorAll("[data-oedit]").forEach(b=>b.onclick=()=>openOutreachForm(b.dataset.oedit));
+  box.querySelectorAll("[data-odel]").forEach(b=>b.onclick=()=>removeOutreach(b.dataset.odel));
+  box.querySelectorAll("[data-omail]").forEach(b=>b.onclick=()=>{
+    const o=(currentMeeting().outreach||[]).find(x=>x.id===b.dataset.omail); if(!o)return;
+    window.location.href=`mailto:${encodeURIComponent(o.to||"")}?subject=${encodeURIComponent(o.subj||"")}&body=${encodeURIComponent(o.body||"")}`;
+    toast("메일 앱을 엽니다");
+  });
+  const a=$("oAdd"); if(a) a.onclick=()=>openOutreachForm(null);
+}
+function openOutreachForm(id){
+  const m=currentMeeting(); if(!m) return;
+  m.outreach=m.outreach||[];
+  const o=id?m.outreach.find(x=>x.id===id):null;
+  const box=$("oForm"); if(!box) return;
+  box.style.display="block";
+  box.innerHTML=`<div class="pform">
+    <div class="pf-head"><b>${id?"아웃리치 수정":"새 아웃리치"}</b><button class="b-ghost" id="ofCancel">취소</button></div>
+    <div class="fld"><label>제목 (누구에게 보내는지)</label><input id="of_title" placeholder="예: LG U+ · 복약지도 셋톱 협업" value="${o?esc(o.title):''}"></div>
+    <div class="pf-row">
+      <div><label>받는 사람</label><input id="of_to" placeholder="이메일" value="${o?esc(o.to||""):''}"></div>
+      <div><label>제목(메일)</label><input id="of_subj" placeholder="메일 제목" value="${o?esc(o.subj||""):''}"></div>
+    </div>
+    <div class="fld"><label>본문</label><textarea id="of_body" style="min-height:180px" placeholder="올린 자료를 보면서 작성하세요.">${o?esc(o.body||""):''}</textarea></div>
+    <div class="pf-acts"><button class="b-mint" id="ofSave">${id?"저장":"추가"}</button></div>
+  </div>`;
+  $("ofCancel").onclick=()=>{box.style.display="none";box.innerHTML="";};
+  $("ofSave").onclick=async()=>{
+    const title=($("of_title").value||"").trim();
+    if(!title){ toast("제목을 입력하세요"); return; }
+    const data={title,to:($("of_to").value||"").trim(),subj:($("of_subj").value||"").trim(),body:($("of_body").value||"").trim()};
+    if(o) Object.assign(o,data);
+    else m.outreach.push({id:"o_"+Date.now(),...data});
+    await saveNow(); renderOutreach(); toast(o?"수정되었습니다":"추가되었습니다");
+  };
+  $("of_title").focus();
+}
+async function removeOutreach(id){
+  const m=currentMeeting(); if(!m) return;
+  if(!confirm("이 아웃리치를 삭제할까요?")) return;
+  m.outreach=(m.outreach||[]).filter(x=>x.id!==id);
+  await saveNow(); renderOutreach(); toast("삭제되었습니다");
+}
+
+function bindTodayNote(){
+  const m=currentMeeting(); if(!m) return;
+  const ta=$("tdNote"); if(ta) ta.value=m.rawNote||"";
+
+  const mic=$("tdMic");
+  if(mic) mic.onclick=()=>{
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){ $("tdMsg").textContent="이 브라우저는 음성인식을 지원하지 않습니다 (Chrome/Edge 권장). 직접 타이핑해 주세요."; return; }
+    if(tdOn){
+      try{ tdRec && tdRec.stop(); }catch(e){}
+      tdOn=false; mic.textContent="녹취 시작"; mic.className="b-mint";
+      $("tdMsg").textContent="녹취를 멈췄습니다. 저장을 눌러 보관하세요.";
+      return;
+    }
+    tdRec=new SR(); tdRec.lang="ko-KR"; tdRec.continuous=true; tdRec.interimResults=false;
+    tdRec.onresult=e=>{
+      let t="";
+      for(let i=e.resultIndex;i<e.results.length;i++){ if(e.results[i].isFinal) t+=e.results[i][0].transcript+" "; }
+      if(t){ const ta=$("tdNote"); ta.value=(ta.value+(ta.value?"\n":"")+t.trim()); ta.scrollTop=ta.scrollHeight; }
+    };
+    tdRec.onerror=e=>{ $("tdMsg").textContent="녹취 오류: "+e.error; tdOn=false; mic.textContent="녹취 시작"; mic.className="b-mint"; };
+    tdRec.onend=()=>{ if(tdOn){ try{ tdRec.start(); }catch(e){} } };
+    try{ tdRec.start(); tdOn=true; mic.textContent="녹취 중지"; mic.className="b-gold";
+      $("tdMsg").textContent="듣고 있습니다… 말씀하세요."; }
+    catch(e){ $("tdMsg").textContent="마이크를 시작할 수 없습니다: "+e.message; }
+  };
+
+  const sv=$("tdSaveNote");
+  if(sv) sv.onclick=async()=>{
+    const m=currentMeeting(); if(!m) return;
+    m.rawNote=($("tdNote").value||"").trim();
+    await saveNow();
+    $("tdMsg").textContent="저장되었습니다. 회의록으로 보관됩니다.";
+    toast("회의 내용이 저장되었습니다");
+  };
+}
+
 function bindToday(){
-  const box=$("outreachCards");
-  if(box){
-    box.innerHTML=Object.keys(OUTREACH).map(outreachCard).join("");
-    box.querySelectorAll("[data-mail]").forEach(b=>b.onclick=()=>{
-      const o=OUTREACH[b.dataset.mail];
-      window.location.href=`mailto:${encodeURIComponent(o.to)}?subject=${encodeURIComponent(o.subj)}&body=${encodeURIComponent(o.body)}`;
-      toast("메일 앱을 엽니다");
-    });
-    box.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{
-      const o=OUTREACH[b.dataset.copy];
-      navigator.clipboard&&navigator.clipboard.writeText(o.body); toast("본문을 복사했습니다");
-    });
-  }
+  renderSummary();
+  bindTodayNote();
+  const se=$("sumEdit"); if(se) se.onclick=openSummaryEditor;
+  const sc=$("sumCancel"); if(sc) sc.onclick=closeSummaryEditor;
+  const ss=$("sumSave"); if(ss) ss.onclick=saveSummary;
+  const sa=$("sumAI"); if(sa) sa.onclick=aiSummary;
+  renderOutreach();
   const lm=$("tLoadMinutes"); if(lm)lm.onclick=()=>{switchTab("email");setTimeout(()=>{const b=$("emLoad0710");if(b)b.click();},200);};
 }
 
@@ -2046,67 +2203,7 @@ function bindEmail(){
     document.querySelectorAll(".mk").forEach(x=>x.classList.remove("on"));
   };
 }
-const MINUTES_0710=`안녕하세요,
-
-2026년 7월 10일(금) 오전 10시, 숙명캠퍼스타운 209호 미팅룸 1호에서 진행한 MedIT × 약학대학 회의(고령화 Age-Tech) 회의록을 정리해 공유드립니다.
-
-[1. 큰 그림·방향]
-- 백신 접종 앱 국내·해외 사례를 검토해 최적화 모델과 요구사항 도출
-- 상용화 전제 개발: 의사·약사·의료인의 상호작용을 보완하는 기술
-- AI는 도움·서포트(디지털 리터러시) 수준까지 — 의사·약사의 범주를 넘지 않음
-- 차별화 서비스로 빠른 도입 가능성 제안(챗봇·예약·Quick response)
-
-[2. 약사 차별화 서비스]
-- 제형 추천·제제 다양화(정제·액제 병행), 영역별 개인 맞춤화
-- 3D 디지털 프린트, 맞춤 의학, 타액 유전자 추출(동의 복잡) 등 향후 검토
-- 건강식품 정보·추천, MBTI 분석 등 부가 서비스
-- 복약지도료·검사·처치·수술 진행 시 수가 발생 구조 고려
-
-[3. 데이터·Real World Data]
-- 건강검진 데이터(체중·혈액 등) 소유권은 병원 — 상품화 시 병원 동의, 국가 지원 시 과제화
-- 네이버·카카오 헬스케어, Amazon Care·세브란스 사례 리서치
-- 약학정보원·약사의 디지털 리터러시 낮음 → 데이터 확보·활용 난이도
-- 데이터 상업화(제약사 디자인·임상·기구) 시 법적 검토 필수(최우선)
-- 랜덤/합성 데이터 생성·패턴 추출 연구 가능성
-
-[4. 표준화·약학정보원]
-- 약학정보원 표준 정보, 식약처 위탁사업형 조제 허가(정제만, 액제 불가)
-- 아세트아미노펜 색상 대조표 → 이미지 데이터 AI화, 약봉투 표기
-- 부작용 데이터는 병원·대한약사회 약물안전본부·보건소·의약품안전관리원으로 수집(개인 매칭 안 됨)
-- 일반의약품 공전(용량 허가 기준), 모약·주약 혼합물 규격 정보
-
-[5. 병원 데이터·소유권·표준화]
-- 건강 프로필 소유권: 병원별 관리(대학병원 표준화 사업 분절) — 통합 과제
-- 병원 간 데이터 교류 불가, 병원별 신뢰성·한계 존재
-- 경영·청구 데이터 전국 수집망·클라우드·익명화 추출/개인화 프로필
-
-[6. 청구·보험·심평원]
-- 수기 처방전 약 청구, 외국인 약 청구·보험(법제도), 약 판매 데이터
-- 건강보험심사평가원 의료비 산정, 데이터 처리 지연, 전문의약품 금융 데이터(OTC 없음)
-- 제약사·병원 가짜 약 판별 조사
-
-[7. 상용화·지원·인프라]
-- 실용화·사회 기여도 우선(산자부), 특허·논문·인재개발(복지부)
-- 앱 임상 실증 테스트 피드백 연구 AI
-- 심평원 데이터 + 온누리·휴베이스, 클라우드(상용화 시 자체 데이터센터)
-- 영상·기기·진단 데이터 솔루션 분리, 약정원 메인 오퍼레이션·약 청구 프로그램
-- 로컬 데이터·개인화 법적 검토, 클라우드 화재 대비
-- 약학정보원 공공기관화·별도 법인 제안, 신평원 데이터 기관
-
-[8. 프로젝트 제안·현장]
-- 프로젝트 제안(생태계·현장 기술, 11~12월): 약사회·약국체인
-- 복약·백신 접종 앱(국가 기록 연동), GPS 입실 자동화, 앱 피드백
-- 용산구 대한노인회·고령친화 약국·경로당·만성질환, 온누리·휴베이스 등 조사
-- 재고 관리·환자 관리, 전자담배 정보화 조사
-
-[다음 액션]
-1. 데이터 상업화·개인화 법적 검토 (최우선)
-2. 백신 앱 국내외 사례 벤치마크 → 요구사항 정리
-3. 약학정보원 이미지 데이터(색상 대조표) AI화 검토
-4. 고령친화 약국·경로당(용산구) 현장 파일럿 방안
-5. 11~12월 프로젝트 제안서(생태계·현장 기술)
-
-감사합니다.`;
+const MINUTES_0710="";   // 하드코딩 제거 — 회의록은 사용자가 직접 작성합니다
 async function buildEmailFromRecord(r){
   const n=r.notes||{};const att=r.attendees.map(a=>a.name+(a.email?` <${a.email}>`:"")).join(", ");
   return `제목: [MedIT 회의록] ${r.title}
