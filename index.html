@@ -1607,7 +1607,19 @@ function projectsHTML(){
   </div>`;
 }
 
+// 파일이 연결 안 된 카드를 제목으로 자동 연결 (registry.html, MediNote_app.html)
+function autoLinkProjects(){
+  let changed=false;
+  (state.projects||[]).forEach(p=>{
+    if(p.url) return;
+    if(/약사|등록|registry/i.test(p.title)){ p.url="registry.html"; changed=true; }
+    else if(/복약|접종|MediNote/i.test(p.title)){ p.url="MediNote_app.html"; changed=true; }
+  });
+  if(changed) saveNow();
+}
+
 function renderProjects(){
+  autoLinkProjects();
   const box=$("projGrid"); if(!box) return;
   const canEdit=state.user.role==="operator"||state.user.role==="host";
   const ps=state.projects||[];
