@@ -484,6 +484,26 @@ body{letter-spacing:-0.015em;}
   transition:all .15s;}
 .mf:hover{border-color:var(--mint);background:var(--mist);}
 .mf span{font-size:11px;color:var(--soft);font-weight:500;}
+
+.hdr-user{display:flex;align-items:center;gap:10px;margin-left:16px;padding-left:16px;
+  border-left:1px solid rgba(255,255,255,.14);}
+.hu-av{width:34px;height:34px;border-radius:11px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:800;color:#fff;background:linear-gradient(135deg,#12BDB0,#0E7C74);
+  box-shadow:0 4px 12px rgba(18,189,176,.35);}
+.hu-info{line-height:1.3;}
+.hu-name{font-size:13.5px;font-weight:700;color:#fff;}
+.hu-role{font-size:11px;color:#8FD9D2;font-weight:600;}
+.hu-out{font-family:inherit;font-size:11.5px;font-weight:700;padding:7px 12px;border-radius:9px;cursor:pointer;
+  border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#cfeeeb;transition:all .15s;}
+.hu-out:hover{background:rgba(255,255,255,.16);color:#fff;}
+@media(max-width:700px){.hu-info{display:none;} .hdr-user{margin-left:8px;padding-left:8px;}}
+
+.quickadd{background:var(--mist);border:1px dashed var(--line);border-radius:14px;padding:15px 17px;}
+.qa-h{font-size:12.5px;color:var(--soft);margin-bottom:10px;}
+.qa-list{display:flex;gap:7px;flex-wrap:wrap;}
+.qa{font-family:inherit;font-size:13px;font-weight:700;padding:10px 15px;border-radius:11px;cursor:pointer;
+  border:1px solid var(--line);background:#fff;color:var(--deep);transition:all .15s;}
+.qa:hover{border-color:var(--mint);background:#fff;transform:translateY(-1px);box-shadow:0 5px 14px rgba(18,189,176,.18);}
 </style>
 </head>
 <body>
@@ -504,6 +524,14 @@ body{letter-spacing:-0.015em;}
   <div class="hspace"></div>
   <div class="pill idle" id="pill"><span class="led"></span><span id="pillText">회의 대기</span></div>
   <span class="clock" id="clock"></span>
+  <div class="hdr-user" id="hdrUser" style="display:none">
+    <div class="hu-av" id="huAv"></div>
+    <div class="hu-info">
+      <div class="hu-name" id="huName"></div>
+      <div class="hu-role" id="huRole"></div>
+    </div>
+    <button class="hu-out" id="huOut" title="로그아웃">나가기</button>
+  </div>
 </header>
 
 <div class="tabs" id="tabs">
@@ -1583,7 +1611,17 @@ function renderProjects(){
   const box=$("projGrid"); if(!box) return;
   const canEdit=state.user.role==="operator"||state.user.role==="host";
   const ps=state.projects||[];
-  if(!ps.length){ box.innerHTML='<div class="mini">아직 프로젝트가 없습니다.</div>'; return; }
+  if(!ps.length){
+    const canEdit=state.user.role==="operator"||state.user.role==="host";
+    box.innerHTML='<div class="mini" style="margin-bottom:10px">아직 프로젝트가 없습니다.</div>'+
+      (canEdit?'<div class="quickadd"><div class="qa-h">이미 만들어진 페이지를 바로 추가하실 수 있습니다</div>'+
+        '<div class="qa-list">'+
+        '<button class="qa" data-quick="site">약사 참여 연구 사이트</button>'+
+        '<button class="qa" data-quick="app">복약·접종 앱</button>'+
+        '</div></div>':'');
+    box.querySelectorAll("[data-quick]").forEach(b=>b.onclick=()=>quickAddProject(b.dataset.quick));
+    return;
+  }
   box.innerHTML='<div class="pgrid">'+ps.map(p=>`
     <div class="pcard">
       <div class="p-top">
@@ -1663,8 +1701,14 @@ function openProjectForm(id){
         <textarea id="pf_desc" placeholder="이 프로젝트가 무엇인지 한두 문장으로">${p?esc(p.desc||""):''}</textarea>
       </div>
       <div class="pf-row">
-        <div><label>HTML 파일 또는 주소 <span style="font-weight:500">(선택)</span></label>
-          <input id="pf_url" placeholder="예: registry.html" value="${p?esc(p.url||""):''}"></div>
+        <div><label>연결할 페이지 <span style="font-weight:500">(선택)</span></label>
+          <input id="pf_url" list="pf_urls" placeholder="예: registry.html" value="${p?esc(p.url||""):''}">
+          <datalist id="pf_urls">
+            <option value="registry.html">약사 참여 등록 사이트</option>
+            <option value="MediNote_app.html">복약·접종 앱 (MediNote)</option>
+            <option value="selftest.html">자가진단</option>
+          </datalist>
+        </div>
         <div><label>태그 <span style="font-weight:500">(쉼표로 구분)</span></label>
           <input id="pf_tags" placeholder="예: 모바일, 복약" value="${p&&p.tags?esc(p.tags.join(", ")):''}"></div>
       </div>
@@ -1728,6 +1772,20 @@ function updateProjectAPI(id,patch){
 }
 function listProjectsAPI(){ return (state.projects||[]).slice(); }
 
+async function quickAddProject(kind){
+  const presets={
+    site:{title:"약사 참여 연구 사이트", status:"제안", url:"registry.html",
+      desc:"지역사회·전국의 약사·제약사·의사가 등록해 약 디자인(제제 설계)에 참여하는 연구 창구.",
+      tags:["연구","등록","약 디자인"]},
+    app:{title:"복약·접종 앱", status:"데모", url:"MediNote_app.html",
+      desc:"MediNote — 5탭 복약·예방접종 관리 앱. 건강 데이터는 기기 안에만 저장.",
+      tags:["모바일","복약","예방접종"]},
+  };
+  const p=presets[kind]; if(!p) return;
+  state.projects=state.projects||[];
+  state.projects.push({id:"p_"+Date.now(),...p,meeting:state.currentMeetingId});
+  await saveNow(); renderProjects(); toast("'"+p.title+"'을(를) 추가했습니다");
+}
 function bindProjects(){
   renderProjects();
   const a=$("projAdd"); if(a) a.onclick=()=>openProjectForm(null);
@@ -2801,10 +2859,32 @@ function createMeetingFlow(){
   state.meetings.push(m); scheduleSave(); showMeetingList();
 }
 
+function renderHdrUser(){
+  const box=$("hdrUser"); if(!box) return;
+  const u=state.user;
+  if(!u || !u.role){ box.style.display="none"; return; }
+  box.style.display="flex";
+  $("huAv").textContent=initials(u.name);
+  $("huName").textContent=u.name||u.email;
+  $("huRole").textContent=roleLabel(u.role);
+  const out=$("huOut");
+  if(out) out.onclick=async()=>{
+    if(!confirm("로그아웃할까요?")) return;
+    await authSignOut();
+    state.user={role:null,name:"",email:"",id:null};
+    await clearUser();
+    $("appMain").style.display="none";
+    $("gate").style.display="flex";
+    box.style.display="none";
+    authMode="login"; renderAuth();
+  };
+}
+
 function enterHub(){
   $("gate").style.display="none";
   renderTabs();
   refreshBadges();          // 참석자 배지·말풍선 즉시 반영
+  renderHdrUser();          // 헤더에 로그인 정보 표시
   $("appMain").style.display="flex";
   syncCurrentMeeting();
   // 헤더 회의 제목 갱신
