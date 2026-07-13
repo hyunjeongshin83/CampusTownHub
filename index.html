@@ -574,6 +574,7 @@ const state={
   companies:[],          // {id,name,role,desc}
   // 잡(Job): 회의에서 이어지는 제안·과업. 다음 회의로 연결 가능.
   projects:[],           // 회의에서 나온 프로젝트 (카드)
+  fileNames:{},          // 업로드 파일의 원본 한글 이름 매핑
   pages:[],              // 커스텀 탭 (HTML 페이지를 탭으로 등록)
   jobs:[],               // {id,title,desc,fromMeetingId,linkedMeetingIds:[],status}
   meeting:null,          // = 현재 회의 (currentMeetingId로 참조, 하위호환)
@@ -717,7 +718,7 @@ function refreshAll(){
   if(state.activeTab) renderStage(state.activeTab);
 }
 async function saveSession(){await store.set("medit:hub1",{
-  accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,currentMeetingId:state.currentMeetingId,
+  accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,currentMeetingId:state.currentMeetingId,
   uploads:state.uploads.map(u=>({name:u.name,type:u.type,size:u.size,text:u.text})),
   tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
   nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart});}
@@ -739,7 +740,7 @@ async function loadAll(){
   const rec=await store.get("medit:records2");if(rec)state.records=rec;
   const s=await store.get("medit:hub1");
   if(s && typeof s==="object"){
-    Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],projects:s.projects||[],pages:s.pages||[],
+    Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],projects:s.projects||[],pages:s.pages||[],fileNames:s.fileNames||{},
       currentMeetingId:s.currentMeetingId||null,uploads:s.uploads||[],
       tabNotes:s.tabNotes||state.tabNotes,segments:s.segments||[],notes:s.notes||null,research:s.research||[],
       nextActions:s.nextActions||[],topicTags:s.topicTags||[],meetingStart:s.meetingStart||null});
@@ -1018,9 +1019,18 @@ async function uploadFiles(files){
     if(f.size > 50*1024*1024){ if(st)st.textContent=f.name+" — 50MB를 초과합니다."; continue; }
     if(st)st.textContent=f.name+" 업로드 중…";
     try{
-      const safe=Date.now()+"_"+f.name.replace(/[^\w.\-가-힣]/g,"_");
-      const {error}=await sb.storage.from(BUCKET).upload(safe,f,{upsert:false});
+      // Supabase Storage는 한글·공백·특수문자를 허용하지 않습니다.
+      const ext=(f.name.match(/\.[^.]+$/)||[""])[0].toLowerCase();
+      const safe=Date.now()+"_"+Math.random().toString(36).slice(2,7)+ext;
+      const {error}=await sb.storage.from(BUCKET).upload(safe,f,{
+        upsert:false,
+        metadata:{ original: f.name }     // 원본 한글 이름을 메타데이터에 보관
+      });
       if(error) throw error;
+      // 원본 이름 매핑 저장 (목록에서 한글 이름으로 표시)
+      state.fileNames=state.fileNames||{};
+      state.fileNames[safe]=f.name;
+      await saveNow();
       if(st)st.textContent=f.name+" 업로드 완료";
     }catch(e){
       if(st)st.textContent="업로드 실패: "+e.message;
@@ -1066,7 +1076,11 @@ async function deleteFile(name){
   }catch(e){ toast("삭제 실패: "+e.message); }
 }
 function prettySize(b){ if(!b)return""; if(b<1024)return b+" B"; if(b<1048576)return (b/1024).toFixed(0)+" KB"; return (b/1048576).toFixed(1)+" MB"; }
-function prettyName(n){ return n.replace(/^\d{10,}_/,""); }
+function prettyName(n){
+  // 저장해둔 원본 한글 이름이 있으면 그것을 표시
+  if(state.fileNames && state.fileNames[n]) return state.fileNames[n];
+  return n.replace(/^\d{10,}_/,"");
+}
 
 async function renderFiles(boxId){
   const box=$(boxId||"fileList"); if(!box) return;
