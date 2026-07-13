@@ -453,6 +453,21 @@ body{letter-spacing:-0.015em;}
   .job-actions button,.p-acts button,.oc-actions button,.pf-acts button,.backup-row button{width:100%;min-width:0;}
   .f-acts{flex-wrap:wrap;}
 }
+
+.tab{position:relative;}
+.tip{position:absolute;top:calc(100% + 9px);left:50%;transform:translateX(-50%) translateY(-4px);
+  background:rgba(12,38,34,.97);color:#fff;border-radius:14px;padding:13px 15px;min-width:230px;max-width:300px;
+  box-shadow:0 12px 32px rgba(12,38,34,.32);opacity:0;visibility:hidden;transition:all .18s ease;z-index:60;
+  text-align:left;pointer-events:none;backdrop-filter:blur(10px);}
+.tab:hover .tip{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0);}
+.tip::before{content:"";position:absolute;bottom:100%;left:50%;transform:translateX(-50%);
+  border:6px solid transparent;border-bottom-color:rgba(12,38,34,.97);}
+.tip-h{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#5FE3D6;margin-bottom:8px;}
+.tip-r{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12.5px;color:#EAFFFB;}
+.tip-r .av{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#12BDB0,#0E7C74);
+  display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex:0 0 auto;}
+.tip-r .em{font-size:11px;color:#8FD9D2;margin-left:auto;}
+.tip-e{font-size:12px;color:#8FD9D2;padding:4px 0;}
 </style>
 </head>
 <body>
@@ -479,7 +494,7 @@ body{letter-spacing:-0.015em;}
   <div class="tab active" data-tab="home">회의 홈</div>
   <div class="tab" data-tab="today">금일 회의</div>
   <div class="tabsep">이번 회의</div>
-  <div class="tab" data-tab="prep">사전 준비 <span class="badge" id="prepBadge">0</span></div>
+  <div class="tab" data-tab="prep">사전 준비 <span class="badge" id="prepBadge">0</span><div class="tip" id="prepTip"></div></div>
   <div class="tab" data-tab="deck">슬라이드</div>
   <div class="tab" data-tab="video">화상회의</div>
   <div class="tab" data-tab="projects">프로젝트</div>
@@ -709,6 +724,7 @@ async function loadAll(){
     if(!Array.isArray(state[k]))state[k]=[];
   });
   if(!state.tabNotes||typeof state.tabNotes!=="object")state.tabNotes={deck:[],app:[],registry:[],console:[]};
+  state.uploads=[];   // 옛 브라우저 저장 방식 잔재 정리 (자료는 Supabase Storage로 이전)
   // 소유자 계정 권한 보정 (이전에 guest로 저장된 경우)
   const owner=(state.accounts||[]).find(a=>(a.email||"").toLowerCase()==="hyunjeong.shin@sookmyung.ac.kr");
   if(owner && owner.role==="guest"){ owner.role="host"; }
@@ -2118,7 +2134,19 @@ function exportRecord(id){const r=state.records.find(x=>x.id===id);if(!r)return;
 window.exportRecord=exportRecord;window.switchTab=switchTab;window.endMeeting=endMeeting;
 
 function refreshBadges(){const sb=$("segBadge");if(sb)sb.textContent=state.segments.length;
-  const pb=$("prepBadge");if(pb)pb.textContent=state.attendees.length+state.uploads.length;}
+  const pb=$("prepBadge");if(pb)pb.textContent=state.attendees.length;
+  renderPrepTip();}
+
+function renderPrepTip(){
+  const t=$("prepTip"); if(!t) return;
+  const at=state.attendees||[];
+  t.innerHTML='<div class="tip-h">참석자 '+at.length+'명</div>'+
+    (at.length
+      ? at.slice(0,6).map(a=>`<div class="tip-r"><span class="av">${esc(initials(a.name))}</span>`+
+          `<span>${esc(a.name)}</span>${a.email?`<span class="em">${esc(a.email.split("@")[0])}</span>`:""}</div>`).join("")
+        + (at.length>6?`<div class="tip-e">외 ${at.length-6}명</div>`:"")
+      : '<div class="tip-e">아직 등록된 참석자가 없습니다</div>');
+}
 
 if("speechSynthesis" in window){window.speechSynthesis.onvoiceschanged=()=>{};window.speechSynthesis.getVoices();}
 // ==================== ENTRY GATE (회의 검색 + 이름 확인) ====================
