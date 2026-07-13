@@ -691,6 +691,13 @@ function storageMode(){
 }
 let saveTimer=null;
 function scheduleSave(){clearTimeout(saveTimer);saveTimer=setTimeout(saveSession,1200);}
+// 즉시 저장 — 삭제·추가처럼 잃으면 안 되는 변경에 사용
+async function saveNow(){ clearTimeout(saveTimer); await saveSession(); }
+// 화면 전체 갱신 — 삭제 후 배지·목록·카드가 모두 최신이 되도록
+function refreshAll(){
+  refreshBadges();
+  if(state.activeTab) renderStage(state.activeTab);
+}
 async function saveSession(){await store.set("medit:hub1",{
   accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,currentMeetingId:state.currentMeetingId,
   uploads:state.uploads.map(u=>({name:u.name,type:u.type,size:u.size,text:u.text})),
@@ -1004,6 +1011,8 @@ async function uploadFiles(files){
     }
   }
   renderFiles();
+  renderFiles("homeFileList");
+  refreshBadges();
 }
 async function downloadFile(name){
   if(!sb){ toast("클라우드에 연결되지 않았습니다"); return; }
@@ -1032,7 +1041,10 @@ async function deleteFile(name){
   try{
     const {error}=await sb.storage.from(BUCKET).remove([name]);
     if(error) throw error;
-    toast("삭제되었습니다"); renderFiles();
+    toast("삭제되었습니다");
+    renderFiles();                  // 사전 준비 탭
+    renderFiles("homeFileList");    // 회의 홈
+    refreshBadges();
   }catch(e){ toast("삭제 실패: "+e.message); }
 }
 function prettySize(b){ if(!b)return""; if(b<1024)return b+" B"; if(b<1048576)return (b/1024).toFixed(0)+" KB"; return (b/1048576).toFixed(1)+" MB"; }
@@ -1129,7 +1141,16 @@ function bindPrep(){
 }
 function renderAtList(){const box=$("atList");if(!box)return;
   box.innerHTML=state.attendees.length?state.attendees.map((a,i)=>`<span class="chip"><span class="av">${esc(initials(a.name))}</span>${esc(a.name)}${a.email?` · ${esc(a.email)}`:""}<span class="x" onclick="rmAt(${i})">삭제</span></span>`).join(""):'<div class="mini">아직 등록된 참석자가 없습니다.</div>';}
-function rmAt(i){state.attendees.splice(i,1);renderAtList();scheduleSave();refreshBadges();}
+async function rmAt(i){
+  const a=state.attendees[i];
+  if(a && !confirm("'"+a.name+"' 참석자를 삭제할까요?")) return;
+  state.attendees.splice(i,1);
+  const m=currentMeeting(); if(m) m.attendees=state.attendees;
+  renderAtList();
+  await saveNow();          // 즉시 저장 (새로고침해도 유지)
+  refreshBadges();          // 배지·말풍선 갱신
+  toast("삭제되었습니다");
+}
 window.rmAt=rmAt;
 function handleFiles(files){
   [...files].forEach(f=>{
@@ -1511,11 +1532,13 @@ function saveProjectForm(){
   }
   scheduleSave(); closeProjectForm(); renderProjects();
 }
-function removeProject(id){
+async function removeProject(id){
   const p=(state.projects||[]).find(x=>x.id===id); if(!p) return;
   if(!confirm("'"+p.title+"' 프로젝트를 삭제할까요?")) return;
   state.projects=state.projects.filter(x=>x.id!==id);
-  scheduleSave(); renderProjects(); toast("삭제되었습니다");
+  await saveNow();                 // 즉시 저장
+  renderProjects(); refreshBadges();
+  toast("삭제되었습니다");
 }
 // 프로젝트 API (코드로도 카드 생성 가능)
 function addProjectAPI(o){
@@ -2647,6 +2670,7 @@ function createMeetingFlow(){
 function enterHub(){
   $("gate").style.display="none";
   renderTabs();
+  refreshBadges();          // 참석자 배지·말풍선 즉시 반영
   $("appMain").style.display="flex";
   syncCurrentMeeting();
   // 헤더 회의 제목 갱신
