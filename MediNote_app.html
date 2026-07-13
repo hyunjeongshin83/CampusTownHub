@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#12BDB0">
+<title>MediNote</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>*{margin:0;padding:0;box-sizing:border-box}html,body{height:100%;background:#06413E;font-family:Pretendard,-apple-system,sans-serif}#root{height:100%}</style>
+<script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+</head><body><div id="root"></div>
+<script>window.require=function(m){if(m==="react")return window.React;if(m==="react-dom"||m==="react-dom/client")return window.ReactDOM;};</script>
+<script>(() => {
+  var __create = Object.create;
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __getProtoOf = Object.getPrototypeOf;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+    get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+  }) : x)(function(x) {
+    if (typeof require !== "undefined") return require.apply(this, arguments);
+    throw Error('Dynamic require of "' + x + '" is not supported');
+  });
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+    // If the importer is in node compatibility mode or this is not an ESM
+    // file that has been converted to a CommonJS file using a Babel-
+    // compatible transform (i.e. "__esModule" has not been set), then set
+    // "default" to the CommonJS "module.exports" for node compatibility.
+    isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+    mod
+  ));
+
+  // ../../tmp/entryF.jsx
+  var import_react = __toESM(__require("react"));
+  var C = {
+    g0: "#EEFBF8",
+    g1: "#D8F5EF",
+    g2: "#AEEAE2",
+    g3: "#5FD6CE",
+    g4: "#12BDB0",
+    g5: "#0DA298",
+    g6: "#0A7168",
+    g7: "#06413E",
+    ink: "#122423",
+    d2: "#324744",
+    d3: "#5A716D",
+    d4: "#8FA6A2",
+    d5: "#C0D3CF",
+    coral: "#F6796B",
+    coralD: "#B23A2E",
+    coralBg: "#FFF1EF",
+    amber: "#F0A83C",
+    amberD: "#96601A",
+    amberBg: "#FFF7EC",
+    burg: "#8E1F2E",
+    burgD: "#6E1522",
+    burgBg: "#FBEDEF",
+    burgBg2: "#F6DDE1",
+    violet: "#6B7BF0",
+    violetBg: "#EDEFFF",
+    violetD: "#3B45B0",
+    paper: "#FAFDFC",
+    card: "#FFFFFF",
+    line: "#E6F1EE",
+    lineSoft: "#F0F7F5"
+  };
+  var FONT = "'Pretendard','Inter','Apple SD Gothic Neo',system-ui,sans-serif";
+  var HAND = "'Gaegu','Pretendard',cursive";
+  var detectLang = () => {
+    try {
+      return (navigator.language || "en").toLowerCase().startsWith("ko") ? "ko" : "en";
+    } catch {
+      return "en";
+    }
+  };
+  var STR = {
+    ko: {
+      tagline: "\uC57D\uB3C4 \uC608\uBC29\uC811\uC885\uB3C4 \uCF55\uCF55! \uC6B0\uB9AC \uAC00\uC871 \uAC74\uAC15\uB178\uD2B8 \u{1F4D4}",
+      taglinePlain: "\uC57D\uB3C4 \uC608\uBC29\uC811\uC885\uB3C4 \uCF55\uCF55! \uC6B0\uB9AC \uAC00\uC871 \uAC74\uAC15\uB178\uD2B8",
+      google: "Google\uB85C \uACC4\uC18D\uD558\uAE30",
+      kakao: "\uCE74\uCE74\uC624\uB85C \uACC4\uC18D\uD558\uAE30",
+      naver: "\uB124\uC774\uBC84\uB85C \uACC4\uC18D\uD558\uAE30",
+      consentNote: "Google \uB85C\uADF8\uC778 \uC2DC \uC0DD\uB144\uC6D4\uC77C\uB85C \uC5F0\uB839\uB300\uB97C \uC790\uB3D9 \uC124\uC815\uD569\uB2C8\uB2E4 (\uB3D9\uC758 \uC2DC).\n\uC81C\uACF5\uB418\uC9C0 \uC54A\uC73C\uBA74 \uD55C \uBC88\uB9CC \uC5EC\uCB64\uBD05\uB2C8\uB2E4.",
+      dobMissTitle: "\uC0DD\uB144\uC6D4\uC77C\uC774 \uACF5\uC720\uB418\uC9C0 \uC54A\uC558\uC5B4\uC694",
+      oneThing: "\uD55C \uAC00\uC9C0\uB9CC\uC694",
+      dobMissBody: "Google\uC5D0\uC11C \uC0DD\uB144\uC6D4\uC77C\uC744 \uBC1B\uC9C0 \uBABB\uD588\uC5B4\uC694. \uC5F0\uB839\uB300 \uB9DE\uCDA4 \uC548\uB0B4\uB97C \uC704\uD574 \uD55C \uBC88\uB9CC \uC785\uB825\uD574 \uC8FC\uC138\uC694.",
+      ageGroup: "\uC5F0\uB839\uB300",
+      start: "\uC2DC\uC791\uD558\uAE30",
+      nav: { home: "\uCC98\uC74C", vaccine: "\uC608\uBC29\uC811\uC885", assist: "\uB3C4\uC6B0\uBBF8", report: "\uB9AC\uD3EC\uD2B8", my: "\uB098\uC758\uC815\uBCF4" },
+      title: { home: "MediNote", vaccine: "\uC608\uBC29\uC811\uC885", assist: "\uB3C4\uC6B0\uBBF8", report: "\uC811\uC885 \uD6C4", my: "\uB098\uC758 \uAE30\uB85D" },
+      greetChild: "\uAC74\uAC15\uD558\uAC8C \uC790\uB77C\uC694!",
+      greetAdult: "\uB2F9\uC2E0\uC758 \uAC74\uAC15, \uC21C\uC870\uB86D\uAC8C.",
+      greetSenior: "\uCC9C\uCC9C\uD788, \uD55C \uAC78\uC74C\uC529.",
+      greetHcw: "\uC784\uC0C1 \uCC38\uACE0, \uC190\uB05D\uC5D0.",
+      notiTitle: "MediNote \xB7 \uB9DE\uCDA4 \uC548\uB0B4",
+      notiNow: "\uC9C0\uAE08 \xB7 \uC571 \uC54C\uB9BC",
+      notiSenior: "\uB3C5\uAC10 \uCCA0\uC774 \uB2E4\uAC00\uC640\uC694. 65\uC138 \uC774\uC0C1\uC740 \uC62C\uD574 \uB3C5\uAC10 \uC811\uC885\uC774 \uAD6D\uAC00 \uC9C0\uC6D0 \uB300\uC0C1\uC774\uC5D0\uC694.",
+      notiChild: "\uC790\uB140\uC758 \uB2E4\uC74C \uC608\uC815 \uC811\uC885\uC774 \uB2E4\uAC00\uC640\uC694.",
+      notiAdult: "\uC62C\uD574 \uB3C5\uAC10 \uC811\uC885 \uC2DC\uAE30\uC608\uC694. \uB20C\uB7EC\uC11C \uAD8C\uC7A5 \uD56D\uBAA9\uC744 \uD655\uC778\uD558\uC138\uC694.",
+      dueTitle: "\uC62C\uD574 \uB9DE\uC744 \uC811\uC885",
+      dueSenior: "\uB3C5\uAC10(10\uC6D4\xB7\uAD6D\uAC00\uC9C0\uC6D0)\uC774 \uC608\uC815\uB3FC \uC788\uC5B4\uC694. \uD3D0\uB834\uAD6C\uADE0 \uC644\uB8CC. \uB300\uC0C1\uD3EC\uC9C4\uC740 \uC0C1\uB2F4 \uAD8C\uC7A5.",
+      dueAdult: "\uB3C5\uAC10\uC774 10\uC6D4\uC5D0 \uC608\uC815\uB3FC \uC788\uC5B4\uC694. \uB20C\uB7EC\uC11C \uD655\uC778\uD558\uC138\uC694.",
+      askAssistant: "\uB3C4\uC6B0\uBBF8\uC5D0\uAC8C \uBB3C\uC5B4\uBCF4\uAE30",
+      todayMed: "\uC624\uB298\uC758 \uBCF5\uC57D",
+      medHalf: "\uC808\uBC18 \uC644\uB8CC\uD588\uC5B4\uC694.\n\uC800\uB141 \uC57D 2\uAC1C\uAC00 \uB0A8\uC558\uC5B4\uC694.",
+      doses: "\uD68C\uBD84",
+      today: "\uC624\uB298",
+      morningDone: "\uC544\uCE68 \uC57D \uBCF5\uC6A9 \uC644\uB8CC",
+      bpDm: "\uD608\uC555\uC57D \xB7 \uB2F9\uB1E8\uC57D",
+      eveningDose: "\uC800\uB141 \uC57D",
+      eveningWhen: "\uC800\uB141 \uC2DD\uD6C4 30\uBD84 \xB7 2\uC815",
+      fluComing: "\uB3C5\uAC10 \uC811\uC885 \uC2DC\uC98C\uC774 \uB2E4\uAC00\uC640\uC694",
+      fluWhen: "10\uC6D4 \xB7 65\uC138 \uC774\uC0C1 \uAD6D\uAC00\uC9C0\uC6D0",
+      nairobi: "\uB098\uC774\uB85C\uBE44 \uC5EC\uD589 \xB7 \uD669\uC5F4 \uC811\uC885 \uD544\uC694",
+      nairobiSub: "\uD56D\uACF5\uAD8C \uC790\uB3D9 \uAC10\uC9C0 \xB7 \uCD9C\uAD6D 46\uC77C \uC804",
+      lifeSched: "\uC0DD\uC560\uC8FC\uAE30 \uC811\uC885",
+      newVac: "\uC0C8\uB85C \uB4F1\uB85D\uB41C \uC811\uC885\uC57D",
+      newVacBody: "\uC740 \uC2DD\uC57D\uCC98 \uD488\uBAA9\uD5C8\uAC00 \uC790\uB8CC\uC5D0\uC11C \uC790\uB3D9 \uC5C5\uB370\uC774\uD2B8\uB3FC\uC694. \uD5C8\uAC00 \uC644\uB8CC\uC640 \uAD6D\uAC00\uAD8C\uC7A5\uC740 \uAD6C\uBD84\uD574 \uD45C\uC2DC\uD569\uB2C8\uB2E4.",
+      when: "\uAD8C\uC7A5 \uC2DC\uAE30",
+      sampleWarn: "\uC608\uC2DC \uB370\uC774\uD130\uC785\uB2C8\uB2E4. \uC2E4\uC81C \uC811\uC885 \uC5EC\uBD80\uB294 \uC758\uC0AC\xB7\uC57D\uC0AC\uC640 \uC0C1\uB2F4\uD558\uC138\uC694.",
+      gov: "\uAD6D\uAC00\uC9C0\uC6D0",
+      newB: "\uC0C8 \uC811\uC885\uC57D",
+      cert: "\uC99D\uBA85\uC11C",
+      askAnything: "\uBB34\uC5C7\uC774\uB4E0\n\uBB3C\uC5B4\uBCF4\uC138\uC694",
+      assistIntro: "\uB2D8 \uC815\uBCF4\uC5D0 \uB9DE\uCDB0, \uC9C8\uBCD1\uAD00\uB9AC\uCCAD \uB4F1 \uCD5C\uC2E0 \uC815\uBCF4\uB97C \uD568\uAED8 \uCC3E\uC544 \uC548\uB0B4\uD574\uC694.",
+      searchNote: "\uAD81\uAE08\uD55C \uAC78 \uBB3C\uC73C\uBA74 \uC6F9\uAC80\uC0C9\uC73C\uB85C \uC9C8\uBCD1\uAD00\uB9AC\uCCAD \uC790\uB8CC\uAE4C\uC9C0 \uD655\uC778\uD574 \uB2F5\uD574\uC694.",
+      searched: "\uC9C8\uBCD1\uAD00\uB9AC\uCCAD \uB4F1 \uC6F9 \uC815\uBCF4 \uCC38\uC870",
+      placeholder: "\uC811\uC885\xB7\uBCF5\uC57D\uC5D0 \uB300\uD574 \uBB3C\uC5B4\uBCF4\uC138\uC694",
+      assistFoot: "\uC815\uBCF4 \uC81C\uACF5 \uB3C4\uC6B0\uBBF8\uC608\uC694. \uC811\uC885\xB7\uBCF5\uC57D\uC758 \uCD5C\uC885 \uD310\uB2E8\uC740 \uC758\uC0AC\xB7\uC57D\uC0AC\uC640 \uC0C1\uB2F4\uD558\uC138\uC694.",
+      reactionLog: "\uC774\uC0C1\uBC18\uC751 \uAE30\uB85D",
+      reactionSub: "\uC811\uC885 \uD6C4 \uBAB8\uC758 \uBCC0\uD654\uB97C \uAE30\uB85D\uD558\uBA74 \uC9C0\uB09C \uC811\uC885\uACFC \uBE44\uAD50\uD560 \uC218 \uC788\uC5B4\uC694.",
+      latest: "\uCD5C\uADFC \uC811\uC885",
+      logToday: "\uC624\uB298 \uC99D\uC0C1 \uAE30\uB85D\uD558\uAE30",
+      emergency: "\uACE0\uC5F4\xB7\uD638\uD761\uACE4\uB780\xB7\uC2EC\uD55C \uBD93\uAE30\uAC00 \uC788\uC73C\uBA74 \uC989\uC2DC \uC758\uB8CC\uAE30\uAD00 \uB610\uB294 1339\uB85C \uC5F0\uB77D\uD558\uC138\uC694. \uC774 \uC571\uC740 \uC99D\uC0C1\uC744 \uC9C4\uB2E8\uD558\uC9C0 \uC54A\uC544\uC694.",
+      reportShare: "\uC774\uC0C1\uBC18\uC751 \uC2E0\uACE0\xB7\uACF5\uC720",
+      reportShareSub: "\uAE30\uB85D\uD55C \uC99D\uC0C1\uC744 \uC9C8\uBCD1\uAD00\uB9AC\uCCAD\uC774\uB098 \uC811\uC885 \uBCD1\uC6D0\uC73C\uB85C \uBCF4\uB0BC \uC218 \uC788\uC5B4\uC694.",
+      toKdca: "\uC9C8\uBCD1\uAD00\uB9AC\uCCAD \uC2E0\uACE0 (KAERS)",
+      toKdcaSub: "\uC608\uBC29\uC811\uC885 \uD6C4 \uC774\uC0C1\uBC18\uC751 \uC2E0\uACE0\uC2DC\uC2A4\uD15C",
+      toClinic: "\uC811\uC885\uBC1B\uC740 \uBCD1\uC6D0\uC5D0 \uACF5\uC720",
+      toClinicSub: "OO\uBCF4\uAC74\uC18C \xB7 \uD6C4\uC18D \uAD00\uB9AC \uC694\uCCAD",
+      myRecord: "\uB098\uC758 \uC811\uC885\uC218\uCCA9",
+      lifelong: "\uC804 \uC0DD\uC560 \uC811\uC885 \uAE30\uB85D",
+      done: "\uC644\uB8CC",
+      upcoming: "\uC608\uC815",
+      discuss: "\uC0C1\uB2F4 \uAD8C\uC7A5",
+      connect: "\uB9DE\uCDA4 \uC815\uBCF4 \uC5F0\uACB0 (\uB3D9\uC758 \uAE30\uBC18)",
+      linkHealth: "\uB098\uC758\uAC74\uAC15\uAE30\uB85D \uC5F0\uACB0",
+      linkHealthSub: "\uAC74\uAC15\uAC80\uC9C4\xB7\uC9C4\uB8CC \uC774\uB825 (\uB9C8\uC774\uD5EC\uC2A4\uC6E8\uC774)",
+      linkPgx: "\uC57D\uBB3C\uC720\uC804\uD615 \uC815\uBCF4 \uC5F0\uACB0",
+      linkPgxSub: "CPIC \uAC00\uC774\uB4DC\uB77C\uC778 \uAE30\uBC18 \uC815\uBCF4 \uC81C\uACF5",
+      sensitive: "\uC720\uC804\xB7\uC758\uB8CC \uC815\uBCF4\uB294 \uBBFC\uAC10\uC815\uBCF4\uC608\uC694. \uBA85\uC2DC\uC801 \uB3D9\uC758 \uD6C4 \uAE30\uAE30 \uC548\uC5D0\uB9CC \uC800\uC7A5\uB418\uBA70, \uC571\uC740 \uC57D\uC744 \uD310\uC815\uD558\uC9C0 \uC54A\uACE0 \uC815\uBCF4 \uC81C\uACF5\uACFC \uC0C1\uB2F4 \uC5F0\uACB0\uB9CC \uD574\uC694.",
+      notif: "\uC54C\uB9BC \uBC1B\uAE30",
+      kkoInfo: "\uCE74\uCE74\uC624\uD1A1\uC73C\uB85C \uC811\uC885 \uC815\uBCF4 \uBC1B\uAE30",
+      kkoInfoSub: "\uCE5C\uAD6C\uCD94\uAC00\uD55C \uCC44\uB110\uB85C \uC815\uBCF4\uC131 \uBA54\uC2DC\uC9C0",
+      timing: "\uC811\uC885 \uC2DC\uAE30 \uC54C\uB9BC",
+      timingSub: "\uC608\uC815\uC77C 2\uC8FC \uC804\xB73\uC77C \uC804",
+      flightChk: "\uD56D\uACF5\uAD8C \uC774\uBA54\uC77C \uD655\uC778 \uC54C\uB9BC",
+      flightChkSub: "\uC5EC\uD589 \uC811\uC885 \uC790\uB3D9 \uC548\uB0B4 (\uB3D9\uC758 \uC2DC)",
+      newsNew: "\uC0C8 \uC811\uC885\uC57D \uC18C\uC2DD",
+      newsNewSub: "\uC2DD\uC57D\uCC98 \uC2E0\uADDC \uD5C8\uAC00 \uBC31\uC2E0",
+      reviewed: "\uBC29\uC900\uC11D \uC5F0\uAD6C\uC2E4 \uAC10\uC218",
+      dateStr: "7\uC6D4 6\uC77C \uC6D4\uC694\uC77C",
+      influenzaLatest: "\uC778\uD50C\uB8E8\uC5D4\uC790 (10.14)",
+      hwShare: "\uAE30\uAE30\xB7AI \uC5F0\uACB0 (\uB3D9\uC758 \uAE30\uBC18)",
+      hwGoogle: "Google \uAC74\uAC15\uAE30\uAE30 \uC5F0\uACB0",
+      hwGoogleSub: "Health Connect\xB7Wear OS \uC13C\uC11C \uC815\uBCF4 \uACF5\uC720",
+      hwAnthropic: "Anthropic \uC5F0\uACB0 \uAE30\uAE30",
+      hwAnthropicSub: "\uC5F0\uACB0\uB41C \uB3CC\uBD04 \uAE30\uAE30\uC5D0 \uBCF5\uC57D\xB7\uC811\uC885 \uC815\uBCF4 \uC81C\uACF5",
+      hwChatgpt: "ChatGPT \uC5F0\uACB0 \uAE30\uAE30",
+      hwChatgptSub: "\uC5F0\uACB0\uB41C \uC74C\uC131 \uBE44\uC11C\uC5D0 \uC815\uBCF4 \uC81C\uACF5",
+      hwNote: "\uC5F0\uACB0\uC740 \uBAA8\uB450 \uB3D9\uC758 \uAE30\uBC18\uC774\uBA70, \uC571\uC740 \uC815\uBCF4 \uC81C\uACF5\xB7\uC0C1\uB2F4 \uC5F0\uACB0\uAE4C\uC9C0\uB9CC \uD569\uB2C8\uB2E4. \uD310\uC815\xB7\uCC98\uBC29\uC740 \uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.",
+      hwTipGoogle: "Health Connect\xB7Wear OS\uC5D0 \uBAA8\uC778 \uAC78\uC74C\xB7\uC2EC\uBC15\xB7\uC218\uBA74 \uB4F1 \uC13C\uC11C \uC815\uBCF4\uB97C, \uB3D9\uC758\uD558\uC2E0 \uBC94\uC704\uC5D0\uC11C \uC811\uC885\xB7\uBCF5\uC57D \uC548\uB0B4\uC5D0 \uCC38\uACE0\uD569\uB2C8\uB2E4. \uC815\uBCF4\uB294 \uAE30\uAE30 \uC548\uC5D0 \uC800\uC7A5\uB3FC\uC694.",
+      hwTipAnthropic: "\uC5F0\uACB0\uB41C \uB3CC\uBD04 \uAE30\uAE30(\uC608: \uC2A4\uD53C\uCEE4\xB7\uB85C\uBD07)\uC5D0 \uBCF5\uC57D\xB7\uC811\uC885 \uC2DC\uAE30\uB97C \uC74C\uC131\uC73C\uB85C \uC548\uB0B4\uD560 \uC218 \uC788\uC5B4\uC694. \uC57D\uC744 \uD310\uC815\uD558\uC9C0 \uC54A\uACE0, \uC548\uB0B4\uC640 \uC0C1\uB2F4 \uC5F0\uACB0\uAE4C\uC9C0\uB9CC \uD569\uB2C8\uB2E4.",
+      hwTipChatgpt: "\uC5F0\uACB0\uB41C \uC74C\uC131 \uBE44\uC11C\uC5D0 \uC624\uB298\uC758 \uBCF5\uC57D\xB7\uC811\uC885 \uC77C\uC815\uC744 \uC804\uB2EC\uD574, \uB9D0\uB85C \uC54C\uB824\uC8FC\uB3C4\uB85D \uD560 \uC218 \uC788\uC5B4\uC694. \uCD5C\uC885 \uD310\uB2E8\uC740 \uB298 \uC758\uC0AC\xB7\uC57D\uC0AC\uC640 \uC0C1\uB2F4\uD558\uC138\uC694."
+    },
+    en: {
+      tagline: "Meds and shots, all in one happy little note \u{1F4D4}",
+      taglinePlain: "Meds and shots, all in one happy little note",
+      google: "Continue with Google",
+      kakao: "Continue with Kakao",
+      naver: "Continue with Naver",
+      consentNote: "With Google, we read your date of birth to set your age group automatically (with consent). If it isn't shared, we'll ask once.",
+      dobMissTitle: "Your date of birth wasn't shared",
+      oneThing: "One quick thing",
+      dobMissBody: "Google didn't return a birth date, so please add it once. We use it only to tailor guidance to your age group.",
+      ageGroup: "Age group",
+      start: "Get started",
+      nav: { home: "Home", vaccine: "Vaccines", assist: "Assistant", report: "After-care", my: "Record" },
+      title: { home: "MediNote", vaccine: "Vaccines", assist: "Assistant", report: "After-care", my: "My record" },
+      greetChild: "Let's keep you healthy!",
+      greetAdult: "Your health, on track.",
+      greetSenior: "Taking it step by step.",
+      greetHcw: "Clinical reference, at hand.",
+      notiTitle: "MediNote \xB7 Personalized for you",
+      notiNow: "now \xB7 app notification",
+      notiSenior: "Flu season is coming. As you're 65+, your flu shot is state-funded this year.",
+      notiChild: "A reminder: your child's next scheduled vaccine is coming up.",
+      notiAdult: "Your flu shot is due this October. Tap to see what's recommended.",
+      dueTitle: "Vaccines due this year",
+      dueSenior: "Flu (October, state-funded) is scheduled. Pneumococcal done. Shingles \u2014 worth discussing.",
+      dueAdult: "Flu is due in October. Tap to review what's recommended.",
+      askAssistant: "Ask the assistant",
+      todayMed: "Today's medication",
+      medHalf: "Halfway there.\n2 evening doses left.",
+      doses: "doses",
+      today: "Today",
+      morningDone: "Morning dose taken",
+      bpDm: "Blood pressure \xB7 Diabetes",
+      eveningDose: "Evening dose",
+      eveningWhen: "30 min after dinner \xB7 2 tablets",
+      fluComing: "Flu season is coming",
+      fluWhen: "October \xB7 state-funded, 65+",
+      nairobi: "Nairobi trip \xB7 Yellow fever needed",
+      nairobiSub: "Auto-detected from your ticket \xB7 46 days out",
+      lifeSched: "Lifelong schedule",
+      newVac: "Newly registered vaccines",
+      newVacBody: " update automatically from MFDS approval data. Approval and national recommendation are shown separately.",
+      when: "When",
+      sampleWarn: "Sample data. Confirm any vaccination with your doctor or pharmacist.",
+      gov: "State-funded",
+      newB: "New",
+      cert: "Certificate",
+      askAnything: "Ask\nanything",
+      assistIntro: ", with KDCA and other sources checked in real time.",
+      searchNote: "Answers are checked against KDCA and public sources via web search.",
+      searched: "Checked KDCA / web sources",
+      placeholder: "Ask about vaccines or medication",
+      assistFoot: "Information only. Confirm any decision with your doctor or pharmacist.",
+      reactionLog: "Reaction log",
+      reactionSub: "Log how you feel after a vaccine, and compare it with past doses.",
+      latest: "Latest",
+      logToday: "Log today's symptoms",
+      emergency: "High fever, trouble breathing, or severe swelling \u2014 contact a medical facility or 1339 right away. This app does not diagnose.",
+      reportShare: "Report \xB7 share",
+      reportShareSub: "Send your logged symptoms to KDCA or the clinic where you were vaccinated.",
+      toKdca: "Report to KDCA (KAERS)",
+      toKdcaSub: "Adverse event reporting system",
+      toClinic: "Share with the clinic",
+      toClinicSub: "OO Public Health Center \xB7 follow-up",
+      myRecord: "Vaccine record",
+      lifelong: "lifelong history",
+      done: "Done",
+      upcoming: "Upcoming",
+      discuss: "Discuss",
+      connect: "Connect (with consent)",
+      linkHealth: "Link My Health Record",
+      linkHealthSub: "Check-ups \xB7 visits (My Healthway)",
+      linkPgx: "Link pharmacogenomic profile",
+      linkPgxSub: "CPIC-guideline information only",
+      sensitive: "Genetic and medical data are sensitive. Stored on-device after explicit consent; the app informs and refers, it does not decide.",
+      notif: "Notifications",
+      kkoInfo: "Vaccine info via KakaoTalk",
+      kkoInfoSub: "Channel messages after you add us",
+      timing: "Vaccine timing reminders",
+      timingSub: "2 weeks and 3 days before",
+      flightChk: "Flight email check",
+      flightChkSub: "Auto travel-vaccine alerts (with consent)",
+      newsNew: "New vaccine news",
+      newsNewSub: "Newly approved (MFDS)",
+      reviewed: "Reviewed \xB7 Bang Lab",
+      dateStr: "Mon, Jul 6",
+      influenzaLatest: "Influenza (Oct 14)",
+      hwShare: "Connect devices \xB7 AI (with consent)",
+      hwGoogle: "Google health devices",
+      hwGoogleSub: "Share Health Connect \xB7 Wear OS sensor data",
+      hwAnthropic: "Anthropic-connected device",
+      hwAnthropicSub: "Provide med/vaccine info to a linked care device",
+      hwChatgpt: "ChatGPT-connected device",
+      hwChatgptSub: "Provide info to a linked voice assistant",
+      hwNote: "All connections are consent-based; the app only informs and refers \u2014 it does not decide or prescribe.",
+      hwTipGoogle: "Sensor data gathered in Health Connect / Wear OS (steps, heart rate, sleep) can inform your vaccine and medication guidance, within the scope you consent to. Data stays on your device.",
+      hwTipAnthropic: "A linked care device (e.g. a speaker or robot) can voice your medication and vaccine reminders. It never decides on medicines \u2014 it only informs and refers.",
+      hwTipChatgpt: "A linked voice assistant can read out today's medication and vaccine schedule. Always confirm final decisions with your doctor or pharmacist."
+    }
+  };
+  var TONES = {
+    child: { label: { ko: "\uC5B4\uB9B0\uC774", en: "Child" }, voice: "gentle, simple, encouraging \u2014 speak to the child's guardian in warm, reassuring language with very short sentences" },
+    adult: { label: { ko: "\uC131\uC778", en: "Adult" }, voice: "direct, efficient, informative \u2014 concise professional sentences" },
+    senior: { label: { ko: "\uB178\uC778", en: "Senior" }, voice: "warm, clear, patient \u2014 plain words, avoid jargon, one point at a time" },
+    hcw: { label: { ko: "\uBCF4\uAC74\uC758\uB8CC\uC778", en: "Health worker" }, voice: "precise and professional \u2014 correct terminology, cite guideline sources" }
+  };
+  function ageGroupFromBirth(iso) {
+    if (!iso) return "adult";
+    const y = (/* @__PURE__ */ new Date()).getFullYear() - new Date(iso).getFullYear();
+    if (y < 19) return "child";
+    if (y >= 65) return "senior";
+    return "adult";
+  }
+  var VAC = {
+    ko: {
+      child: [["MMR", "\uC0DD\uD6C4 12~15\uAC1C\uC6D4 / \uB9CC 4~6\uC138", "\uAD6D\uAC00\uC608\uBC29\uC811\uC885(NIP)", "gov"], ["\uC77C\uBCF8\uB1CC\uC5FC", "\uC0DD\uD6C4 12\uAC1C\uC6D4~", "\uAD6D\uAC00\uC608\uBC29\uC811\uC885(NIP)", "gov"], ["\uC218\uB450", "\uC0DD\uD6C4 12~15\uAC1C\uC6D4", "\uAD6D\uAC00\uC608\uBC29\uC811\uC885(NIP)", "gov"]],
+      adult: [["Tdap", "10\uB144\uB9C8\uB2E4 \uCD94\uAC00\uC811\uC885", "\uC131\uC778 \uAD8C\uC7A5 \uC811\uC885", ""], ["A\uD615\uAC04\uC5FC", "\uD56D\uCCB4 \uC5C6\uB294 20~40\uB300", "2\uD68C \uC811\uC885(6\uAC1C\uC6D4 \uAC04\uACA9)", ""], ["HPV", "\uAD8C\uC7A5 \uC5F0\uB839\uB300", "\uC2DD\uC57D\uCC98 \uC2E0\uADDC \uC801\uC751\uC99D \uD5C8\uAC00", "newv"]],
+      senior: [["\uC778\uD50C\uB8E8\uC5D4\uC790(\uB3C5\uAC10)", "\uB9E4\uB144 10~11\uC6D4", "65\uC138 \uC774\uC0C1 \uAD6D\uAC00\uC9C0\uC6D0", "gov"], ["\uD3D0\uB834\uAD6C\uADE0(PPSV23)", "65\uC138 \uC774\uC0C1 1\uD68C", "\uAD6D\uAC00\uC608\uBC29\uC811\uC885 \uC9C0\uC6D0", "gov"], ["\uB300\uC0C1\uD3EC\uC9C4", "\uB9CC 65\uC138 \uAD8C\uC7A5", "\uC2DD\uC57D\uCC98 \uC2E0\uADDC \uD5C8\uAC00 \xB7 \uC9C0\uC790\uCCB4\uBCC4 \uC0C1\uC774", "newv"]],
+      hcw: [["B\uD615\uAC04\uC5FC", "\uD56D\uCCB4 \uBBF8\uBCF4\uC720 \uC885\uC0AC\uC790", "\uC758\uC0AC\xB7\uC57D\uC0AC\xB7\uAC04\uD638\uC0AC \uAD8C\uC7A5", ""], ["\uC778\uD50C\uB8E8\uC5D4\uC790", "\uB9E4\uB144", "\uC758\uB8CC\uAE30\uAD00 \uC885\uC0AC\uC790 \uAD8C\uC7A5", ""], ["MMR\xB7\uC218\uB450", "\uD56D\uCCB4 \uBBF8\uBCF4\uC720 \uC2DC", "\uD658\uC790 \uC811\uCD09 \uC804 \uAD8C\uC7A5", ""]],
+      travel: [["\uD669\uC5F4", "\uCD9C\uAD6D 10\uC77C \uC804\uAE4C\uC9C0", "\uC785\uAD6D \uC2DC \uC99D\uBA85\uC11C(\uC610\uB85C\uCE74\uB4DC) \uC694\uAD6C \uAC00\uB2A5 \xB7 \uAD6D\uB0B4 \uC9C0\uC815 \uC758\uB8CC\uAE30\uAD00", "rec"], ["\uC7A5\uD2F0\uD478\uC2A4", "\uC704\uD5D8\uC9C0\uC5ED 2\uC8FC \uC804", "\uB3D9\uB0A8\uC544\xB7\uB0A8\uC544\uC2DC\uC544\xB7\uC544\uD504\uB9AC\uCE74 \uC5EC\uD589 \uC2DC \uAD8C\uC7A5", ""], ["A\uD615\uAC04\uC5FC", "\uCD9C\uAD6D 2~4\uC8FC \uC804", "\uC704\uC0DD \uCDE8\uC57D \uC9C0\uC5ED \uC804\uBC18 \uAD8C\uC7A5", ""], ["\uC218\uB9C9\uAD6C\uADE0", "\uCD9C\uAD6D 10\uC77C \uC804", "\uC0AC\uC6B0\uB514 \uC131\uC9C0\uC21C\uB840(\uD558\uC9C0\xB7\uC6C0\uB77C) \uC2DC \uD544\uC218", "rec"], ["\uB9D0\uB77C\uB9AC\uC544 \uC608\uBC29\uC57D", "\uC9C0\uC5ED\uBCC4 \xB7 \uCD9C\uAD6D \uC804 \uC0C1\uB2F4", "\uC811\uC885 \uC544\uB2CC \uC608\uBC29\uC57D(\uCC98\uBC29) \xB7 \uD604\uC9C0 \uB3C4\uCC29 \uC804 \uBCF5\uC6A9 \uC2DC\uC791", ""], ["\uAD11\uACAC\uBCD1", "\uACE0\uC704\uD5D8\xB7\uC7A5\uAE30 \uCCB4\uB958 \uC2DC", "\uD604\uC9C0 \uB3D9\uBB3C \uC811\uCD09 \uC704\uD5D8 \uC9C0\uC5ED \xB7 3\uD68C \uC811\uC885", ""], ["\uCF5C\uB808\uB77C", "\uCDE8\uC57D \uC9C0\uC5ED \uC7A5\uAE30 \uCCB4\uB958", "\uACBD\uAD6C\uC6A9 \xB7 \uD604\uC9C0 \uC720\uD589 \uC2DC \uACE0\uB824", ""]]
+    },
+    en: {
+      child: [["MMR", "12\u201315 months / age 4\u20136", "National immunization (NIP)", "gov"], ["Japanese encephalitis", "from 12 months", "National immunization (NIP)", "gov"], ["Varicella", "12\u201315 months", "National immunization (NIP)", "gov"]],
+      adult: [["Tdap", "booster every 10 years", "Recommended for adults", ""], ["Hepatitis A", "seronegative, 20s\u201340s", "2 doses, 6 months apart", ""], ["HPV", "recommended ages", "Newly approved indication", "newv"]],
+      senior: [["Influenza (flu)", "yearly, Oct\u2013Nov", "State-funded, age 65+", "gov"], ["Pneumococcal (PPSV23)", "once, age 65+", "National immunization program", "gov"], ["Shingles", "recommended at 65", "Newly approved \xB7 varies by region", "newv"]],
+      hcw: [["Hepatitis B", "non-immune staff", "Recommended for clinicians", ""], ["Influenza", "yearly", "Recommended for facility staff", ""], ["MMR \xB7 Varicella", "if non-immune", "Before patient contact", ""]],
+      travel: [["Yellow fever", "\u226510 days before travel", "Certificate (yellow card) may be required \xB7 designated clinics", "rec"], ["Typhoid", "2 weeks before, risk areas", "SE Asia \xB7 South Asia \xB7 Africa", ""], ["Hepatitis A", "2\u20134 weeks before", "Recommended for low-sanitation regions", ""], ["Meningococcal", "\u226510 days before", "Required for Hajj/Umrah pilgrimage (Saudi Arabia)", "rec"], ["Malaria prophylaxis", "varies \xB7 consult before travel", "Not a vaccine \u2014 prescription, start before arrival", ""], ["Rabies", "high-risk / long stay", "Areas with animal-contact risk \xB7 3 doses", ""], ["Cholera", "long stay in risk areas", "Oral \xB7 consider during local outbreaks", ""]]
+    }
+  };
+  var TAB_KEYS = ["child", "adult", "senior", "hcw", "travel"];
+  var TAB_LABELS = { ko: ["\uC5B4\uB9B0\uC774", "\uC131\uC778", "\uB178\uC778", "\uBCF4\uAC74\uC758\uB8CC\uC778", "\uD574\uC678\uC5EC\uD589"], en: ["Children", "Adults", "Seniors", "Health workers", "Travel"] };
+  function App() {
+    const [lang] = (0, import_react.useState)(detectLang());
+    const [phase, setPhase] = (0, import_react.useState)("splash");
+    const [pct, setPct] = (0, import_react.useState)(0);
+    const [profile, setProfile] = (0, import_react.useState)(null);
+    const [tab, setTab] = (0, import_react.useState)("home");
+    const t = STR[lang];
+    (0, import_react.useEffect)(() => {
+      if (phase !== "splash") return;
+      const total = 8e3, step = 30;
+      let elapsed = 0;
+      const iv = setInterval(() => {
+        elapsed += step;
+        setPct(Math.min(100, Math.round(elapsed / total * 100)));
+      }, step);
+      const done = setTimeout(() => setPhase("onboard"), total);
+      return () => {
+        clearInterval(iv);
+        clearTimeout(done);
+      };
+    }, [phase]);
+    if (phase === "splash") return /* @__PURE__ */ import_react.default.createElement(Splash, { t, pct });
+    if (phase === "onboard" || !profile) return /* @__PURE__ */ import_react.default.createElement(Onboard, { t, lang, onDone: (p) => {
+      setProfile(p);
+      setPhase("app");
+    } });
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: { fontFamily: FONT, background: C.g7, minHeight: "100vh", display: "flex", justifyContent: "center" } }, /* @__PURE__ */ import_react.default.createElement("style", null, `*{box-sizing:border-box;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent} ::-webkit-scrollbar{display:none} @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}} @keyframes drop{from{opacity:0;transform:translateY(-140%)}to{opacity:1;transform:translateY(0)}} @keyframes bl{0%,60%,100%{opacity:.25}30%{opacity:1}} @keyframes pop{0%{transform:scale(.86);opacity:0}60%{transform:scale(1.04)}100%{transform:scale(1);opacity:1}} button{font-family:inherit}`), /* @__PURE__ */ import_react.default.createElement("div", { style: { width: "100%", maxWidth: 430, height: "100dvh", display: "flex", flexDirection: "column", background: `linear-gradient(180deg,${C.g0} 0%,${C.paper} 30%,${C.g0} 100%)`, position: "relative", overflow: "hidden" } }, /* @__PURE__ */ import_react.default.createElement(AppBar, { title: t.title[tab], onBell: () => setTab("assist"), onUser: () => setTab("my") }), /* @__PURE__ */ import_react.default.createElement("div", { key: tab, style: { flex: 1, overflowY: "auto", animation: "fade .34s ease" } }, tab === "home" && /* @__PURE__ */ import_react.default.createElement(Home, { t, go: setTab, profile }), tab === "vaccine" && /* @__PURE__ */ import_react.default.createElement(Vaccine, { t, lang, profile }), tab === "assist" && /* @__PURE__ */ import_react.default.createElement(Assistant, { t, lang, profile }), tab === "report" && /* @__PURE__ */ import_react.default.createElement(Report, { t }), tab === "my" && /* @__PURE__ */ import_react.default.createElement(My, { t, lang, profile })), /* @__PURE__ */ import_react.default.createElement(Nav, { t, tab, set: setTab })));
+  }
+  function Ico({ d, s = 22, c = C.d2, sw = 1.9, f = "none" }) {
+    return /* @__PURE__ */ import_react.default.createElement("svg", { width: s, height: s, viewBox: "0 0 24 24", fill: f, stroke: c, strokeWidth: sw, strokeLinecap: "round", strokeLinejoin: "round" }, d);
+  }
+  var I = {
+    home: /* @__PURE__ */ import_react.default.createElement("path", { d: "M3 10.5l9-7 9 7V20a1.5 1.5 0 01-1.5 1.5H15V15H9v6.5H4.5A1.5 1.5 0 013 20z" }),
+    note: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("path", { d: "M8 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2h-2" }), /* @__PURE__ */ import_react.default.createElement("rect", { x: "8", y: "2", width: "8", height: "4", rx: "1" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M8 11h6M8 15h4" })),
+    vaccine: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("rect", { x: "4", y: "9", width: "16", height: "6", rx: "3", transform: "rotate(-45 12 12)" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M15 6l3 3M9 12l3 3M6 15l-3 3" })),
+    chat: /* @__PURE__ */ import_react.default.createElement("path", { d: "M21 15a2 2 0 01-2 2H8l-5 4V5a2 2 0 012-2h14a2 2 0 012 2z" }),
+    report: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("path", { d: "M9 11l3 3L22 4" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" })),
+    user: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("circle", { cx: "12", cy: "8", r: "4" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M4 21c0-4 4-6.5 8-6.5S20 17 20 21" })),
+    pill: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("rect", { x: "4", y: "9", width: "16", height: "10", rx: "5" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M12 9v10" })),
+    plane: /* @__PURE__ */ import_react.default.createElement("path", { d: "M2 16l20-6L2 4l3 6-3 6z" }),
+    search: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("circle", { cx: "11", cy: "11", r: "7" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M21 21l-4.3-4.3" })),
+    send: /* @__PURE__ */ import_react.default.createElement("path", { d: "M22 2L11 13M22 2l-7 20-4-9-9-4z" }),
+    chev: /* @__PURE__ */ import_react.default.createElement("path", { d: "M9 6l6 6-6 6" }),
+    check: /* @__PURE__ */ import_react.default.createElement("path", { d: "M5 13l4 4L19 7" }),
+    warn: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("path", { d: "M10.3 4L2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L14 4a2 2 0 00-3.7 0z" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M12 9v4M12 17h.01" })),
+    building: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("path", { d: "M3 21h18M5 21V5l8-3v19M19 21V9l-6-3" })),
+    hospital: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("path", { d: "M3 21h18M6 21V6a2 2 0 012-2h8a2 2 0 012 2v15" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M12 8v6M9 11h6" }))
+  };
+  var Logo = ({ s = 30 }) => /* @__PURE__ */ import_react.default.createElement("svg", { width: s, height: s, viewBox: "0 0 48 48", fill: "none", "aria-hidden": "true" }, /* @__PURE__ */ import_react.default.createElement("rect", { width: "48", height: "48", rx: "14", fill: C.g4 }), /* @__PURE__ */ import_react.default.createElement("rect", { x: "13", y: "10", width: "22", height: "28", rx: "4", fill: "#EAFBF3" }), /* @__PURE__ */ import_react.default.createElement("rect", { x: "19", y: "7", width: "10", height: "6", rx: "2", fill: C.g6 }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M18 20h9M18 25h12M18 30h7", stroke: C.g4, strokeWidth: "2", strokeLinecap: "round" }), /* @__PURE__ */ import_react.default.createElement("circle", { cx: "32", cy: "31", r: "7", fill: C.g6 }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M32 28v6M29 31h6", stroke: "#EAFBF3", strokeWidth: "2", strokeLinecap: "round" }));
+  function Splash({ t, pct = 0 }) {
+    const loadingLabel = t.reviewed === STR.ko.reviewed ? "\uBD88\uB7EC\uC624\uB294 \uC911" : "Loading";
+    const fillTop = 48 - 48 * pct / 100;
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: { fontFamily: FONT, minHeight: "100vh", display: "flex", justifyContent: "center", background: `linear-gradient(160deg,${C.g5},${C.g7})` } }, /* @__PURE__ */ import_react.default.createElement("style", null, `@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}} @keyframes pop{0%{transform:scale(.86);opacity:0}60%{transform:scale(1.04)}100%{transform:scale(1);opacity:1}} @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}`), /* @__PURE__ */ import_react.default.createElement("div", { style: { width: "100%", maxWidth: 430, height: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 32px", textAlign: "center" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { animation: "pop .7s cubic-bezier(.2,.8,.2,1.1)" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { animation: "float 3s ease-in-out infinite" } }, /* @__PURE__ */ import_react.default.createElement("svg", { width: "112", height: "112", viewBox: "0 0 48 48", fill: "none", "aria-hidden": "true" }, /* @__PURE__ */ import_react.default.createElement("defs", null, /* @__PURE__ */ import_react.default.createElement("clipPath", { id: "sp" }, /* @__PURE__ */ import_react.default.createElement("rect", { width: "48", height: "48", rx: "14" }))), /* @__PURE__ */ import_react.default.createElement("g", { clipPath: "url(#sp)" }, /* @__PURE__ */ import_react.default.createElement("rect", { width: "48", height: "48", fill: "rgba(255,255,255,.14)" }), /* @__PURE__ */ import_react.default.createElement("rect", { x: "0", y: fillTop, width: "48", height: 48, fill: "#fff", style: { transition: "y .1s linear" } })), /* @__PURE__ */ import_react.default.createElement("rect", { x: "13", y: "10", width: "22", height: "28", rx: "4", fill: "none", stroke: "#0A7168", strokeWidth: "2.2" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M18 20h9M18 25h12M18 30h7", stroke: "#0A7168", strokeWidth: "2", strokeLinecap: "round" }), /* @__PURE__ */ import_react.default.createElement("circle", { cx: "32", cy: "31", r: "7", fill: "none", stroke: "#0A7168", strokeWidth: "2.2" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M32 28v6M29 31h6", stroke: "#0A7168", strokeWidth: "2", strokeLinecap: "round" }), /* @__PURE__ */ import_react.default.createElement("rect", { x: "1.1", y: "1.1", width: "45.8", height: "45.8", rx: "13", fill: "none", stroke: "rgba(255,255,255,.5)", strokeWidth: "1.2" })))), /* @__PURE__ */ import_react.default.createElement("h1", { style: { fontSize: 38, fontWeight: 800, color: "#fff", letterSpacing: "-.03em", marginTop: 24, animation: "fade .6s .2s both" } }, "MediNote"), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontFamily: HAND, fontSize: 20, color: C.g2, lineHeight: 1.5, marginTop: 14, animation: "fade .6s .4s both" } }, t.taglinePlain), /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: 40, display: "flex", alignItems: "center", gap: 8, animation: "fade .6s .6s both" } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontFamily: FONT, fontSize: 13, fontWeight: 500, letterSpacing: ".08em", color: C.g2 } }, loadingLabel), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 14, fontWeight: 700, color: "#fff", fontVariantNumeric: "tabular-nums" } }, pct, "%"))));
+  }
+  function Onboard({ t, lang, onDone }) {
+    const [step, setStep] = (0, import_react.useState)(0);
+    const [birth, setBirth] = (0, import_react.useState)("");
+    const grp = ageGroupFromBirth(birth);
+    function profileFor(b) {
+      const g = ageGroupFromBirth(b);
+      return { name: g === "child" ? lang === "ko" ? "\uC900" : "Jun" : "Nick", birth: b, ageGroup: g, conditions: g === "senior" ? lang === "ko" ? ["\uACE0\uD608\uC555", "\uB2F9\uB1E8"] : ["hypertension", "diabetes"] : [] };
+    }
+    function signIn(provider) {
+      const returned = provider === "google" ? "1958-04-10" : null;
+      if (returned) onDone(profileFor(returned));
+      else setStep(1);
+    }
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: { fontFamily: FONT, minHeight: "100vh", display: "flex", justifyContent: "center", background: `linear-gradient(170deg,${C.g0} 0%,${C.g1} 45%,${C.g2} 100%)` } }, /* @__PURE__ */ import_react.default.createElement("style", null, `@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}`), /* @__PURE__ */ import_react.default.createElement("div", { style: { width: "100%", maxWidth: 430, height: "100dvh", display: "flex", flexDirection: "column", padding: "0 24px", animation: "fade .3s ease" } }, step === 0 ? /* @__PURE__ */ import_react.default.createElement("div", { style: { flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" } }, /* @__PURE__ */ import_react.default.createElement(Logo, { s: 96 }), /* @__PURE__ */ import_react.default.createElement("h1", { style: { fontSize: 34, fontWeight: 800, color: C.ink, letterSpacing: "-.03em", marginTop: 20 } }, "MediNote"), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontFamily: HAND, fontSize: 19, color: C.d3, lineHeight: 1.5, marginTop: 8, marginBottom: 36 } }, t.taglinePlain), /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => signIn("google"), style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 12, width: "100%", padding: 16, borderRadius: 14, background: "#fff", border: `1px solid ${C.line}`, fontSize: 15, fontWeight: 600, color: C.ink, cursor: "pointer", boxShadow: "0 4px 14px -6px rgba(10,110,78,.18)" } }, /* @__PURE__ */ import_react.default.createElement("svg", { width: "26", height: "26", viewBox: "0 0 24 24" }, /* @__PURE__ */ import_react.default.createElement("path", { fill: "#4285F4", d: "M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" }), /* @__PURE__ */ import_react.default.createElement("path", { fill: "#34A853", d: "M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0012 23z" }), /* @__PURE__ */ import_react.default.createElement("path", { fill: "#FBBC05", d: "M5.84 14.1a6.6 6.6 0 010-4.2V7.06H2.18a11 11 0 000 9.88l3.66-2.84z" }), /* @__PURE__ */ import_react.default.createElement("path", { fill: "#EA4335", d: "M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z" })), t.google), /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => signIn("kakao"), style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "100%", padding: 16, borderRadius: 14, background: "#FEE500", border: "none", fontSize: 15, fontWeight: 700, color: "#3C1E1E", cursor: "pointer", marginTop: 10, boxShadow: "0 4px 14px -6px rgba(60,30,30,.22)" } }, /* @__PURE__ */ import_react.default.createElement("svg", { width: "22", height: "22", viewBox: "0 0 24 24", fill: "#3C1E1E" }, /* @__PURE__ */ import_react.default.createElement("path", { d: "M12 3C6.5 3 2 6.48 2 10.8c0 2.76 1.86 5.18 4.65 6.55-.15.53-.97 3.35-1 3.57 0 0-.02.17.09.23.11.07.24.02.24.02.32-.04 3.7-2.42 4.28-2.83.56.08 1.14.12 1.74.12 5.5 0 10-3.48 10-7.78S17.5 3 12 3z" })), t.kakao), /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => signIn("naver"), style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "100%", padding: 16, borderRadius: 14, background: "#03C75A", border: "none", fontSize: 15, fontWeight: 700, color: "#fff", cursor: "pointer", marginTop: 10, boxShadow: "0 4px 14px -6px rgba(3,199,90,.35)" } }, /* @__PURE__ */ import_react.default.createElement("svg", { width: "18", height: "18", viewBox: "0 0 24 24", fill: "#fff" }, /* @__PURE__ */ import_react.default.createElement("path", { d: "M16.27 3v9.1L7.86 3H3v18h4.73v-9.1L16.14 21H21V3z" })), t.naver), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 11, color: C.d4, textAlign: "center", marginTop: 24, lineHeight: 1.6, whiteSpace: "pre-line" } }, t.consentNote)) : /* @__PURE__ */ import_react.default.createElement("div", { style: { flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: C.g5, fontWeight: 700, textTransform: "uppercase" } }, t.oneThing), /* @__PURE__ */ import_react.default.createElement("h1", { style: { fontSize: 25, fontWeight: 800, color: C.ink, letterSpacing: "-.02em", margin: "6px 0" } }, t.dobMissTitle), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 14, color: C.d3, lineHeight: 1.6, marginBottom: 20 } }, t.dobMissBody), /* @__PURE__ */ import_react.default.createElement("input", { type: "date", value: birth, onChange: (e) => setBirth(e.target.value), style: { width: "100%", border: `1px solid ${C.line}`, borderRadius: 14, padding: "14px 16px", fontSize: 16, color: C.ink, outline: "none", background: C.card } }), birth && /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: 14, padding: 14, background: C.g1, borderRadius: 14, fontSize: 13.5, color: C.g6, fontWeight: 600 } }, t.ageGroup, ": ", TONES[grp].label[lang]), /* @__PURE__ */ import_react.default.createElement("button", { disabled: !birth, onClick: () => onDone(profileFor(birth)), style: { width: "100%", padding: 16, borderRadius: 14, background: birth ? C.g4 : C.d5, color: "#fff", fontSize: 15, fontWeight: 700, border: "none", cursor: birth ? "pointer" : "default", marginTop: 24 } }, t.start))));
+  }
+  function AppBar({ title, onBell, onUser }) {
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: { padding: "14px 18px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, background: "transparent", borderBottom: `1px solid ${C.lineSoft}` } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 9 } }, /* @__PURE__ */ import_react.default.createElement(Logo, { s: 30 }), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 18, fontWeight: 800, color: C.ink, letterSpacing: "-.02em" } }, title)), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 2 } }, /* @__PURE__ */ import_react.default.createElement("button", { onClick: onBell, "aria-label": "assistant", style: ib }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: I.chat, c: C.d2 })), /* @__PURE__ */ import_react.default.createElement("button", { onClick: onUser, "aria-label": "record", style: ib }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: I.user, c: C.d2 }))));
+  }
+  var ib = { width: 40, height: 40, borderRadius: 13, border: "none", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" };
+  function Nav({ t, tab, set }) {
+    const items = [["home", I.home], ["vaccine", I.vaccine], ["assist", I.chat], ["report", I.report], ["my", I.user]];
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: { background: C.card, borderTop: `1px solid ${C.line}`, display: "flex", padding: "9px 6px calc(12px + env(safe-area-inset-bottom,0px))", flexShrink: 0 } }, items.map(([k, d]) => {
+      const on = tab === k;
+      return /* @__PURE__ */ import_react.default.createElement("button", { key: k, onClick: () => set(k), style: { flex: 1, background: "none", border: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer", padding: "4px 0" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { width: 46, height: 30, borderRadius: 16, background: on ? C.g1 : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: ".2s" } }, /* @__PURE__ */ import_react.default.createElement(Ico, { d, s: 22, c: on ? C.g5 : C.d4, sw: on ? 2.2 : 1.9 })), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, fontWeight: on ? 700 : 600, color: on ? C.g5 : C.d4 } }, t.nav[k]));
+    }));
+  }
+  var wrap = { padding: "20px 20px 28px" };
+  var eyebrow = { fontSize: 12, color: C.g5, fontWeight: 700, letterSpacing: ".02em", textTransform: "uppercase" };
+  var bigH = { fontFamily: HAND, fontSize: 30, fontWeight: 700, color: C.ink, lineHeight: 1.25, margin: "5px 0", letterSpacing: "0", whiteSpace: "pre-line" };
+  var sub = { fontSize: 14, color: C.d3, lineHeight: 1.6 };
+  var card = { background: C.card, borderRadius: 22, padding: 20, marginTop: 14, border: `1px solid ${C.line}`, boxShadow: "0 1px 2px rgba(10,110,78,.04)" };
+  var LabChip = ({ t }) => /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 700, color: C.g6, background: C.g1, padding: "5px 11px", borderRadius: 999 } }, t.reviewed);
+  function Home({ t, go, profile }) {
+    const [noti, setNoti] = (0, import_react.useState)(true);
+    const g = profile.ageGroup;
+    const greet = g === "child" ? t.greetChild : g === "senior" ? t.greetSenior : g === "hcw" ? t.greetHcw : t.greetAdult;
+    const notiBody = g === "senior" ? t.notiSenior : g === "child" ? t.notiChild : t.notiAdult;
+    const dueBody = g === "senior" ? t.dueSenior : t.dueAdult;
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: wrap }, noti && /* @__PURE__ */ import_react.default.createElement("div", { onClick: () => {
+      setNoti(false);
+      go("assist");
+    }, style: { display: "flex", gap: 11, alignItems: "flex-start", background: "rgba(255,255,255,.98)", border: `1px solid ${C.line}`, borderRadius: 16, padding: 13, marginBottom: 14, cursor: "pointer", boxShadow: "0 10px 28px -10px rgba(10,110,78,.35)", animation: "drop .5s cubic-bezier(.2,.9,.3,1.1)" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { width: 34, height: 34, borderRadius: 11, background: C.g4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: I.note, s: 18, c: "#fff" })), /* @__PURE__ */ import_react.default.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ import_react.default.createElement("b", { style: { fontSize: 12.5, fontWeight: 700, color: C.ink, display: "block" } }, t.notiTitle), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 12, color: C.d3, lineHeight: 1.45, marginTop: 2 } }, notiBody), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: C.d4, marginTop: 3, display: "block" } }, t.notiNow))), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement("span", { style: eyebrow }, t.dateStr), /* @__PURE__ */ import_react.default.createElement(LabChip, { t })), /* @__PURE__ */ import_react.default.createElement("h1", { style: bigH }, greet, "\n", profile.name), /* @__PURE__ */ import_react.default.createElement("div", { onClick: () => go("assist"), style: { display: "flex", gap: 14, alignItems: "flex-start", background: `linear-gradient(135deg,${C.g6},${C.g7})`, borderRadius: 22, padding: 19, marginTop: 16, cursor: "pointer", boxShadow: "0 8px 24px -10px rgba(10,110,78,.5)" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { width: 44, height: 44, borderRadius: 14, background: "rgba(255,255,255,.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: I.note, s: 22, c: C.g3 })), /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement("b", { style: { fontSize: 15.5, fontWeight: 800, color: "#fff", display: "block" } }, t.dueTitle), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12.5, color: C.g2, lineHeight: 1.55, display: "block", marginTop: 5 } }, dueBody), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 12.5, fontWeight: 700, color: C.g3, marginTop: 11, display: "flex", alignItems: "center", gap: 4 } }, t.askAssistant, " ", /* @__PURE__ */ import_react.default.createElement(Ico, { d: I.chev, s: 13, c: C.g3 })))), /* @__PURE__ */ import_react.default.createElement("div", { style: { ...card, background: C.g0, border: `1px solid ${C.g2}`, display: "flex", alignItems: "center", gap: 17 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { position: "relative", width: 76, height: 76, flexShrink: 0 } }, /* @__PURE__ */ import_react.default.createElement("svg", { width: "76", height: "76", style: { transform: "rotate(-90deg)" } }, /* @__PURE__ */ import_react.default.createElement("circle", { cx: "38", cy: "38", r: "31", fill: "none", stroke: C.g2, strokeWidth: "7" }), /* @__PURE__ */ import_react.default.createElement("circle", { cx: "38", cy: "38", r: "31", fill: "none", stroke: C.g4, strokeWidth: "7", strokeLinecap: "round", strokeDasharray: "195", strokeDashoffset: "97" })), /* @__PURE__ */ import_react.default.createElement("div", { style: { position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" } }, /* @__PURE__ */ import_react.default.createElement("b", { style: { fontSize: 18, fontWeight: 800, color: C.g6 } }, "2/4"), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: C.g5 } }, t.doses))), /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 15.5, fontWeight: 800, color: C.ink } }, t.todayMed), /* @__PURE__ */ import_react.default.createElement("p", { style: { ...sub, marginTop: 5, fontSize: 13.5, whiteSpace: "pre-line" } }, t.medHalf))), /* @__PURE__ */ import_react.default.createElement("p", { style: { ...eyebrow, marginTop: 22, marginBottom: 2 } }, t.today), /* @__PURE__ */ import_react.default.createElement(Task, { ic: I.check, done: true, b: t.morningDone, s: t.bpDm }), /* @__PURE__ */ import_react.default.createElement(Task, { ic: I.pill, b: t.eveningDose, s: t.eveningWhen, chev: true }), /* @__PURE__ */ import_react.default.createElement(Task, { ic: I.vaccine, kind: "new", b: t.fluComing, s: t.fluWhen, chev: true, onClick: () => go("vaccine") }), /* @__PURE__ */ import_react.default.createElement(Task, { ic: I.plane, kind: "warn", b: t.nairobi, s: t.nairobiSub, chev: true, onClick: () => go("assist") }));
+  }
+  function Task({ ic, b, s, done, kind, chev, onClick }) {
+    let bg = C.g1, st = C.g5, grad = `linear-gradient(135deg,${C.g0},${C.card})`;
+    if (done) {
+      bg = C.g4;
+      st = "#fff";
+      grad = `linear-gradient(135deg,${C.g1},${C.card})`;
+    }
+    if (kind === "new") {
+      bg = C.amberBg;
+      st = C.amberD;
+      grad = `linear-gradient(135deg,${C.amberBg},${C.card})`;
+    }
+    if (kind === "warn") {
+      bg = `linear-gradient(135deg,${C.burg},${C.burgD})`;
+      st = "#fff";
+      grad = `linear-gradient(135deg,${C.burgBg},${C.card})`;
+    }
+    return /* @__PURE__ */ import_react.default.createElement("div", { onClick, style: { display: "flex", alignItems: "center", gap: 13, padding: 15, borderRadius: 18, background: grad, border: `1px solid ${C.line}`, marginTop: 10, cursor: onClick ? "pointer" : "default", boxShadow: "0 2px 8px -4px rgba(10,110,78,.1)" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { width: 44, height: 44, borderRadius: 15, background: bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: ic, s: 21, c: st })), /* @__PURE__ */ import_react.default.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ import_react.default.createElement("b", { style: { fontSize: 14.5, fontWeight: 700, color: C.ink, display: "block" } }, b), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12.5, color: C.d4 } }, s)), chev && /* @__PURE__ */ import_react.default.createElement(Ico, { d: I.chev, s: 18, c: C.d5 }));
+  }
+  function Warn({ t, children, kind = "warn" }) {
+    const isDanger = kind === "danger";
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 12, padding: "15px 16px", borderRadius: 16, marginTop: 14, background: isDanger ? `linear-gradient(135deg,${C.burgBg},${C.burgBg2})` : C.amberBg, border: isDanger ? `1px solid ${C.burgBg2}` : "none" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { flexShrink: 0, marginTop: 1 } }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: I.warn, s: 18, c: isDanger ? C.burg : C.amberD })), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 12.5, color: isDanger ? C.burgD : C.amberD, lineHeight: 1.55 } }, children));
+  }
+  function Vaccine({ t, lang, profile }) {
+    const init = profile.ageGroup === "child" ? "child" : profile.ageGroup === "hcw" ? "hcw" : profile.ageGroup === "senior" ? "senior" : "adult";
+    const [open, setOpen] = (0, import_react.useState)(init);
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: wrap }, /* @__PURE__ */ import_react.default.createElement("span", { style: eyebrow }, t.title.vaccine), /* @__PURE__ */ import_react.default.createElement("h1", { style: bigH }, t.lifeSched), /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: 8 } }, TAB_KEYS.map((k, i) => {
+      const isOpen = open === k;
+      const list = VAC[lang][k];
+      const isTravel = k === "travel";
+      return /* @__PURE__ */ import_react.default.createElement("div", { key: k, style: { marginTop: 10, borderRadius: 18, overflow: "hidden", border: `1px solid ${isOpen ? C.g2 : C.line}`, background: C.card, boxShadow: isOpen ? "0 6px 18px -10px rgba(10,110,78,.28)" : "0 1px 2px rgba(10,110,78,.03)", transition: ".2s" } }, /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => setOpen(isOpen ? null : k), style: { display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "16px 17px", border: "none", cursor: "pointer", background: isOpen ? `linear-gradient(135deg,${C.g0},${C.g1})` : "transparent" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { width: 38, height: 38, borderRadius: 12, background: isOpen ? C.g4 : C.g1, display: "flex", alignItems: "center", justifyContent: "center", transition: ".2s" } }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: GRP_ICON[k], s: 20, c: isOpen ? "#fff" : C.g5 })), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 15.5, fontWeight: 700, color: C.ink } }, TAB_LABELS[lang][i])), /* @__PURE__ */ import_react.default.createElement("div", { style: { transform: isOpen ? "rotate(90deg)" : "none", transition: ".2s" } }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: I.chev, s: 18, c: C.d4 }))), isOpen && /* @__PURE__ */ import_react.default.createElement("div", { style: { padding: "2px 15px 16px" } }, isTravel && /* @__PURE__ */ import_react.default.createElement(Warn, { t }, lang === "ko" ? /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("b", null, "\uD574\uC678 \uC811\uC885 \uC815\uBCF4"), "\uB294 \uC9C8\uBCD1\uAD00\uB9AC\uCCAD \uD574\uC678\uAC10\uC5FC\uBCD1NOW \uAE30\uC900\uC73C\uB85C \uC790\uB3D9 \uC5C5\uB370\uC774\uD2B8\uB429\uB2C8\uB2E4. \uBC29\uBB38\uAD6D\xB7\uC77C\uC815\uC5D0 \uB530\uB77C \uD56D\uBAA9\uC774 \uB2EC\uB77C\uC838\uC694.") : /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("b", null, "Travel vaccine info"), " updates automatically from KDCA's overseas-infection guidance. Items vary by destination and dates.")), (k === "senior" || k === "adult") && /* @__PURE__ */ import_react.default.createElement(Warn, { t }, /* @__PURE__ */ import_react.default.createElement("b", null, t.newVac), t.newVacBody), list.map(([n, due, note, badge], j) => /* @__PURE__ */ import_react.default.createElement("div", { key: j, style: { padding: "13px 4px", borderBottom: j === list.length - 1 ? "none" : `1px solid ${C.lineSoft}` } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" } }, /* @__PURE__ */ import_react.default.createElement("b", { style: { fontSize: 14.5, fontWeight: 700, color: C.ink } }, n), badge === "gov" && /* @__PURE__ */ import_react.default.createElement(Bdg, { bg: C.g1, c: C.g6 }, t.gov), badge === "newv" && /* @__PURE__ */ import_react.default.createElement(Bdg, { bg: C.amberBg, c: C.amberD }, t.newB), badge === "rec" && /* @__PURE__ */ import_react.default.createElement(Bdg, { bg: C.burgBg, c: C.burg }, t.cert)), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 12.5, color: C.d2, marginTop: 5 } }, t.when, " \xB7 ", due), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 11.5, color: C.d4, marginTop: 2 } }, note)))));
+    })), /* @__PURE__ */ import_react.default.createElement(Warn, { t, kind: "danger" }, t.sampleWarn));
+  }
+  var GRP_ICON = {
+    child: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("circle", { cx: "12", cy: "7", r: "3.2" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M6 21c0-4 2.7-7 6-7s6 3 6 7" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M9 10.5c1 1 1.5 1.5 3 1.5s2-.5 3-1.5" })),
+    adult: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("circle", { cx: "12", cy: "7", r: "3.5" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M5 21c0-4 3-7 7-7s7 3 7 7" })),
+    senior: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("circle", { cx: "12", cy: "6.5", r: "3" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M6 21c0-4 2.7-6.5 6-6.5S18 17 18 21" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M17 12l3 2-3 2" })),
+    hcw: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("path", { d: "M12 3l7 3v5c0 5-3.5 8-7 9.5C8.5 19 5 16 5 11V6z" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M12 8v6M9 11h6" })),
+    travel: /* @__PURE__ */ import_react.default.createElement("path", { d: "M2 16l20-6L2 4l3 6-3 6z" })
+  };
+  var Bdg = ({ children, bg, c }) => /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10.5, fontWeight: 700, padding: "3px 9px", borderRadius: 8, background: bg, color: c } }, children);
+  function Assistant({ t, lang, profile }) {
+    const tone = TONES[profile.ageGroup];
+    const [msgs, setMsgs] = (0, import_react.useState)([]);
+    const [input, setInput] = (0, import_react.useState)("");
+    const [loading, setLoading] = (0, import_react.useState)(false);
+    const endRef = (0, import_react.useRef)(null);
+    (0, import_react.useEffect)(() => {
+      endRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [msgs, loading]);
+    const SUG = {
+      ko: {
+        child: ["\uC62C\uD574 \uC544\uC774\uAC00 \uB9DE\uC544\uC57C \uD560 \uC811\uC885\uC740?", "\uB3C5\uAC10 \uBC31\uC2E0\uC740 \uC5B4\uB9B0\uC774\uC5D0\uAC8C \uC548\uC804\uD55C\uAC00\uC694?", "\uC8FC\uC758\uD560 \uBD80\uC791\uC6A9\uC774 \uC788\uB098\uC694?"],
+        hcw: ["\uC81C\uAC00 \uB9DE\uC544\uC57C \uD560 \uC9C1\uC5ED \uC811\uC885\uC740?", "\uB300\uC0C1\uD3EC\uC9C4 \uC7AC\uC870\uD569 \uBC31\uC2E0 \uCD5C\uC2E0 \uC9C0\uCE68\uC740?", "B\uD615\uAC04\uC5FC \uB178\uCD9C \uD6C4 \uC608\uBC29\uC740?"],
+        def: ["\uC62C\uD574 \uC81C\uAC00 \uB9DE\uC544\uC57C \uD560 \uC811\uC885\uC774 \uC788\uB098\uC694?", "\uC778\uD50C\uB8E8\uC5D4\uC790 \uC811\uC885 \uBD80\uC791\uC6A9\uC774 \uAD81\uAE08\uD574\uC694", "\uACE0\uD608\uC555\xB7\uB2F9\uB1E8\uAC00 \uC788\uB294\uB370 \uB3C5\uAC10 \uBC31\uC2E0 \uB9DE\uC544\uB3C4 \uB418\uB098\uC694?"]
+      },
+      en: {
+        child: ["What vaccines does my child need this year?", "Is the flu shot safe for young children?", "What side effects should I watch for?"],
+        hcw: ["Which occupational vaccines am I due for?", "Latest guidance on recombinant shingles vaccine?", "Post-exposure prophylaxis for hepatitis B?"],
+        def: ["Do I have any vaccines due this year?", "What are the side effects of the flu shot?", "I have hypertension and diabetes \u2014 is the flu shot okay?"]
+      }
+    };
+    const suggestions = profile.ageGroup === "child" ? SUG[lang].child : profile.ageGroup === "hcw" ? SUG[lang].hcw : SUG[lang].def;
+    async function ask(q) {
+      const question = (q ?? input).trim();
+      if (!question || loading) return;
+      setInput("");
+      setMsgs((m) => [...m, { role: "user", text: question }]);
+      setLoading(true);
+      const system = `You are the in-app assistant for 'MediNote', a Korean vaccination and medication guidance app, reviewed by the Bang Joon-seok lab at Sookmyung Women's University College of Pharmacy.
+[User] ${profile.name} \xB7 age group ${profile.ageGroup} \xB7 conditions: ${(profile.conditions || []).join(", ") || "none"}
+[Tone] ${tone.voice}
+[Reply language] ${lang === "ko" ? "Korean" : "English"}
+[Absolute rules]
+1. You do not practice medicine. Never tell the user to take or avoid a specific drug/vaccine.
+2. Answer only as information + referral: per KDCA guidance for their age/condition, then advise confirming with a doctor or pharmacist.
+3. If current schedule/eligibility is needed, use web_search to check KDCA and authoritative Korean sources.
+4. Match the tone above; keep it clear and short.
+5. For side effects, separate common from rare-serious; for serious reactions advise contacting 1339 or a medical facility.`;
+      const history = [...msgs, { role: "user", text: question }].map((m) => ({ role: m.role, content: m.text }));
+      try {
+        const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1e3, system, messages: history, tools: [{ type: "web_search_20250305", name: "web_search" }] }) });
+        const data = await res.json();
+        const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
+        const used = (data.content || []).some((b) => b.type === "server_tool_use" || b.type === "web_search_tool_result");
+        setMsgs((m) => [...m, { role: "assistant", text: text || (lang === "ko" ? "\uB2F5\uBCC0\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC5B4\uC694." : "Couldn't load a response."), searched: used }]);
+      } catch (e) {
+        setMsgs((m) => [...m, { role: "assistant", text: lang === "ko" ? "\uC5F0\uACB0\uC5D0 \uBB38\uC81C\uAC00 \uC0DD\uACBC\uC5B4\uC694." : "Connection problem. Try again." }]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexDirection: "column", height: "100%" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { flex: 1, overflowY: "auto", padding: "20px 16px" } }, msgs.length === 0 && /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 4px" } }, /* @__PURE__ */ import_react.default.createElement("span", { style: eyebrow }, t.title.assist), /* @__PURE__ */ import_react.default.createElement(LabChip, { t })), /* @__PURE__ */ import_react.default.createElement("h1", { style: { ...bigH, padding: "0 4px" } }, t.askAnything), /* @__PURE__ */ import_react.default.createElement("p", { style: { ...sub, padding: "0 4px", marginBottom: 10 } }, profile.name, t.assistIntro), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 10, padding: 14, background: C.g0, border: `1px solid ${C.g2}`, borderRadius: 16, margin: "4px 4px 16px" } }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: I.search, s: 18, c: C.g6 }), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 12.5, color: C.g6, lineHeight: 1.5 } }, t.searchNote)), suggestions.map((s) => /* @__PURE__ */ import_react.default.createElement("button", { key: s, onClick: () => ask(s), style: { display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", textAlign: "left", background: C.card, border: `1px solid ${C.line}`, borderRadius: 16, padding: "15px 16px", marginBottom: 9, fontSize: 13.5, fontWeight: 600, color: C.d2, cursor: "pointer", boxShadow: "0 1px 2px rgba(10,110,78,.03)" } }, /* @__PURE__ */ import_react.default.createElement("span", null, s), /* @__PURE__ */ import_react.default.createElement(Ico, { d: I.chev, s: 16, c: C.d5 })))), msgs.map((m, i) => /* @__PURE__ */ import_react.default.createElement("div", { key: i, style: { display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 12, animation: "fade .3s ease" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { maxWidth: "86%", padding: "13px 15px", borderRadius: 18, fontSize: 13.5, lineHeight: 1.62, whiteSpace: "pre-wrap", background: m.role === "user" ? C.g4 : C.card, color: m.role === "user" ? "#fff" : C.d2, border: m.role === "user" ? "none" : `1px solid ${C.line}`, borderBottomRightRadius: m.role === "user" ? 5 : 18, borderBottomLeftRadius: m.role === "user" ? 18 : 5, boxShadow: m.role === "user" ? "0 4px 12px -4px rgba(18,185,129,.4)" : "0 1px 2px rgba(10,110,78,.03)" } }, m.searched && /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: C.g5, marginBottom: 6, fontWeight: 700 } }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: I.search, s: 13, c: C.g5 }), t.searched), m.text))), loading && /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", marginBottom: 12 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { padding: "14px 17px", borderRadius: 18, background: C.card, border: `1px solid ${C.line}`, display: "flex", gap: 5 } }, [0, 1, 2].map((i) => /* @__PURE__ */ import_react.default.createElement("span", { key: i, style: { width: 7, height: 7, borderRadius: "50%", background: C.g4, animation: `bl 1.2s ${i * 0.15}s infinite` } })))), /* @__PURE__ */ import_react.default.createElement("div", { ref: endRef })), /* @__PURE__ */ import_react.default.createElement("div", { style: { padding: "10px 14px 14px", background: C.card, borderTop: `1px solid ${C.line}` } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 8, alignItems: "flex-end" } }, /* @__PURE__ */ import_react.default.createElement("textarea", { value: input, onChange: (e) => setInput(e.target.value), onKeyDown: (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        ask();
+      }
+    }, placeholder: t.placeholder, rows: 1, style: { flex: 1, resize: "none", border: `1px solid ${C.line}`, borderRadius: 15, padding: "13px 15px", fontSize: 14, fontFamily: FONT, outline: "none", color: C.ink, maxHeight: 100, background: C.paper } }), /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => ask(), disabled: loading || !input.trim(), "aria-label": "send", style: { width: 48, height: 48, borderRadius: 15, border: "none", background: input.trim() ? C.g4 : C.d5, display: "flex", alignItems: "center", justifyContent: "center", cursor: input.trim() ? "pointer" : "default", flexShrink: 0, transition: ".15s", boxShadow: input.trim() ? "0 4px 12px -4px rgba(18,185,129,.5)" : "none" } }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: I.send, s: 20, c: "#fff" }))), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 10.5, color: C.d4, textAlign: "center", marginTop: 9, lineHeight: 1.4 } }, t.assistFoot)));
+  }
+  function Report({ t }) {
+    const ko = t.reviewed === STR.ko.reviewed;
+    const labels = ko ? [["\uC811\uC885\uBD80\uC704 \uD1B5\uC99D", 40, "\uC57D\uD568", C.g4], ["\uBC1C\uC5F4", 15, "\uC5C6\uC74C", C.g4], ["\uD53C\uB85C\uAC10", 55, "\uBCF4\uD1B5", C.amber], ["\uB450\uD1B5", 10, "\uC5C6\uC74C", C.g4]] : [["Injection pain", 40, "Mild", C.g4], ["Fever", 15, "None", C.g4], ["Fatigue", 55, "Moderate", C.amber], ["Headache", 10, "None", C.g4]];
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: wrap }, /* @__PURE__ */ import_react.default.createElement("span", { style: eyebrow }, t.title.report), /* @__PURE__ */ import_react.default.createElement("h1", { style: bigH }, t.reactionLog), /* @__PURE__ */ import_react.default.createElement("p", { style: sub }, t.reactionSub), /* @__PURE__ */ import_react.default.createElement("div", { style: card }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 15.5, fontWeight: 800, color: C.ink } }, t.latest, " \xB7 ", t.influenzaLatest), labels.map(([l, w, v, col]) => /* @__PURE__ */ import_react.default.createElement("div", { key: l, style: { display: "flex", alignItems: "center", gap: 11, marginTop: 12 } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12.5, color: C.d2, width: 96, flexShrink: 0 } }, l), /* @__PURE__ */ import_react.default.createElement("div", { style: { flex: 1, height: 9, borderRadius: 6, background: C.g1, overflow: "hidden" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { height: "100%", width: `${w}%`, background: col, borderRadius: 6 } })), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 11.5, color: C.d4, width: 56, textAlign: "right" } }, v)))), /* @__PURE__ */ import_react.default.createElement("button", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: 16, borderRadius: 16, background: `linear-gradient(135deg,${C.g5},${C.g6})`, color: "#fff", fontSize: 15, fontWeight: 700, border: "none", cursor: "pointer", marginTop: 14, boxShadow: "0 6px 16px -6px rgba(13,162,152,.5)" } }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: /* @__PURE__ */ import_react.default.createElement("path", { d: "M12 5v14M5 12h14" }), s: 18, c: "#fff" }), t.logToday), /* @__PURE__ */ import_react.default.createElement(Warn, { t, kind: "danger" }, t.emergency), /* @__PURE__ */ import_react.default.createElement("p", { style: { ...eyebrow, marginTop: 22, marginBottom: 2 } }, t.reportShare), /* @__PURE__ */ import_react.default.createElement("div", { style: card }, /* @__PURE__ */ import_react.default.createElement("p", { style: { ...sub, marginBottom: 4, fontSize: 13.5 } }, t.reportShareSub), /* @__PURE__ */ import_react.default.createElement(Task, { ic: I.building, b: t.toKdca, s: t.toKdcaSub, chev: true, onClick: () => {
+    } }), /* @__PURE__ */ import_react.default.createElement(Task, { ic: I.hospital, b: t.toClinic, s: t.toClinicSub, chev: true, onClick: () => {
+    } })));
+  }
+  function My({ t, lang, profile }) {
+    const events = lang === "ko" ? [["\uC601\uC720\uC544\uAE30", "BCG\xB7B\uD615\uAC04\uC5FC\xB7DTaP \uB4F1 \uAE30\uCD08\uC811\uC885", "1958~1959 \xB7 \uD45C\uC900 \uC77C\uC815 \uC644\uB8CC", "done"], ["\uC131\uC778\uAE30", "A\uD615\uAC04\uC5FC \xB7 Tdap", "2015 \xB7 OO\uC758\uC6D0", "done"], ["\uB178\uB144\uAE30", "\uD3D0\uB834\uAD6C\uADE0(PPSV23)", "2024.03.02 \xB7 OO\uB0B4\uACFC", "done"], ["", "\uC778\uD50C\uB8E8\uC5D4\uC790(\uB3C5\uAC10)", "2025.10.14 \xB7 OO\uBCF4\uAC74\uC18C", "done"], ["", "\uC778\uD50C\uB8E8\uC5D4\uC790(\uB3C5\uAC10)", "2026.10 \uC608\uC815 \xB7 \uC54C\uB9BC \uC124\uC815\uB428", "open"], ["", "\uB300\uC0C1\uD3EC\uC9C4", "\uBBF8\uC811\uC885 \xB7 \uC0C1\uB2F4 \uAD8C\uC7A5", "warn"]] : [["Infancy", "BCG \xB7 Hep B \xB7 DTaP (primary series)", "1958\u20131959 \xB7 completed", "done"], ["Adulthood", "Hepatitis A \xB7 Tdap", "2015 \xB7 OO clinic", "done"], ["Later life", "Pneumococcal (PPSV23)", "2024.03.02 \xB7 OO internal med", "done"], ["", "Influenza (flu)", "2025.10.14 \xB7 OO health center", "done"], ["", "Influenza (flu)", "Oct 2026 \xB7 reminder set", "open"], ["", "Shingles", "Not yet \xB7 worth discussing", "warn"]];
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: wrap }, /* @__PURE__ */ import_react.default.createElement("span", { style: eyebrow }, t.title.my), /* @__PURE__ */ import_react.default.createElement("h1", { style: bigH }, t.myRecord), /* @__PURE__ */ import_react.default.createElement("p", { style: sub }, profile.name, " \xB7 ", TONES[profile.ageGroup].label[lang], " \xB7 ", t.lifelong), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 10, marginTop: 14 } }, [["12", t.done, C.g1, C.g5], ["1", t.upcoming, C.card, C.ink], ["1", t.discuss, C.coralBg, C.coralD]].map(([n, l, bg, col], i) => /* @__PURE__ */ import_react.default.createElement("div", { key: i, style: { flex: 1, borderRadius: 18, padding: "16px 8px", textAlign: "center", background: bg, border: bg === C.card ? `1px solid ${C.line}` : "none" } }, /* @__PURE__ */ import_react.default.createElement("b", { style: { fontSize: 24, fontWeight: 800, color: col, display: "block" } }, n), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 11, color: C.d4, marginTop: 5, display: "block" } }, l)))), /* @__PURE__ */ import_react.default.createElement("div", { style: card }, /* @__PURE__ */ import_react.default.createElement("div", { style: { position: "relative", paddingLeft: 24 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { position: "absolute", left: 6, top: 8, bottom: 8, width: 2, background: C.g2 } }), events.map(([era, b, s, st], i) => /* @__PURE__ */ import_react.default.createElement("div", { key: i, style: { position: "relative", marginBottom: i === events.length - 1 ? 0 : 17 } }, era && /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: C.g5, marginBottom: 8 } }, era), /* @__PURE__ */ import_react.default.createElement("div", { style: { position: "absolute", left: -24, top: era ? 27 : 2, width: 14, height: 14, borderRadius: "50%", background: st === "done" ? C.g4 : C.card, border: `3px solid ${st === "warn" ? C.coral : st === "open" ? C.g4 : C.card}`, boxShadow: st === "done" ? "none" : `0 0 0 1px ${C.g2}` } }), /* @__PURE__ */ import_react.default.createElement("b", { style: { fontSize: 13.5, fontWeight: 700, color: C.ink } }, b), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, display: "block", marginTop: 1, color: st === "warn" ? C.coralD : st === "open" ? C.g5 : C.d4 } }, s))))), /* @__PURE__ */ import_react.default.createElement("p", { style: { ...eyebrow, marginTop: 22, marginBottom: 2 } }, t.connect), /* @__PURE__ */ import_react.default.createElement("div", { style: card }, /* @__PURE__ */ import_react.default.createElement(Tog, { b: t.linkHealth, s: t.linkHealthSub }), /* @__PURE__ */ import_react.default.createElement(Tog, { b: t.linkPgx, s: t.linkPgxSub, last: true })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 11, padding: 15, borderRadius: 16, marginTop: 13, background: C.violetBg } }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("circle", { cx: "12", cy: "12", r: "10" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M12 8v4M12 16h.01" })), s: 19, c: C.violetD }), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 12.5, color: C.violetD, lineHeight: 1.5 } }, t.sensitive)), /* @__PURE__ */ import_react.default.createElement("p", { style: { ...eyebrow, marginTop: 22, marginBottom: 2 } }, t.hwShare), /* @__PURE__ */ import_react.default.createElement("div", { style: card }, /* @__PURE__ */ import_react.default.createElement(HwRow, { color: "#4285F4", letter: "G", b: t.hwGoogle, s: t.hwGoogleSub, tip: t.hwTipGoogle }), /* @__PURE__ */ import_react.default.createElement(HwRow, { color: "#C15F3C", letter: "A", b: t.hwAnthropic, s: t.hwAnthropicSub, tip: t.hwTipAnthropic }), /* @__PURE__ */ import_react.default.createElement(HwRow, { color: "#10A37F", letter: "C", b: t.hwChatgpt, s: t.hwChatgptSub, tip: t.hwTipChatgpt, last: true })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 11, padding: 15, borderRadius: 16, marginTop: 13, background: C.g0, border: `1px solid ${C.g2}` } }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("circle", { cx: "12", cy: "12", r: "10" }), /* @__PURE__ */ import_react.default.createElement("path", { d: "M12 8v4M12 16h.01" })), s: 19, c: C.g6 }), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 12.5, color: C.g6, lineHeight: 1.5 } }, t.hwNote)), /* @__PURE__ */ import_react.default.createElement("p", { style: { ...eyebrow, marginTop: 22, marginBottom: 2 } }, t.notif), /* @__PURE__ */ import_react.default.createElement("div", { style: card }, /* @__PURE__ */ import_react.default.createElement(Tog, { b: t.kkoInfo, s: t.kkoInfoSub, defOn: true }), /* @__PURE__ */ import_react.default.createElement(Tog, { b: t.timing, s: t.timingSub, defOn: true }), /* @__PURE__ */ import_react.default.createElement(Tog, { b: t.flightChk, s: t.flightChkSub, defOn: true }), /* @__PURE__ */ import_react.default.createElement(Tog, { b: t.newsNew, s: t.newsNewSub, last: true })));
+  }
+  function HwRow({ color, letter, b, s, tip, last }) {
+    const [hover, setHover] = (0, import_react.useState)(false);
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: { position: "relative", borderBottom: last ? "none" : `1px solid ${C.lineSoft}` } }, /* @__PURE__ */ import_react.default.createElement("div", { onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false), onClick: () => setHover((h) => !h), style: { display: "flex", alignItems: "center", gap: 12, padding: "13px 2px", cursor: "pointer" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { width: 36, height: 36, borderRadius: 11, background: color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "#fff", fontSize: 16, fontWeight: 800 } }, letter), /* @__PURE__ */ import_react.default.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ import_react.default.createElement("b", { style: { fontSize: 13.5, fontWeight: 700, color: C.ink, display: "block" } }, b), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 11.5, color: C.d4 } }, s)), /* @__PURE__ */ import_react.default.createElement("div", { style: { flexShrink: 0 } }, /* @__PURE__ */ import_react.default.createElement(Ico, { d: /* @__PURE__ */ import_react.default.createElement("path", { d: "M9 6l6 6-6 6" }), s: 18, c: C.d5 }))), hover && tip && /* @__PURE__ */ import_react.default.createElement("div", { style: { margin: "0 2px 12px", padding: "12px 13px", background: `linear-gradient(135deg,${C.g0},${C.g1})`, border: `1px solid ${C.g2}`, borderRadius: 12, fontSize: 12, color: C.g6, lineHeight: 1.55, animation: "fade .2s ease" } }, tip));
+  }
+  function Tog({ b, s, defOn, last }) {
+    const [on, setOn] = (0, import_react.useState)(defOn || false);
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 2px", borderBottom: last ? "none" : `1px solid ${C.lineSoft}` } }, /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement("b", { style: { fontSize: 13.5, fontWeight: 600, color: C.ink, display: "block" } }, b), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 11.5, color: C.d4 } }, s)), /* @__PURE__ */ import_react.default.createElement("div", { onClick: () => setOn(!on), style: { width: 48, height: 28, borderRadius: 999, background: on ? C.g4 : C.d5, position: "relative", cursor: "pointer", transition: ".22s", flexShrink: 0 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { position: "absolute", top: 3, left: on ? 23 : 3, width: 22, height: 22, borderRadius: "50%", background: "#fff", transition: ".22s", boxShadow: "0 1px 3px rgba(0,0,0,.2)" } })));
+  }
+  var __root = ReactDOM.createRoot(document.getElementById("root"));
+  __root.render(import_react.default.createElement(App));
+})();
+</script>
+</body></html>
