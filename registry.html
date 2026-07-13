@@ -58,6 +58,17 @@
   .note{background:var(--mist);border-left:3px solid var(--mint);border-radius:10px;padding:13px 15px;
     font-size:12.5px;color:var(--soft);line-height:1.65;margin-top:14px;}
   .foot{text-align:center;color:var(--soft);font-size:12px;margin-top:34px;}
+
+  .idea-hint{font-size:12.5px;color:var(--soft);line-height:1.55;margin-bottom:9px;}
+  .idea-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px;}
+  .chip{font-family:inherit;font-size:12px;font-weight:700;padding:7px 12px;border-radius:20px;cursor:pointer;
+    border:1px solid var(--line);background:#fff;color:var(--soft);transition:all .15s;}
+  .chip:hover{border-color:var(--mint);color:var(--deep);background:var(--mist);}
+  .ways{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;}
+  .way{display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;color:var(--soft);cursor:pointer;
+    border:1px solid var(--line);border-radius:11px;padding:10px 12px;background:#fff;transition:all .15s;}
+  .way:hover{border-color:var(--mint);}
+  .way input{width:auto;padding:0;}
   @media(max-width:640px){.row,.roles{grid-template-columns:1fr;}}
 </style>
 </head>
@@ -90,7 +101,7 @@
 
   <div class="card">
     <h3>등록하기</h3>
-    <div class="sub">등록하시면 연구 참여 안내와 결과를 이메일로 공유해 드립니다.</div>
+    <div class="sub">등록하시면 연구 참여 안내와 결과를 이메일로 공유해 드립니다. 제안해 주신 아이디어는 연구 주제 선정에 반영됩니다.</div>
 
     <div class="fld">
       <label>참여 구분</label>
@@ -125,8 +136,25 @@
     </div>
 
     <div class="fld">
-      <label>현장에서 느끼신 문제 <span style="font-weight:500">(선택)</span></label>
-      <textarea id="f_note" placeholder="예: 고령 환자가 알약을 삼키기 어려워하는데 액제 대안이 부족합니다."></textarea>
+      <label>연구 아이디어 제안 <span style="font-weight:500">(선택)</span></label>
+      <div class="idea-hint">현장에서 느끼신 문제나, 이런 약이 있으면 좋겠다는 아이디어를 자유롭게 적어주세요. 제안해 주신 내용은 연구 주제 선정에 반영됩니다.</div>
+      <div class="idea-chips">
+        <button type="button" class="chip" data-add="고령 환자가 알약을 삼키기 어려워합니다. 액제·구강붕해정 대안이 필요합니다.">제형 개선</button>
+        <button type="button" class="chip" data-add="여러 약을 함께 복용하는 환자의 상호작용 확인이 어렵습니다.">다제약물</button>
+        <button type="button" class="chip" data-add="복약 지도 내용을 환자가 기억하지 못합니다. 반복 안내 수단이 필요합니다.">복약 순응</button>
+        <button type="button" class="chip" data-add="비슷하게 생긴 약을 구분하기 어렵습니다. 색상·모양 식별이 개선되면 좋겠습니다.">약 식별</button>
+      </div>
+      <textarea id="f_note" placeholder="예: 고령 환자가 알약을 삼키기 어려워하는데 액제 대안이 부족합니다.&#10;&#10;위 버튼을 눌러 예시를 넣거나, 직접 작성하셔도 됩니다."></textarea>
+    </div>
+
+    <div class="fld">
+      <label>연구 참여 방식 <span style="font-weight:500">(선택)</span></label>
+      <div class="ways">
+        <label class="way"><input type="checkbox" value="아이디어 제안"> 아이디어 제안</label>
+        <label class="way"><input type="checkbox" value="설문 참여"> 설문 참여</label>
+        <label class="way"><input type="checkbox" value="현장 데이터 제공"> 현장 데이터 제공</label>
+        <label class="way"><input type="checkbox" value="공동 연구"> 공동 연구</label>
+      </div>
     </div>
 
     <button class="btn" id="submit">등록하기</button>
@@ -179,6 +207,15 @@ async function loadStats(){
 }
 loadStats();
 
+// 아이디어 예시 칩
+document.querySelectorAll(".chip").forEach(c=>{
+  c.onclick=()=>{
+    const t=$("f_note");
+    t.value = t.value.trim() ? (t.value.trim()+"\n"+c.dataset.add) : c.dataset.add;
+    t.focus();
+  };
+});
+
 // 등록
 $("submit").onclick=async()=>{
   const name=$("f_name").value.trim();
@@ -187,6 +224,7 @@ $("submit").onclick=async()=>{
   const region=$("f_region").value;
   const interest=$("f_interest").value.trim();
   const note=$("f_note").value.trim();
+  const ways=[...document.querySelectorAll(".way input:checked")].map(x=>x.value).join(", ");
   const msg=$("msg");
 
   if(!name||!email){ msg.innerHTML='<span class="err">이름과 이메일을 입력해 주세요.</span>'; return; }
@@ -199,12 +237,13 @@ $("submit").onclick=async()=>{
 
   try{
     const {error}=await sb.from("registry").insert([{
-      name, email, role, org, region, interest, note, created_at:new Date().toISOString()
+      name, email, role, org, region, interest, note, ways, created_at:new Date().toISOString()
     }]);
     if(error) throw error;
     msg.innerHTML='<span class="ok">등록이 완료되었습니다. 연구 진행 상황을 이메일로 공유해 드리겠습니다.</span>';
     ["f_name","f_email","f_org","f_interest","f_note"].forEach(id=>$(id).value="");
     $("f_region").value="";
+    document.querySelectorAll(".way input").forEach(x=>x.checked=false);
     loadStats();
   }catch(e){
     if(/duplicate key/i.test(e.message)){

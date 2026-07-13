@@ -411,6 +411,36 @@ body{letter-spacing:-0.015em;}
 .tab-add:hover{border-color:var(--mint)!important;color:var(--deep)!important;}
 .tab-x{margin-left:6px;opacity:.5;font-weight:700;}
 .tab-x:hover{opacity:1;color:#fff;}
+
+.pform{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px 22px;box-shadow:0 6px 22px rgba(12,38,34,.07);}
+.pf-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.pf-head b{font-size:16px;letter-spacing:-.02em;}
+.pf-row{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:11px;}
+.pf-fld{margin-bottom:11px;}
+.pform label{display:block;font-size:11.5px;font-weight:800;color:var(--soft);margin-bottom:5px;}
+.pform input,.pform select,.pform textarea{width:100%;font-family:inherit;font-size:14px;padding:10px 12px;
+  border:1px solid var(--line);border-radius:11px;outline:none;box-sizing:border-box;transition:border .15s;}
+.pform input:focus,.pform select:focus,.pform textarea:focus{border-color:var(--mint);box-shadow:0 0 0 3px rgba(18,189,176,.14);}
+.pform textarea{min-height:64px;resize:vertical;}
+.pf-acts{display:flex;gap:8px;margin-top:6px;}
+@media(max-width:640px){.pf-row{grid-template-columns:1fr;}}
+
+.mail-kinds{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:14px;}
+.mk{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:15px 17px;text-align:left;cursor:pointer;
+  font-family:inherit;transition:all .15s;}
+.mk:hover{border-color:var(--mint);transform:translateY(-1px);}
+.mk.on{background:var(--mint);border-color:var(--mint);box-shadow:0 7px 20px rgba(18,189,176,.3);}
+.mk b{display:block;font-size:15px;color:var(--ink);letter-spacing:-.02em;}
+.mk span{display:block;font-size:12px;color:var(--soft);margin-top:4px;line-height:1.45;}
+.mk.on b,.mk.on span{color:#fff;}
+.mail-sub{display:flex;gap:7px;flex-wrap:wrap;}
+.msb{font-family:inherit;font-size:12.5px;font-weight:700;padding:9px 14px;border-radius:11px;cursor:pointer;
+  border:1px solid var(--line);background:#fff;color:var(--soft);transition:all .15s;}
+.msb:hover{border-color:var(--mint);color:var(--deep);}
+.msb.on{background:var(--deep);color:#fff;border-color:var(--deep);}
+.note-box{background:var(--mist);border-left:3px solid var(--mint);border-radius:12px;padding:14px 16px;
+  font-size:13px;color:var(--soft);line-height:1.65;}
+.note-box b{color:var(--deep);}
 </style>
 </head>
 <body>
@@ -490,7 +520,7 @@ function seedData(){
       {id:"u_host",name:"신현정",       email:"twinky0509@gmail.com",     role:"host",     pw:"1234"},
       {id:"u_bang",name:"방준석 교수님", email:"jsbang@sookmyung.ac.kr",   role:"guest",    pw:"1234"},
       {id:"u_jin", name:"진인혜",        email:"jih4154@sookmyung.ac.kr",   role:"guest",    pw:"1234"},
-      {id:"u_hj",  name:"신현정",        email:"hyunjeong.shin@sookmyung.ac.kr", role:"guest", pw:"1234"},
+      {id:"u_hj",  name:"신현정",        email:"hyunjeong.shin@sookmyung.ac.kr", role:"host", pw:"1234"},
     ];
   }
   if(!state.companies.length){
@@ -667,6 +697,9 @@ async function loadAll(){
     if(!Array.isArray(state[k]))state[k]=[];
   });
   if(!state.tabNotes||typeof state.tabNotes!=="object")state.tabNotes={deck:[],app:[],registry:[],console:[]};
+  // 소유자 계정 권한 보정 (이전에 guest로 저장된 경우)
+  const owner=(state.accounts||[]).find(a=>(a.email||"").toLowerCase()==="hyunjeong.shin@sookmyung.ac.kr");
+  if(owner && owner.role==="guest"){ owner.role="host"; }
   seedData();
 }
 
@@ -861,15 +894,28 @@ function renderJobs(){
   box.innerHTML=state.jobs.map(j=>{
     const linked=(j.linkedMeetingIds||[]).length;
     const here=cm&&(j.linkedMeetingIds||[]).includes(cm.id);
+    // 같은 제목의 프로젝트를 찾아 연결
+    const proj=(state.projects||[]).find(p=>
+      p.title===j.title || p.title.includes(j.title) || j.title.includes(p.title));
     return `<div class="jobcard">
       <div class="job-top"><b>${esc(j.title)}</b><span class="job-status">${esc(j.status||"")}</span></div>
       <div class="job-desc">${esc(j.desc||"")}</div>
       <div class="job-meta">연결된 회의 ${linked}개${here?' · 이번 회의 포함':''}</div>
-      ${canManage?`<div class="job-actions">
-        <button class="b-ghost" data-link="${j.id}">다음 회의로 연결</button>
-      </div>`:''}
+      <div class="job-actions">
+        ${proj?`<button class="b-mint" data-goproj="${proj.id}">${proj.url?"열어보기":"프로젝트 보기"}</button>`:''}
+        ${canManage?`<button class="b-ghost" data-link="${j.id}">다음 회의로 연결</button>`:''}
+      </div>
     </div>`;
   }).join("");
+  box.querySelectorAll("[data-goproj]").forEach(b=>b.onclick=()=>{
+    const p=(state.projects||[]).find(x=>x.id===b.dataset.goproj);
+    if(!p) return;
+    switchTab("projects");
+    setTimeout(()=>{
+      if(p.url) openProject(p.id);          // 앱이 있으면 바로 실행
+      else if(p.detail) showDetail(p.detail); // 제안 내용이 있으면 펼침
+    },250);
+  });
   if(canManage){
     box.querySelectorAll("[data-link]").forEach(b=>b.onclick=()=>linkJobToMeeting(b.dataset.link));
   }
@@ -1307,6 +1353,7 @@ function projectsHTML(){
    <div class="section-title">Projects · 이 회의에서 나온 것들</div>
    <h2 style="font-size:23px;color:var(--ink);margin-bottom:4px">프로젝트</h2>
    <div class="mini" style="margin-bottom:16px">회의를 진행하며 나온 제안과 만들어진 결과물입니다. 새 아이디어가 나오면 여기에 추가하세요.</div>
+   <div id="projForm" style="display:none;margin-bottom:14px"></div>
    <div id="projGrid"></div>
    ${canEdit?'<button class="b-deep" id="projAdd" style="margin-top:14px">+ 프로젝트 추가</button>':''}
   </div>`;
@@ -1336,7 +1383,7 @@ function renderProjects(){
 
   box.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openProject(b.dataset.open));
   box.querySelectorAll("[data-detail]").forEach(b=>b.onclick=()=>showDetail(b.dataset.detail));
-  box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>editProject(b.dataset.edit));
+  box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openProjectForm(b.dataset.edit));
   box.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>removeProject(b.dataset.rm));
 }
 
@@ -1370,15 +1417,71 @@ function openProject(id){
   v.scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 
-function editProject(id){
-  const p=(state.projects||[]).find(x=>x.id===id); if(!p) return;
-  const title=prompt("제목",p.title); if(title===null) return;
-  const desc=prompt("설명",p.desc||""); if(desc===null) return;
-  const status=prompt("상태 (제안 / 설계 / 데모 / 진행)",p.status||"제안"); if(status===null) return;
-  const url=prompt("HTML 파일명 또는 주소 (없으면 비워두세요)\n예: MediNote_app.html",p.url||"");
-  if(url===null) return;
-  Object.assign(p,{title:title.trim(),desc:desc.trim(),status:status.trim(),url:url.trim()});
-  scheduleSave(); renderProjects(); toast("수정되었습니다");
+let editingId=null;
+
+// 작성 보드 열기 (추가 또는 수정)
+function openProjectForm(id){
+  editingId=id||null;
+  const p=id?(state.projects||[]).find(x=>x.id===id):null;
+  const box=$("projForm"); if(!box) return;
+  box.style.display="block";
+  box.innerHTML=`
+    <div class="pform">
+      <div class="pf-head">
+        <b>${id?"프로젝트 수정":"새 프로젝트"}</b>
+        <button class="b-ghost" id="pfCancel">취소</button>
+      </div>
+      <div class="pf-row">
+        <div><label>제목</label><input id="pf_title" placeholder="예: 약국 재고 관리" value="${p?esc(p.title):''}"></div>
+        <div><label>상태</label>
+          <select id="pf_status">
+            ${["제안","설계","데모","진행"].map(s=>`<option ${p&&p.status===s?"selected":""}>${s}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+      <div class="pf-fld"><label>설명</label>
+        <textarea id="pf_desc" placeholder="이 프로젝트가 무엇인지 한두 문장으로">${p?esc(p.desc||""):''}</textarea>
+      </div>
+      <div class="pf-row">
+        <div><label>HTML 파일 또는 주소 <span style="font-weight:500">(선택)</span></label>
+          <input id="pf_url" placeholder="예: registry.html" value="${p?esc(p.url||""):''}"></div>
+        <div><label>태그 <span style="font-weight:500">(쉼표로 구분)</span></label>
+          <input id="pf_tags" placeholder="예: 모바일, 복약" value="${p&&p.tags?esc(p.tags.join(", ")):''}"></div>
+      </div>
+      <div class="pf-acts">
+        <button class="b-mint" id="pfSave">${id?"저장":"추가"}</button>
+        ${id?`<button class="b-ghost" id="pfDelete">삭제</button>`:""}
+      </div>
+      <div class="mini" id="pfMsg" style="margin-top:8px"></div>
+    </div>`;
+  $("pfCancel").onclick=closeProjectForm;
+  $("pfSave").onclick=saveProjectForm;
+  const del=$("pfDelete"); if(del) del.onclick=()=>{ removeProject(id); closeProjectForm(); };
+  $("pf_title").focus();
+  box.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function closeProjectForm(){
+  const box=$("projForm"); if(box){ box.style.display="none"; box.innerHTML=""; }
+  editingId=null;
+}
+function saveProjectForm(){
+  const title=($("pf_title").value||"").trim();
+  const desc=($("pf_desc").value||"").trim();
+  const status=$("pf_status").value;
+  const url=($("pf_url").value||"").trim();
+  const tags=($("pf_tags").value||"").split(",").map(t=>t.trim()).filter(Boolean);
+  const msg=$("pfMsg");
+  if(!title){ msg.innerHTML='<span style="color:#C0492A">제목을 입력하세요.</span>'; return; }
+  if(editingId){
+    const p=(state.projects||[]).find(x=>x.id===editingId);
+    if(p) Object.assign(p,{title,desc,status,url,tags});
+    toast("수정되었습니다");
+  } else {
+    state.projects=state.projects||[];
+    state.projects.push({id:"p_"+Date.now(),title,desc,status,url,tags,meeting:state.currentMeetingId});
+    toast("프로젝트가 추가되었습니다");
+  }
+  scheduleSave(); closeProjectForm(); renderProjects();
 }
 function removeProject(id){
   const p=(state.projects||[]).find(x=>x.id===id); if(!p) return;
@@ -1386,19 +1489,26 @@ function removeProject(id){
   state.projects=state.projects.filter(x=>x.id!==id);
   scheduleSave(); renderProjects(); toast("삭제되었습니다");
 }
-function addProject(){
-  const title=prompt("프로젝트 제목 (예: 약국 재고 관리)"); if(!title) return;
-  const desc=prompt("한 줄 설명","")||"";
-  const status=prompt("상태 (제안 / 설계 / 데모 / 진행)","제안")||"제안";
-  const url=prompt("HTML 파일명 또는 주소 (없으면 비워두세요)\n예: MediNote_app.html","")||"";
+// 프로젝트 API (코드로도 카드 생성 가능)
+function addProjectAPI(o){
+  if(!o||!o.title) throw new Error("title이 필요합니다");
+  const p={id:o.id||("p_"+Date.now()),title:o.title,desc:o.desc||"",status:o.status||"제안",
+    url:o.url||"",tags:o.tags||[],meeting:o.meeting||state.currentMeetingId};
   state.projects=state.projects||[];
-  state.projects.push({id:"p_"+Date.now(),title:title.trim(),desc:desc.trim(),status:status.trim(),
-    url:url.trim(),meeting:state.currentMeetingId,tags:[]});
-  scheduleSave(); renderProjects(); toast("프로젝트가 추가되었습니다");
+  state.projects.push(p); scheduleSave(); renderProjects();
+  return p.id;
 }
+function updateProjectAPI(id,patch){
+  const p=(state.projects||[]).find(x=>x.id===id);
+  if(!p) throw new Error("프로젝트를 찾을 수 없습니다: "+id);
+  Object.assign(p,patch||{}); scheduleSave(); renderProjects();
+  return true;
+}
+function listProjectsAPI(){ return (state.projects||[]).slice(); }
+
 function bindProjects(){
   renderProjects();
-  const a=$("projAdd"); if(a) a.onclick=addProject;
+  const a=$("projAdd"); if(a) a.onclick=()=>openProjectForm(null);
 }
 
 function videoHTML(){
@@ -1730,47 +1840,123 @@ ${(state.nextActions||[]).map(x=>"· "+x).join("\n")||"—"}
 
 // ==================== EMAIL TAB ====================
 function emailHTML(){
-  const last=state.records[0];
-  const to=state.attendees.map(a=>a.email).filter(Boolean).join(", ");
-  const draft=last?last.email:"";
-  const subj=last?`[MedIT 회의록] ${last.title}`:"[MedIT 회의록]";
-  return `<div class="email">
-   <div class="section-title">Minutes & Email</div>
-   <h2 style="font-size:22px;color:var(--ink);margin-bottom:4px">회의록 · 이메일 아카이브</h2>
-   <div class="mini" style="margin-bottom:16px">회의 종료 시 AI가 녹취·참석자·자료를 정리해 이메일 초안을 만듭니다. 지금은 \u2018메일 앱으로 열기\u2019·복사까지 지원하며, 자동 발송은 신뢰도 확인 후 연동 예정입니다.</div>
+  const m=currentMeeting()||{};
+  return `<div class="hero">
+   <div class="section-title">Mail · 이메일 센터</div>
+   <h2 style="font-size:23px;color:var(--ink);margin-bottom:4px">이메일</h2>
+   <div class="mini" style="margin-bottom:16px">아래에서 종류를 고르면 수신자·제목·본문이 자동으로 채워집니다. 확인 후 메일 앱으로 보내세요.</div>
+
+   <div class="mail-kinds">
+     <button class="mk" data-kind="invite">
+       <b>초대장</b><span>회의 참석 안내 · 허브 가입 요청</span>
+     </button>
+     <button class="mk" data-kind="minutes">
+       <b>회의록</b><span>회의 요약 · 다음 액션 공유</span>
+     </button>
+     <button class="mk" data-kind="outreach">
+       <b>아웃리치</b><span>LG U+ · 휴베이스/온누리 협업 제안</span>
+     </button>
+   </div>
+
+   <div id="mailSub" style="margin-bottom:12px"></div>
+
    <div class="glass tile">
-     <div class="field"><label>받는 사람</label><input id="emTo" value="${esc(to)}" placeholder="attendee@example.com"></div>
-     <div class="field"><label>제목</label><input id="emSubj" value="${esc(subj)}"></div>
-     <div class="field"><label>본문 <span class="aibadge"><span class="dot"></span>AI 작성</span></label><textarea id="emBody" placeholder="회의를 종료하면 AI가 초안을 채웁니다.">${esc(draft)}</textarea></div>
-     <div style="display:flex;gap:8px;flex-wrap:wrap">
+     <div class="fld"><label>받는 사람</label><input id="emTo" placeholder="쉼표로 구분"></div>
+     <div class="fld"><label>제목</label><input id="emSubj" placeholder="제목"></div>
+     <div class="fld"><label>본문</label><textarea id="emBody" style="min-height:280px" placeholder="위에서 종류를 선택하면 자동으로 채워집니다"></textarea></div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
        <button class="b-mint" id="emOpen">메일 앱으로 열기</button>
        <button class="b-ghost" id="emCopy">본문 복사</button>
-       <button class="b-ghost" id="emRegen">AI 다시 작성</button>
-       <button class="b-gold" id="emLoad0710">0710 회의록 불러오기</button>
-       <button class="b-deep" id="emMd">회의록 MD</button>
+       <button class="b-ghost" id="emClear">비우기</button>
      </div>
+     <div class="mini" id="emMsg" style="margin-top:9px"></div>
    </div>
-   <div class="section-title" style="margin-top:18px">이메일 아카이브</div>
+
+   <div class="note-box" style="margin-top:14px">
+     <b>자동 발송에 대하여</b><br>
+     지금은 <b>메일 앱을 여는 방식</b>입니다. 웹페이지는 보안상 스스로 메일을 보낼 수 없기 때문입니다.
+     허브가 직접 발송하려면 메일 서비스(Resend·SendGrid 등)와 서버 함수가 필요합니다.
+     API 키를 웹페이지에 넣으면 누구나 훔쳐 쓸 수 있으므로, 키는 반드시 서버에 숨겨야 합니다.
+     <span class="mini">→ 나중에 Supabase Edge Function으로 붙이면 버튼 하나로 발송됩니다.</span>
+   </div>
+
+   <div class="section-title" style="margin-top:22px">지난 회의 기록</div>
    <div id="archive"></div>
   </div>`;
 }
+
+const MAIL_TPL={
+  invite(){
+    const m=currentMeeting()||{};
+    const to=(m.attendees||[]).map(a=>a.email).filter(Boolean).join(", ");
+    return {to, subj:`[초대] ${m.title||"회의"}`,
+      body:`안녕하세요,\n\n${fmtDate(m.date)} ${m.time||""}, ${m.place||""}에서 진행하는 회의에 초대드립니다.\n\n`+
+`회의: ${m.title||""}\n일시: ${fmtDate(m.date)} ${m.time||""}\n장소: ${m.place||""}\n\n`+
+`아래 회의 운영 사이트에서 자료와 회의록을 확인하실 수 있습니다.\n`+
+`캠퍼스타운 허브: ${location.origin+location.pathname}\n\n`+
+`본인 이메일로 가입하시면 초대된 회의가 목록에 표시됩니다.\n\n감사합니다.`};
+  },
+  minutes(){
+    const m=currentMeeting()||{};
+    const to=(m.attendees||[]).map(a=>a.email).filter(Boolean).join(", ");
+    const r=state.records[0];
+    let body=MINUTES_0710;
+    if(r && r.notes){
+      body=`안녕하세요,\n\n${r.title||m.title} 회의록을 공유드립니다.\n\n`+
+        (r.notes.summary?`[요약]\n${r.notes.summary}\n\n`:"")+
+        (r.nextActions&&r.nextActions.length?`[다음 액션]\n`+r.nextActions.map((a,i)=>`${i+1}. ${a}`).join("\n")+`\n\n`:"")+
+        (r.script?`[정리된 스크립트]\n${r.script}\n\n`:"")+
+        `감사합니다.`;
+    }
+    return {to, subj:`[회의록] ${m.title||"회의"}`, body};
+  },
+  outreach(){ return null; }   // 하위 선택으로 처리
+};
+
 function bindEmail(){
   renderArchive();
-  $("emOpen").onclick=()=>{const to=$("emTo").value,su=encodeURIComponent($("emSubj").value),bo=encodeURIComponent($("emBody").value);
-    window.location.href=`mailto:${encodeURIComponent(to)}?subject=${su}&body=${bo}`;};
-  $("emCopy").onclick=()=>{navigator.clipboard.writeText($("emBody").value).then(()=>toast("본문을 복사했습니다"));};
-  $("emMd").onclick=()=>{if(state.records[0])exportRecord(state.records[0].id);else toast("종료된 회의가 없습니다");};
-  const el=$("emLoad0710"); if(el)el.onclick=()=>{
-    $("emSubj").value="[회의록] MedIT × 약학대학 (2026.07.10) — 고령화 Age-Tech";
-    $("emBody").value=MINUTES_0710;
-    const to=(currentMeeting()&&currentMeeting().attendees||[]).map(a=>a.email).filter(Boolean).join(", ");
-    if(to)$("emTo").value=to;
-    toast("0710 회의록을 불러왔습니다");
+  const set=(t)=>{ $("emTo").value=t.to||""; $("emSubj").value=t.subj||""; $("emBody").value=t.body||""; };
+
+  document.querySelectorAll(".mk").forEach(b=>b.onclick=()=>{
+    document.querySelectorAll(".mk").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    const kind=b.dataset.kind;
+    const sub=$("mailSub");
+    if(kind==="outreach"){
+      sub.innerHTML='<div class="mail-sub">'+Object.keys(OUTREACH).map(k=>
+        `<button class="msb" data-o="${k}">${esc(OUTREACH[k].title)}</button>`).join("")+'</div>';
+      sub.querySelectorAll("[data-o]").forEach(x=>x.onclick=()=>{
+        sub.querySelectorAll(".msb").forEach(y=>y.classList.remove("on"));
+        x.classList.add("on");
+        const o=OUTREACH[x.dataset.o];
+        set({to:o.to,subj:o.subj,body:o.body});
+        $("emMsg").textContent="아웃리치 초안을 불러왔습니다. 내용을 확인 후 보내세요.";
+      });
+      $("emMsg").textContent="보낼 대상을 선택하세요.";
+      return;
+    }
+    sub.innerHTML="";
+    const t=MAIL_TPL[kind] && MAIL_TPL[kind]();
+    if(t){ set(t); $("emMsg").textContent=(kind==="invite"?"초대장":"회의록")+"을(를) 불러왔습니다."; }
+  });
+
+  $("emOpen").onclick=()=>{
+    const to=$("emTo").value, su=$("emSubj").value, bo=$("emBody").value;
+    if(!bo.trim()){ $("emMsg").textContent="본문이 비어 있습니다. 위에서 종류를 선택하세요."; return; }
+    window.location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(su)}&body=${encodeURIComponent(bo)}`;
+    $("emMsg").textContent="메일 앱을 엽니다.";
   };
-  $("emRegen").onclick=async()=>{if(!state.records[0]){toast("종료된 회의가 없습니다");return;}
-    const r=state.records[0];const b=$("emRegen");b.disabled=true;b.textContent="작성 중…";
-    try{const em=await buildEmailFromRecord(r);$("emBody").value=em;r.email=em;await saveRecords();toast("이메일 다시 작성됨");}
-    catch(e){toast("실패: "+e.message);}finally{b.disabled=false;b.textContent="AI 다시 작성";}};
+  $("emCopy").onclick=()=>{
+    const bo=$("emBody").value;
+    if(!bo.trim()){ $("emMsg").textContent="복사할 내용이 없습니다."; return; }
+    navigator.clipboard && navigator.clipboard.writeText(bo);
+    $("emMsg").textContent="본문을 복사했습니다.";
+  };
+  $("emClear").onclick=()=>{
+    $("emTo").value=""; $("emSubj").value=""; $("emBody").value="";
+    $("mailSub").innerHTML=""; $("emMsg").textContent="";
+    document.querySelectorAll(".mk").forEach(x=>x.classList.remove("on"));
+  };
 }
 const MINUTES_0710=`안녕하세요,
 
@@ -2091,6 +2277,8 @@ window.MedITHub={
   currentUser:()=>state.user,
   joinMeeting:(id)=>{state.currentMeetingId=id;syncCurrentMeeting();enterHub();return true;},
   addPage, removePage, listPages,
+  addProject:addProjectAPI, updateProject:updateProjectAPI,
+  removeProject, listProjects:listProjectsAPI,
   exportData, importData,
   storageOK:()=>storageOK,
   storageMode,
