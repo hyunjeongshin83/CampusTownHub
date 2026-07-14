@@ -504,6 +504,9 @@ body{letter-spacing:-0.015em;}
 .qa{font-family:inherit;font-size:13px;font-weight:700;padding:10px 15px;border-radius:11px;cursor:pointer;
   border:1px solid var(--line);background:#fff;color:var(--deep);transition:all .15s;}
 .qa:hover{border-color:var(--mint);background:#fff;transform:translateY(-1px);box-shadow:0 5px 14px rgba(18,189,176,.18);}
+
+.chip .x.invite{color:var(--deep);font-weight:800;background:var(--mist);border-radius:8px;padding:2px 7px;margin-right:2px;}
+.chip .x.invite:hover{background:var(--mint);color:#fff;}
 </style>
 </head>
 <body>
@@ -1169,7 +1172,55 @@ function bindPrep(){
     state.meeting.purpose=$("mPurpose").value.trim()||state.meeting.purpose;scheduleSave();toast("회의 정보 저장됨");};
 }
 function renderAtList(){const box=$("atList");if(!box)return;
-  box.innerHTML=state.attendees.length?state.attendees.map((a,i)=>`<span class="chip"><span class="av">${esc(initials(a.name))}</span>${esc(a.name)}${a.email?` · ${esc(a.email)}`:""}<span class="x" onclick="rmAt(${i})">삭제</span></span>`).join(""):'<div class="mini">아직 등록된 참석자가 없습니다.</div>';}
+  if(!state.attendees.length){ box.innerHTML='<div class="mini">아직 등록된 참석자가 없습니다.</div>'; return; }
+  box.innerHTML=state.attendees.map((a,i)=>
+    `<span class="chip"><span class="av">${esc(initials(a.name))}</span>${esc(a.name)}${a.email?` · ${esc(a.email)}`:""}`+
+    `${a.email?`<span class="x invite" onclick="inviteOne(${i})" title="초대 메일 보내기">초대</span>`:""}`+
+    `<span class="x" onclick="rmAt(${i})">삭제</span></span>`).join("")+
+    `<div style="margin-top:10px;display:flex;gap:7px;justify-content:flex-end">
+       <button class="b-mint" id="inviteAll">전체에게 초대 메일</button>
+     </div>`;
+  const ia=$("inviteAll"); if(ia) ia.onclick=inviteAllAttendees;
+}
+
+// 초대 메일 본문 생성 (사이트 주소 + 가입 안내)
+function buildInvite(names){
+  const m=currentMeeting()||{};
+  const site=location.origin+location.pathname;
+  return `안녕하세요, ${names},\n\n`+
+`아래 회의에 초대드립니다.\n\n`+
+`■ 회의: ${m.title||""}\n`+
+`■ 일시: ${fmtDate(m.date)} ${m.time||""}\n`+
+`■ 장소: ${m.place||""}\n\n`+
+`■ 회의 운영 사이트 (자료·회의록)\n${site}\n\n`+
+`■ 접속 방법\n`+
+`1. 위 주소로 들어가 "회원가입"을 누르세요\n`+
+`2. 본인 이메일과 비밀번호로 가입하세요\n`+
+`   (초대된 이메일로만 가입할 수 있습니다)\n`+
+`3. 로그인하시면 이 회의가 목록에 표시됩니다\n\n`+
+`■ 부탁드리는 것\n`+
+`회의 전에 사이트에 올린 자료를 한 번 읽어봐 주시면 감사하겠습니다.\n\n`+
+`감사합니다.\n\n신현정 드림`;
+}
+function openMail(to,subj,body){
+  window.location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+}
+function inviteOne(i){
+  const a=state.attendees[i]; if(!a||!a.email){ toast("이메일이 없습니다"); return; }
+  const m=currentMeeting()||{};
+  openMail(a.email, `[초대] ${m.title||"회의"}`, buildInvite(a.name));
+  toast(a.name+"님께 보낼 초대 메일을 엽니다");
+}
+window.inviteOne=inviteOne;
+function inviteAllAttendees(){
+  const list=state.attendees.filter(a=>a.email);
+  if(!list.length){ toast("이메일이 등록된 참석자가 없습니다"); return; }
+  const m=currentMeeting()||{};
+  const to=list.map(a=>a.email).join(",");
+  const names=list.map(a=>a.name).join(", ")+" 님께";
+  openMail(to, `[초대] ${m.title||"회의"}`, buildInvite(names));
+  toast(list.length+"명에게 보낼 초대 메일을 엽니다");
+}
 async function rmAt(i){
   const a=state.attendees[i];
   if(a && !confirm("'"+a.name+"' 참석자를 삭제할까요?")) return;
