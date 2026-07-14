@@ -1082,6 +1082,42 @@ function prettyName(n){
   return n.replace(/^\d{10,}_/,"");
 }
 
+
+// 텍스트 파일인가 (브라우저가 내용을 읽을 수 있는 것만)
+function isTextFile(name){ return /\.(txt|md|csv|json|srt|vtt)$/i.test(name||""); }
+
+// 업로드한 텍스트 파일을 AI가 읽어 회의록으로 정리
+async function aiSummarizeFile(storedName){
+  const m=currentMeeting(); if(!m){ toast("회의를 먼저 만들어 주세요"); return; }
+  if(!sb){ toast("클라우드에 연결되지 않았습니다"); return; }
+  toast("파일을 읽는 중…");
+  try{
+    // 파일 내용 가져오기
+    const {data,error}=await sb.storage.from(BUCKET).download(storedName);
+    if(error) throw error;
+    const text=await data.text();
+    if(!text.trim()){ toast("파일이 비어 있습니다"); return; }
+
+    toast("AI가 회의록을 정리하는 중…");
+    const sys="회의 노트를 정리하는 담당자. 아래 노트를 읽고 JSON만 출력: "+
+      '{"summary":"3~4문장 요약","tags":["핵심 키워드"],"actions":["다음 액션"]}';
+    let o=await callClaude(sys, text.slice(0,12000), 1500);
+    o=o.replace(/```json|```/g,"").trim();
+    const r=JSON.parse(o);
+
+    m.summary=r.summary||"";
+    m.tags=r.tags||[];
+    m.actions=r.actions||[];
+    m.rawNote=(m.rawNote?m.rawNote+"\n\n":"")+text;   // 원문도 회의 기록에 보관
+    await saveNow();
+    toast("회의록이 정리되었습니다 — 금일 회의 탭에서 확인하세요");
+    switchTab("today");
+  }catch(e){
+    toast("AI 정리 실패: "+e.message);
+    console.error(e);
+  }
+}
+
 async function renderFiles(boxId){
   const box=$(boxId||"fileList"); if(!box) return;
   box.innerHTML='<div class="mini">불러오는 중…</div>';
@@ -1097,10 +1133,12 @@ async function renderFiles(boxId){
   box.innerHTML=files.map(f=>`<div class="filerow">
     <div class="f-info"><div class="f-name">${esc(prettyName(f.name))}</div><div class="f-meta">${prettySize(f.metadata&&f.metadata.size)}</div></div>
     <div class="f-acts">
+      ${(isTextFile(prettyName(f.name))&&canEditMeeting())?`<button class="b-deep" data-ai="${esc(f.name)}">AI 정리</button>`:""}
       <button class="b-ghost" data-view="${esc(f.name)}">바로보기</button>
       <button class="b-mint" data-dl="${esc(f.name)}">다운로드</button>
       ${canUpload()?`<button class="b-ghost" data-del="${esc(f.name)}">삭제</button>`:""}
     </div></div>`).join("");
+  box.querySelectorAll("[data-ai]").forEach(b=>b.onclick=()=>aiSummarizeFile(b.dataset.ai));
   box.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>viewFile(b.dataset.view));
   box.querySelectorAll("[data-dl]").forEach(b=>b.onclick=()=>downloadFile(b.dataset.dl));
   box.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>deleteFile(b.dataset.del));
@@ -2130,7 +2168,11 @@ async function doResearch(){const q=$("researchInput").value.trim();if(!q)return
 function computeStats(){
   const prof=state.segments.filter(s=>s.who!=='나').length,me=state.segments.filter(s=>s.who==='나').length;
   const words=state.segments.map(s=>s.text).join(" ").split(/\s+/).filter(Boolean).length;
-  const dur=state.meeting.started?Math.round(((state.meeting.ended||Date.now())-state.meeting.started)/60000):0;
+  let dur=0;
+  if(state.meeting.started && state.meeting.ended){
+    dur=Math.round((state.meeting.ended-state.meeting.started)/60000);
+    if(dur<0 || dur>1440) dur=0;    // 비정상 값(음수·24시간 초과) 방지
+  }
   return{segs:state.segments.length,prof,me,words,dur};
 }
 async function endMeeting(){
@@ -2402,11 +2444,36 @@ function renderArchive(){const box=$("archive");if(!box)return;
           <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(r.mood)}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="b-mint" onclick="previewRecord('${r.id}')">미리보기</button>
           <button class="b-ghost" onclick="loadEmail('${r.id}')">이메일</button>
           <button class="b-deep" onclick="exportRecord('${r.id}')">MD</button>
         </div>
       </div>
+      <div id="pv-${r.id}"></div>
     </div>`).join(""):'<div class="mini">아직 아카이브된 회의가 없습니다.</div>';}
+
+// 회의록 미리보기 (화면에서 바로 확인)
+function previewRecord(id){
+  const r=state.records.find(x=>x.id===id); if(!r) return;
+  const box=$("pv-"+id); if(!box) return;
+  if(box.innerHTML){ box.innerHTML=""; return; }   // 토글
+  const md=recordToMD(r);
+  box.innerHTML=`<div style="margin-top:12px;background:var(--mist);border-radius:12px;padding:14px 16px;
+    max-height:420px;overflow-y:auto;font-size:13px;line-height:1.7;color:var(--gray);white-space:pre-wrap;
+    border:1px solid var(--line)">${esc(md)}</div>
+    <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:8px">
+      <button class="b-ghost" onclick="copyRecord('${id}')">본문 복사</button>
+      <button class="b-ghost" onclick="previewRecord('${id}')">닫기</button>
+    </div>`;
+  box.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+window.previewRecord=previewRecord;
+function copyRecord(id){
+  const r=state.records.find(x=>x.id===id); if(!r) return;
+  navigator.clipboard && navigator.clipboard.writeText(recordToMD(r));
+  toast("회의록을 복사했습니다");
+}
+window.copyRecord=copyRecord;
 function loadEmail(id){const r=state.records.find(x=>x.id===id);if(!r)return;
   $("emTo").value=r.attendees.map(a=>a.email).filter(Boolean).join(", ");
   $("emSubj").value=`[MedIT 회의록] ${r.title}`;$("emBody").value=r.email||"";toast("아카이브에서 불러왔습니다");}
@@ -2438,7 +2505,9 @@ function recordToMD(r){let md=`# MedIT 회의록 — ${r.dt}\n\n**${r.title}**\n
     md+=sec("안건",n.agenda)+sec("결정 사항",n.decisions)+sec("액션 아이템",n.actions)+sec("후속",n.followups)+sec("AI 추천 다음 할 일",r.nextActions);}
   const tn=r.tabNotes||{},nm={deck:"슬라이드",app:"복약앱",registry:"약사사이트",console:"콘솔"};
   Object.keys(tn).forEach(k=>{if(tn[k]&&tn[k].length)md+=`## [${nm[k]}] 메모\n`+tn[k].map(x=>`- ${x.text}`).join("\n")+"\n\n";});
-  md+=`## 전체 녹취\n`+r.segments.map(s=>`- [${s.who} ${s.time}] ${s.text}`).join("\n")+"\n";
+  if(r.rawNote) md+=`## 회의 내용 기록\n${r.rawNote}\n\n`;
+  if(r.script) md+=`## 정리된 스크립트\n${r.script}\n\n`;
+  if(r.purged) md+=`> 녹취 원문 ${r.purged.count}건은 ${r.purged.at}에 파기되었습니다.\n\n`;
   if(r.email)md+=`\n## 이메일 초안\n\`\`\`\n${r.email}\n\`\`\`\n`;
   return md;}
 function exportRecord(id){const r=state.records.find(x=>x.id===id);if(!r)return;
