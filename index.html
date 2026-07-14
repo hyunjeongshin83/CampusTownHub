@@ -1022,10 +1022,7 @@ async function uploadFiles(files){
       // Supabase Storage는 한글·공백·특수문자를 허용하지 않습니다.
       const ext=(f.name.match(/\.[^.]+$/)||[""])[0].toLowerCase();
       const safe=Date.now()+"_"+Math.random().toString(36).slice(2,7)+ext;
-      const {error}=await sb.storage.from(BUCKET).upload(safe,f,{
-        upsert:false,
-        metadata:{ original: f.name }     // 원본 한글 이름을 메타데이터에 보관
-      });
+      const {error}=await sb.storage.from(BUCKET).upload(safe,f,{upsert:false});
       if(error) throw error;
       // 원본 이름 매핑 저장 (목록에서 한글 이름으로 표시)
       state.fileNames=state.fileNames||{};
