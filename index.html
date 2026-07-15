@@ -790,9 +790,9 @@ function refreshApiKeyStatus(){
 //  ② 개인 키 — 이 브라우저에 등록한 본인 키
 const AI_PROXY_NAMES=["claude-proxy","quick-service","rapid-service"];   // 순서대로 시도
 async function callViaProxy(system,user,maxTokens){
-  if(!authReady) throw new Error("no-auth");
+  if(!authReady) throw new Error("Supabase 인증 초기화 안 됨");
   const {data:{session}}=await sb.auth.getSession();
-  if(!session) throw new Error("로그인 필요");
+  if(!session) throw new Error("로그인 필요 — 사이트에 로그인한 뒤 다시 시도");
   const base=SUPABASE_URL.replace(/\/$/,"")+"/functions/v1/";
   const cached=localStorage.getItem("medit:proxyfn");
   const names=cached?[cached,...AI_PROXY_NAMES.filter(n=>n!==cached)]:AI_PROXY_NAMES;
@@ -803,7 +803,7 @@ async function callViaProxy(system,user,maxTokens){
         headers:{"Content-Type":"application/json",
           "Authorization":"Bearer "+session.access_token,"apikey":SUPABASE_ANON_KEY},
         body:JSON.stringify({system,user,maxTokens:maxTokens||1000})});
-      if(res.status===404){ lastErr=new Error(fn+" 없음"); continue; }   // 다음 이름 시도
+      if(res.status===404){ lastErr=new Error(fn+" 함수 없음(미배포)"); continue; }   // 다음 이름 시도
       const d=await res.json().catch(()=>({}));
       if(!res.ok){ lastErr=new Error("proxy "+res.status+(d.error?" — "+d.error:"")); continue; }
       if(d.error){ lastErr=new Error(d.error); continue; }
@@ -811,16 +811,17 @@ async function callViaProxy(system,user,maxTokens){
       return d.text||"";
     }catch(e){ lastErr=e; }
   }
-  throw lastErr||new Error("프록시 없음");
+  throw lastErr||new Error("배포된 프록시 함수 없음 — Supabase에 claude-proxy.ts 배포 필요");
 }
 async function callClaude(system,user,maxTokens){
   // ① 공유 프록시
+  let proxyWhy="";
   try{ return await callViaProxy(system,user,maxTokens); }
-  catch(e){ console.warn("공유 프록시 사용 불가 → 개인 키로 시도:",e.message); }
+  catch(e){ proxyWhy=e.message||String(e); console.warn("공유 프록시 사용 불가 → 개인 키로 시도:",proxyWhy); }
   // ② 개인 키
   let key=getApiKey();
   if(!key){
-    key=prompt("AI 요약을 쓰려면 Anthropic API 키가 필요합니다.\nconsole.anthropic.com → API Keys에서 발급 (sk-ant-…)\n키는 이 브라우저에만 저장되고 어디에도 전송·게시되지 않습니다.\n\n비워두고 확인하면 AI 없이 진행합니다.");
+    key=prompt("[공유 프록시 사용 불가: "+proxyWhy+"]\n\nAI 요약을 쓰려면 Anthropic API 키가 필요합니다.\nconsole.anthropic.com → API Keys에서 발급 (sk-ant-…)\n키는 이 브라우저에만 저장되고 어디에도 전송·게시되지 않습니다.\n\n비워두고 확인하면 AI 없이 진행합니다.");
     if(key){ setApiKey(key); } else { throw new Error("API 키 없음 — AI 기능 건너뜀"); }
   }
   const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
