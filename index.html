@@ -315,7 +315,9 @@ button:disabled{opacity:.5;cursor:not-allowed;transform:none;}
 .feat .fd{font-size:12px;color:#567;margin-top:3px;line-height:1.42;}
 
 /* console */
-.console{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:1100px;margin:0 auto;height:100%;}
+.console{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:1100px;margin:0 auto;height:100%;min-height:0;}
+.console .cpanel{max-height:100%;}
+@media(max-width:900px){.console{height:auto;}.console .cpanel{max-height:none;overflow:visible;}}
 .cpanel{border-radius:16px;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
 .cpanel h3{font-size:12px;font-weight:800;color:var(--deep);padding:11px 14px;
   border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;}
@@ -2210,9 +2212,9 @@ function consoleHTML(){
        <button class="b-deep" id="addBtn">추가</button>
      </div>
    </div>
-   <div class="glass cpanel">
+   <div class="glass cpanel" style="overflow-y:auto">
      <h3>회의록 (AI 반영) <span class="tag">Claude</span></h3>
-     <div class="cscroll" id="notes"></div>
+     <div class="cscroll" id="notes" style="flex:none;max-height:240px;overflow-y:auto"></div>
      <div class="crow">
        <button class="b-deep" id="syncBtn">AI 반영</button>
        <label class="mini" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="autoSync">자동(30초)</label>
@@ -2233,7 +2235,7 @@ function consoleHTML(){
        <button class="b-ghost" id="undoTidy" style="display:none">되돌리기</button>
      </div>
      <h3 style="border-top:1px solid var(--line)">즉석 리서치 <span class="tag">Claude</span></h3>
-     <div class="cscroll" id="research" style="max-height:140px"></div>
+     <div class="cscroll" id="research" style="flex:none;max-height:140px;overflow-y:auto"></div>
      <div class="crow" style="border-top:none;padding-top:0">
        <input id="researchInput" placeholder="용어·수치 조사 · Enter">
        <button class="b-deep" id="researchBtn">조사</button>
