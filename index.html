@@ -324,6 +324,7 @@ button:disabled{opacity:.5;cursor:not-allowed;transform:none;}
 .crow{padding:10px 14px;border-top:1px solid var(--line);display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
 .crow input{flex:1;font-family:inherit;font-size:12.5px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;outline:none;}
 .crow input:focus{border-color:var(--mint);box-shadow:0 0 0 3px rgba(18,189,176,.12);}
+#manualNote:focus{border-color:var(--mint);box-shadow:0 0 0 3px rgba(18,189,176,.12);}
 .rcard{background:var(--light);border-radius:9px;padding:9px 11px;margin-bottom:7px;font-size:12px;line-height:1.5;}
 .rcard .q{font-weight:700;color:var(--deep);}
 .nsec{margin-bottom:12px;}
@@ -2218,17 +2219,18 @@ function consoleHTML(){
        <button class="b-ghost" id="ttsBtn">회의 읽어주기</button>
        <button class="b-gold" id="endBtn2">종료·정리</button>
      </div>
-     <div style="border-top:1px solid var(--line);padding-top:8px;margin-top:4px">
-       <div class="mini" style="margin-bottom:6px">수기 회의록 — 직접 입력하거나 파일(txt·md)을 첨부하세요. [AI 정리]로 다듬은 뒤 [노트로 저장]하면 회의 기록(미리보기·MD)에 포함됩니다. <span id="manualNoteInfo"></span></div>
-       <textarea id="manualNote" style="min-height:100px;width:100%" placeholder="회의록을 직접 입력하거나, 파일을 이 칸에 끌어다 놓으세요."></textarea>
-       <div class="crow" style="border-top:none;padding-top:6px;align-items:center">
-         <button class="b-ghost" id="noteFileBtn">📎 파일 첨부</button>
-         <input type="file" id="noteFile" accept=".txt,.md,.srt,.vtt,text/plain" style="display:none">
-         <button class="b-mint" id="aiTidyNote">AI 정리</button>
-         <button class="b-deep" id="saveManualNote">노트로 저장</button>
-         <button class="b-ghost" id="undoTidy" style="display:none">되돌리기</button>
-         <span class="mini" id="noteFileName"></span>
-       </div>
+     <h3 style="border-top:1px solid var(--line)">수기 회의록 <span class="tag">직접 입력·파일 첨부</span></h3>
+     <div style="padding:12px 14px 0">
+       <div class="mini" style="margin-bottom:8px;line-height:1.6">직접 입력하거나 파일(txt·md)을 첨부하세요. [AI 정리]로 다듬은 뒤 [노트로 저장]하면 회의 기록(미리보기·MD)에 포함됩니다. <span id="manualNoteInfo"></span></div>
+       <textarea id="manualNote" style="box-sizing:border-box;width:100%;min-height:110px;font-family:inherit;font-size:12.5px;line-height:1.6;padding:11px 13px;border:1px solid var(--line);border-radius:9px;outline:none;resize:vertical;background:#fff;color:var(--ink)" placeholder="회의록을 입력하거나, 파일을 이 칸에 끌어다 놓으세요."></textarea>
+       <div class="mini" id="noteFileName" style="margin-top:4px"></div>
+     </div>
+     <div class="crow" style="border-top:none">
+       <button class="b-ghost" id="noteFileBtn">파일 첨부</button>
+       <input type="file" id="noteFile" accept=".txt,.md,.srt,.vtt,text/plain" style="display:none">
+       <button class="b-mint" id="aiTidyNote">AI 정리</button>
+       <button class="b-deep" id="saveManualNote">노트로 저장</button>
+       <button class="b-ghost" id="undoTidy" style="display:none">되돌리기</button>
      </div>
      <h3 style="border-top:1px solid var(--line)">즉석 리서치 <span class="tag">Claude</span></h3>
      <div class="cscroll" id="research" style="max-height:140px"></div>
