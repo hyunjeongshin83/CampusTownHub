@@ -2454,7 +2454,7 @@ function renderArchive(){const box=$("archive");if(!box)return;
   box.innerHTML=state.records.length?state.records.map(r=>`
     <div class="glass tile" style="margin-bottom:10px">
       <div style="display:flex;gap:10px;align-items:flex-start">
-        <div style="flex:1">
+        <div style="flex:1;cursor:pointer" onclick="previewRecord('${r.id}')" title="회의록 미리보기">
           <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(r.title)}</div>
           <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${durLabel(r)} · 참석 ${r.attendees.length}명 · ${(r.tags||[]).map(t=>"#"+t).join(" ")}</div>
           <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(moodLine(r))}</div>
@@ -2502,7 +2502,7 @@ function renderRecords(){const list=$("reclist");if(!list)return;
   if(!state.records.length){list.innerHTML='<div class="glass tile"><div class="mini">아직 저장된 회의가 없습니다. 회의를 시작하고 종료하면 여기 쌓입니다.</div></div>';return;}
   list.innerHTML=state.records.map(r=>`
     <div class="glass tile" style="margin-bottom:10px;display:flex;gap:12px;align-items:flex-start">
-      <div style="flex:1">
+      <div style="flex:1;cursor:pointer" onclick="previewRecord('${r.id}','pv2-${r.id}')" title="회의록 미리보기">
         <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(r.title)}</div>
         <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${durLabel(r)} · 발언 ${r.stats.segs}건 · 참석 ${r.attendees.length}명</div>
         <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(moodLine(r))}</div>
