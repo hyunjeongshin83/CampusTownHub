@@ -2214,7 +2214,7 @@ function consoleHTML(){
    </div>
    <div class="glass cpanel" style="overflow-y:auto">
      <h3>회의록 (AI 반영) <span class="tag">Claude</span></h3>
-     <div class="cscroll" id="notes" style="flex:none;max-height:240px;overflow-y:auto"></div>
+     <div class="cscroll" id="notes" style="flex:none;max-height:150px;overflow-y:auto"></div>
      <div class="crow">
        <button class="b-deep" id="syncBtn">AI 반영</button>
        <label class="mini" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="autoSync">자동(30초)</label>
@@ -2223,8 +2223,8 @@ function consoleHTML(){
      </div>
      <h3 style="border-top:1px solid var(--line)">수기 회의록 <span class="tag">직접 입력·파일 첨부</span></h3>
      <div style="padding:12px 14px 0">
-       <div class="mini" style="margin-bottom:8px;line-height:1.6">직접 입력하거나 파일(txt·md)을 첨부하세요. [AI 정리]로 다듬은 뒤 [노트로 저장]하면 회의 기록(미리보기·MD)에 포함됩니다. <span id="manualNoteInfo"></span></div>
-       <textarea id="manualNote" style="box-sizing:border-box;width:100%;min-height:110px;font-family:inherit;font-size:12.5px;line-height:1.6;padding:11px 13px;border:1px solid var(--line);border-radius:9px;outline:none;resize:vertical;background:#fff;color:var(--ink)" placeholder="회의록을 입력하거나, 파일을 이 칸에 끌어다 놓으세요."></textarea>
+       <div class="mini" style="margin-bottom:8px;line-height:1.6">직접 입력하거나 파일(txt·md)을 첨부 → [AI 정리](선택) → [노트로 저장]하면 회의 기록에 포함됩니다. <span id="manualNoteInfo"></span></div>
+       <textarea id="manualNote" style="box-sizing:border-box;width:100%;min-height:80px;font-family:inherit;font-size:12.5px;line-height:1.6;padding:11px 13px;border:1px solid var(--line);border-radius:9px;outline:none;resize:vertical;background:#fff;color:var(--ink)" placeholder="회의록을 입력하거나, 파일을 이 칸에 끌어다 놓으세요."></textarea>
        <div class="mini" id="noteFileName" style="margin-top:4px"></div>
      </div>
      <div class="crow" style="border-top:none">
@@ -2234,11 +2234,13 @@ function consoleHTML(){
        <button class="b-deep" id="saveManualNote">노트로 저장</button>
        <button class="b-ghost" id="undoTidy" style="display:none">되돌리기</button>
      </div>
-     <h3 style="border-top:1px solid var(--line)">즉석 리서치 <span class="tag">Claude</span></h3>
-     <div class="cscroll" id="research" style="flex:none;max-height:140px;overflow-y:auto"></div>
-     <div class="crow" style="border-top:none;padding-top:0">
-       <input id="researchInput" placeholder="용어·수치 조사 · Enter">
-       <button class="b-deep" id="researchBtn">조사</button>
+     <h3 style="border-top:1px solid var(--line);cursor:pointer" id="researchHead"><span id="researchArrow">▸</span> 즉석 리서치 <span class="tag">Claude</span></h3>
+     <div id="researchWrap" style="display:none">
+       <div class="cscroll" id="research" style="flex:none;max-height:140px;overflow-y:auto"></div>
+       <div class="crow" style="border-top:none;padding-top:0">
+         <input id="researchInput" placeholder="용어·수치 조사 · Enter">
+         <button class="b-deep" id="researchBtn">조사</button>
+       </div>
      </div>
    </div></div>`;
 }
@@ -2250,6 +2252,8 @@ function bindConsole(){
   $("syncBtn").onclick=syncNotes;$("endBtn2").onclick=endMeeting;
   $("ttsBtn").onclick=toggleTTS;
   $("researchBtn").onclick=doResearch;$("researchInput").addEventListener("keydown",e=>{if(e.key==='Enter')doResearch();});
+  if($("researchHead"))$("researchHead").onclick=()=>{const w=$("researchWrap"),a=$("researchArrow");
+    const open=w.style.display==="none"; w.style.display=open?"":"none"; a.textContent=open?"▾":"▸";};
   const mn=$("manualNote"),mni=$("manualNoteInfo");
   const noteInfo=()=>{const m=currentMeeting();if(mni)mni.textContent=(m&&m.rawNote)?("현재 노트 "+m.rawNote.length+"자 저장됨"):"";};
   noteInfo();
