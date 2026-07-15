@@ -1103,28 +1103,36 @@ async function aiSummarizeFile(storedName){
     const text=await data.text();
     if(!text.trim()){ toast("파일이 비어 있습니다"); return; }
 
-    toast("AI가 회의록을 정리하는 중…");
-    const sys="회의 노트를 정리하는 담당자. 아래 노트를 읽고 JSON만 출력: "+
-      '{"summary":"3~4문장 요약","tags":["핵심 키워드"],"actions":["다음 액션"]}';
-    let o=await callClaude(sys, text.slice(0,12000), 1500);
-    o=o.replace(/```json|```/g,"").trim();
-    const r=JSON.parse(o);
-
-    m.summary=r.summary||"";
-    m.tags=r.tags||[];
-    m.actions=r.actions||[];
-    m.rawNote=(m.rawNote?m.rawNote+"\n\n":"")+text;   // 원문도 회의 기록에 보관
+    // ① 원문 먼저 저장 — AI 호출과 무관하게 노트가 회의·기록에 남도록
+    if(!(m.rawNote||"").includes(text.slice(0,200))){
+      m.rawNote=(m.rawNote?m.rawNote+"\n\n":"")+text;
+    }
     await saveNow();
-    // 이미 종료·저장된 같은 제목의 기록에도 반영 (미리보기·MD에 표시)
+
+    // ② AI 요약 시도 — 실패해도 원문은 이미 저장됨
+    let aiOK=false;
+    try{
+      toast("AI가 회의록을 정리하는 중…");
+      const sys="회의 노트를 정리하는 담당자. 아래 노트를 읽고 JSON만 출력: "+
+        '{"summary":"3~4문장 요약","tags":["핵심 키워드"],"actions":["다음 액션"]}';
+      let o=await callClaude(sys, text.slice(0,12000), 1500);
+      o=o.replace(/```json|```/g,"").trim();
+      const r=JSON.parse(o);
+      m.summary=r.summary||""; m.tags=r.tags||[]; m.actions=r.actions||[];
+      await saveNow(); aiOK=true;
+    }catch(e){ console.warn("AI 요약 실패(원문은 저장됨):",e.message); }
+    // ③ 이미 종료·저장된 같은 제목의 기록에도 반영 (미리보기·MD에 표시)
     let recTouched=false;
     (state.records||[]).forEach(rr=>{ if(sameTitle(rr.title,m.title)){
-      rr.rawNote=m.rawNote; if(!rr.notes)rr.notes={summary:m.summary,actions:(m.actions||[]).slice()};
-      if(!rr.tags||!rr.tags.length)rr.tags=(m.tags||[]).slice(); recTouched=true; } });
+      rr.rawNote=m.rawNote;
+      if(!rr.notes&&m.summary)rr.notes={summary:m.summary,actions:(m.actions||[]).slice()};
+      if((!rr.tags||!rr.tags.length)&&m.tags&&m.tags.length)rr.tags=m.tags.slice(); recTouched=true; } });
     if(recTouched) await saveRecords();
-    toast("회의록이 정리되었습니다 — 금일 회의 탭에서 확인하세요");
-    switchTab("today");
+    toast(aiOK?"회의록이 정리되었습니다 — 회의 기록 미리보기에서 확인하세요"
+             :"노트 원문을 저장했습니다 (AI 요약은 실패) — 미리보기에서 확인하세요");
+    renderRecords(); if($("archive"))renderArchive();
   }catch(e){
-    toast("AI 정리 실패: "+e.message);
+    toast("노트 저장 실패: "+e.message);
     console.error(e);
   }
 }
@@ -2542,8 +2550,16 @@ function moodLine(r){
   if(r.rawNote) return r.rawNote.replace(/\s+/g," ").slice(0,90)+(r.rawNote.length>90?"…":"");
   return r.mood||"";
 }
-function recordToMD(r){let md=`# MedIT 회의록 — ${r.dt}\n\n**${r.title}**\n\n`;
-  md+=`- 목적: ${r.purpose}\n- 소요: ${durLabel(r)} · 발언 ${r.stats.segs}건(교수 ${r.stats.prof}/나 ${r.stats.me}) · ${r.stats.words}단어\n- 참석: ${r.attendees.map(a=>a.name+(a.email?`(${a.email})`:"")).join(", ")||"—"}\n- 태그: ${(r.tags||[]).map(t=>"#"+t).join(" ")}\n\n`;
+function recordToMD(r){
+  // 기록에 노트가 없으면 같은 제목의 회의에서 즉시 가져옴 (저장 여부와 무관하게 표시 보장)
+  if(!r.rawNote||!r.notes){
+    const mm=(state.meetings||[]).find(m=>sameTitle(m.title,r.title));
+    if(mm){ if(!r.rawNote&&mm.rawNote)r.rawNote=mm.rawNote;
+      if(!r.notes&&mm.summary)r.notes={summary:mm.summary,actions:(mm.actions||[]).slice()};
+      if((!r.tags||!r.tags.length)&&mm.tags)r.tags=(mm.tags||[]).slice(); }
+  }
+  let md=`# MedIT 회의록 — ${r.dt}\n\n**${r.title}**\n\n`;
+  md+=`- 목적: ${r.purpose}\n- 소요: ${durLabel(r)} · 발언 ${r.stats.segs}건(교수 ${r.stats.prof}/나 ${r.stats.me}) · ${r.stats.words}단어\n- 참석: ${r.attendees.map(a=>a.name+(a.email?`(${a.email})`:"")).join(", ")||"—"}\n${(r.tags&&r.tags.length)?`- 태그: ${r.tags.map(t=>"#"+t).join(" ")}\n`:""}\n`;
   md+=`## 회의 분위기\n${r.mood}\n\n`;
   if(r.notes){const n=r.notes,sec=(t,a)=>a&&a.length?`## ${t}\n`+a.map(x=>"- "+x).join("\n")+"\n\n":"";
     if(n.summary)md+=`## 개요\n${n.summary}\n\n`;
@@ -2552,7 +2568,7 @@ function recordToMD(r){let md=`# MedIT 회의록 — ${r.dt}\n\n**${r.title}**\n
   Object.keys(tn).forEach(k=>{if(tn[k]&&tn[k].length)md+=`## [${nm[k]}] 메모\n`+tn[k].map(x=>`- ${x.text}`).join("\n")+"\n\n";});
   if(r.rawNote) md+=`## 회의 내용 기록\n${r.rawNote}\n\n`;
   if(r.script) md+=`## 정리된 스크립트\n${r.script}\n\n`;
-  if(r.purged) md+=`> 녹취 원문 ${r.purged.count}건은 ${r.purged.at}에 파기되었습니다.\n\n`;
+  if(r.purged&&r.purged.count>0) md+=`> 녹취 원문 ${r.purged.count}건은 ${r.purged.at}에 파기되었습니다.\n\n`;
   if(r.email)md+=`\n## 이메일 초안\n\`\`\`\n${r.email}\n\`\`\`\n`;
   return md;}
 function exportRecord(id){const r=state.records.find(x=>x.id===id);if(!r)return;
