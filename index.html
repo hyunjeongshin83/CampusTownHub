@@ -762,10 +762,69 @@ async function loadAll(){
 }
 
 // ==================== CLAUDE ====================
+// AI 호출: API 키는 localStorage(이 브라우저)에만 저장 — 소스코드·GitHub에는 절대 넣지 않음
+function getApiKey(){ return localStorage.getItem("medit:apikey")||""; }
+function setApiKey(k){
+  k=(k||"").trim();
+  if(k){ localStorage.setItem("medit:apikey",k); toast("API 키를 이 브라우저에 저장했습니다"); }
+  else { localStorage.removeItem("medit:apikey"); toast("API 키를 삭제했습니다"); }
+}
+function promptApiKey(){
+  const cur=getApiKey();
+  const k=prompt("Anthropic API 키 (sk-ant-…)\nconsole.anthropic.com → API Keys에서 발급.\n이 브라우저에만 저장됩니다."+(cur?"\n\n(현재 키 등록됨 — 새 키를 넣으면 교체)":""));
+  if(k===null) return;
+  setApiKey(k); refreshApiKeyStatus();
+}
+function refreshApiKeyStatus(){
+  const el=$("apiKeyStatus"); if(!el) return;
+  const k=getApiKey();
+  el.textContent=k?("등록됨 — sk-ant-…"+k.slice(-4)+" (이 브라우저에만 저장)")
+    :"공유 프록시(운영자 키)가 배포되어 있으면 로그인만으로 AI를 쓸 수 있습니다. 없으면 개인 키를 등록하세요 — 키는 이 브라우저에만 저장됩니다.";
+}
+// AI 호출 경로 (순서대로 시도):
+//  ① 공유 프록시 — Supabase Edge Function "claude-proxy". 운영자의 키를 서버에 두고,
+//     로그인한 사용자는 각자 키 없이 사용. (배포 안 되어 있으면 자동으로 ②로 넘어감)
+//  ② 개인 키 — 이 브라우저에 등록한 본인 키
+const AI_PROXY_NAMES=["claude-proxy","quick-service","rapid-service"];   // 순서대로 시도
+async function callViaProxy(system,user,maxTokens){
+  if(!authReady) throw new Error("no-auth");
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session) throw new Error("로그인 필요");
+  const base=SUPABASE_URL.replace(/\/$/,"")+"/functions/v1/";
+  const cached=localStorage.getItem("medit:proxyfn");
+  const names=cached?[cached,...AI_PROXY_NAMES.filter(n=>n!==cached)]:AI_PROXY_NAMES;
+  let lastErr=null;
+  for(const fn of names){
+    try{
+      const res=await fetch(base+fn,{method:"POST",
+        headers:{"Content-Type":"application/json",
+          "Authorization":"Bearer "+session.access_token,"apikey":SUPABASE_ANON_KEY},
+        body:JSON.stringify({system,user,maxTokens:maxTokens||1000})});
+      if(res.status===404){ lastErr=new Error(fn+" 없음"); continue; }   // 다음 이름 시도
+      const d=await res.json().catch(()=>({}));
+      if(!res.ok){ lastErr=new Error("proxy "+res.status+(d.error?" — "+d.error:"")); continue; }
+      if(d.error){ lastErr=new Error(d.error); continue; }
+      localStorage.setItem("medit:proxyfn",fn);                          // 작동한 이름 기억
+      return d.text||"";
+    }catch(e){ lastErr=e; }
+  }
+  throw lastErr||new Error("프록시 없음");
+}
 async function callClaude(system,user,maxTokens){
+  // ① 공유 프록시
+  try{ return await callViaProxy(system,user,maxTokens); }
+  catch(e){ console.warn("공유 프록시 사용 불가 → 개인 키로 시도:",e.message); }
+  // ② 개인 키
+  let key=getApiKey();
+  if(!key){
+    key=prompt("AI 요약을 쓰려면 Anthropic API 키가 필요합니다.\nconsole.anthropic.com → API Keys에서 발급 (sk-ant-…)\n키는 이 브라우저에만 저장되고 어디에도 전송·게시되지 않습니다.\n\n비워두고 확인하면 AI 없이 진행합니다.");
+    if(key){ setApiKey(key); } else { throw new Error("API 키 없음 — AI 기능 건너뜀"); }
+  }
   const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
-    headers:{"Content-Type":"application/json"},
+    headers:{"Content-Type":"application/json","x-api-key":key,
+      "anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
     body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:maxTokens||1000,system,messages:[{role:"user",content:user}]})});
+  if(res.status===401){ localStorage.removeItem("medit:apikey"); throw new Error("API 키가 유효하지 않습니다 — 다시 입력해 주세요"); }
   if(!res.ok)throw new Error("API "+res.status);
   const d=await res.json();return d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");
 }
@@ -784,7 +843,7 @@ function switchTab(tab){
 function renderStage(tab){
   const st=$("stage");
   if(tab==="home")st.innerHTML=homeHTML();
-  else if(tab==="prep")st.innerHTML=prepHTML();
+  else if(tab==="prep"){st.innerHTML=prepHTML();setTimeout(refreshApiKeyStatus,0);}
   else if(tab==="deck")st.innerHTML=deckHTML();
   else if(tab==="video")st.innerHTML=videoHTML();
   else if(tab==="today")st.innerHTML=todayHTML();
@@ -1058,8 +1117,9 @@ async function viewFile(name){
     const {data,error}=await sb.storage.from(BUCKET).createSignedUrl(name,3600);
     if(error) throw error;
     const url=data.signedUrl, ext=(name.split(".").pop()||"").toLowerCase();
-    if(["ppt","pptx","doc","docx","xls","xlsx"].includes(ext)){
-      // Microsoft Office 뷰어: 그림·서식 포함 렌더링 (10MB 초과 파일은 표시 실패 → 다운로드 안내)
+    if(ext==="pptx"||ext==="ppt"){
+      openPptViewer(url,name);          // 앱 내 렌더링 — 그림·도형 포함
+    } else if(["doc","docx","xls","xlsx"].includes(ext)){
       const sz=(FILE_SIZES&&FILE_SIZES[name])||0;
       if(sz>10*1048576){ toast("10MB가 넘는 문서는 뷰어가 열지 못합니다 — 다운로드하거나 PDF로 변환해 올려 주세요"); return; }
       window.open("https://view.officeapps.live.com/op/view.aspx?src="+encodeURIComponent(url),"_blank");
@@ -1067,6 +1127,63 @@ async function viewFile(name){
       window.open(url,"_blank");   // PDF·이미지·텍스트는 브라우저가 바로 열어줌
     }
   }catch(e){ toast("열기 실패: "+e.message); }
+}
+// ---------- 앱 내 PPT 뷰어 (PPTXjs — 브라우저에서 직접 렌더링, 그림 포함) ----------
+let pptLibsReady=false;
+function loadOnce(tag,attrs){return new Promise((ok,no)=>{
+  const el=document.createElement(tag);
+  Object.entries(attrs).forEach(([k,v])=>el[k]=v);
+  el.onload=ok; el.onerror=()=>no(new Error("로드 실패: "+(attrs.src||attrs.href)));
+  document.head.appendChild(el);
+});}
+async function ensurePptLibs(){
+  if(pptLibsReady) return;
+  const base="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master";
+  await loadOnce("link",{rel:"stylesheet",href:base+"/css/pptxjs.css"});
+  if(!window.jQuery) await loadOnce("script",{src:"https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"});
+  await loadOnce("script",{src:base+"/js/jszip.min.js"});
+  await loadOnce("script",{src:base+"/js/filereader.js"});
+  await loadOnce("script",{src:base+"/js/pptxjs.js"});
+  await loadOnce("script",{src:base+"/js/divs2slides.js"});
+  pptLibsReady=true;
+}
+async function openPptViewer(url,name){
+  toast("발표자료를 불러오는 중…");
+  let modal=$("pptModal");
+  if(!modal){
+    modal=document.createElement("div"); modal.id="pptModal";
+    modal.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:20px";
+    modal.innerHTML=`
+      <div style="background:#fff;border-radius:16px;max-width:min(1080px,96vw);width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+        <div style="display:flex;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)">
+          <div id="pptTitle" style="flex:1;font-weight:800;color:var(--deep);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+          <button class="b-ghost" id="pptExt">외부 뷰어</button>
+          <button class="b-ghost" id="pptDl">다운로드</button>
+          <button class="b-deep" id="pptClose">닫기</button>
+        </div>
+        <div id="pptBody" style="overflow:auto;background:#f2f4f4;padding:14px">
+          <div id="pptxTarget"></div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    $("pptClose").onclick=()=>{modal.style.display="none";$("pptxTarget").innerHTML="";};
+    modal.onclick=e=>{if(e.target===modal)$("pptClose").click();};
+  }
+  $("pptTitle").textContent=prettyName(name);
+  $("pptExt").onclick=()=>window.open("https://view.officeapps.live.com/op/view.aspx?src="+encodeURIComponent(url),"_blank");
+  $("pptDl").onclick=()=>downloadFile(name);
+  modal.style.display="flex";
+  $("pptxTarget").innerHTML='<div class="mini" style="padding:30px;text-align:center">여는 중…</div>';
+  try{
+    await ensurePptLibs();
+    $("pptxTarget").innerHTML="";
+    window.jQuery("#pptxTarget").pptxToHtml({
+      pptxFileUrl:url, slidesScale:"100%", slideMode:false, keyBoardShortCut:false
+    });
+  }catch(e){
+    console.error(e);
+    $("pptxTarget").innerHTML='<div class="mini" style="padding:24px;text-align:center">앱 내 표시에 실패했습니다 — 상단의 [외부 뷰어] 또는 [다운로드]를 이용해 주세요.<br>'+esc(e.message)+"</div>";
+  }
 }
 async function deleteFile(name){
   if(!sb||!canUpload()) return;
@@ -1178,7 +1295,18 @@ function prepHTML(){
   return `<div class="hero">
    <div class="section-title">Before the meeting</div>
    <h2 style="font-size:22px;color:var(--ink);margin-bottom:4px">사전 준비</h2>
-   <div class="mini" style="margin-bottom:16px">회의 전에 참석자 이메일과 관련 자료(스크립트·발표 DOC·영상·관련 문서)를 등록하세요. 문서는 AI 정리에 반영되고, 영상은 목록에 보관됩니다. PPT·Word는 그림 포함 뷰어로 열립니다(10MB 이하) — 큰 파일은 PDF로 변환해 올리면 가장 안정적입니다.</div>
+   <div class="mini" style="margin-bottom:16px">회의 전에 참석자 이메일과 관련 자료(스크립트·발표 DOC·영상·관련 문서)를 등록하세요. 문서는 AI 정리에 반영되고, 영상은 목록에 보관됩니다. PPT는 사이트 안에서 그림 포함으로 바로 열리고, Word·Excel은 외부 뷰어(10MB 이하)로 열립니다. 인쇄 품질이 필요하면 PDF 변환 업로드가 가장 확실합니다.</div>
+
+   <div class="glass tile" style="margin-bottom:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+     <div style="flex:1;min-width:220px">
+       <h4 style="margin-bottom:3px">AI 키 (선택)</h4>
+       <div class="mini" id="apiKeyStatus">공유 프록시(운영자 키)가 배포되어 있으면 로그인만으로 AI를 쓸 수 있습니다. 없으면 개인 키를 등록하세요 — 키는 이 브라우저에만 저장됩니다. 키 없이도 노트 저장·미리보기는 작동합니다.</div>
+     </div>
+     <div style="display:flex;gap:6px">
+       <button class="b-mint" onclick="promptApiKey()">키 등록·교체</button>
+       <button class="b-ghost" onclick="setApiKey('');refreshApiKeyStatus()">삭제</button>
+     </div>
+   </div>
 
    <div class="glass tile" style="margin-bottom:14px">
      <h4>참석자 등록 (이메일)</h4>
@@ -2466,6 +2594,7 @@ function renderArchive(){const box=$("archive");if(!box)return;
           <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(r.title)}</div>
           <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${durLabel(r)} · 참석 ${r.attendees.length}명 · ${(r.tags||[]).map(t=>"#"+t).join(" ")}</div>
           <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(moodLine(r))}</div>
+          ${recordSnippet(r)?`<div style="margin-top:7px;background:var(--mist);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.6;color:var(--gray);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${esc(recordSnippet(r))}</div>`:""}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
           <button class="b-mint" onclick="previewRecord('${r.id}')">미리보기</button>
@@ -2514,6 +2643,7 @@ function renderRecords(){const list=$("reclist");if(!list)return;
         <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(r.title)}</div>
         <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${durLabel(r)} · 발언 ${r.stats.segs}건 · 참석 ${r.attendees.length}명</div>
         <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(moodLine(r))}</div>
+        ${recordSnippet(r)?`<div style="margin-top:7px;background:var(--mist);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.6;color:var(--gray);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${esc(recordSnippet(r))}</div>`:""}
         <div style="margin-top:6px">${(r.tags||[]).map(t=>`<span class="chip"><span class="av">#</span>${esc(t)}</span>`).join("")}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
@@ -2544,6 +2674,17 @@ function repairRecords(){
   if(changed) saveRecords();
 }
 function durLabel(r){ const d=r&&r.stats&&r.stats.dur; return (d>0&&d<=1440)?d+"분":"—"; }
+// 카드 밑 상시 표시용 짧은 미리보기 (노트·요약 앞부분)
+function recordSnippet(r){
+  let src="";
+  if(r.rawNote) src=r.rawNote;
+  else if(r.notes&&r.notes.summary) src=r.notes.summary;
+  else { const mm=(state.meetings||[]).find(m=>sameTitle(m.title,r.title));
+         if(mm) src=mm.rawNote||mm.summary||""; }
+  if(!src && r.script) src=r.script;
+  src=String(src).replace(/\s+/g," ").trim();
+  return src?src.slice(0,220)+(src.length>220?"…":""):"";
+}
 function moodLine(r){
   if(r.mood && r.mood!=="(분위기 요약 없음)") return r.mood;
   if(r.notes&&r.notes.summary) return r.notes.summary;
