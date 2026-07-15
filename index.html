@@ -1209,6 +1209,22 @@ function prettyName(n){
 function isTextFile(name){ return /\.(txt|md|csv|json|srt|vtt)$/i.test(name||""); }
 
 // 업로드한 텍스트 파일을 AI가 읽어 회의록으로 정리
+// 노트 원문을 회의에 저장하고, 같은 제목의 기존 기록(미리보기·MD)에도 반영
+async function saveNoteToMeeting(m,text){
+  text=(text||"").trim();
+  if(text && !(m.rawNote||"").includes(text.slice(0,200))){
+    m.rawNote=(m.rawNote?m.rawNote+"\n\n":"")+text;
+  }
+  await saveNow();
+  let touched=false;
+  (state.records||[]).forEach(rr=>{ if(sameTitle(rr.title,m.title)){
+    rr.rawNote=m.rawNote;
+    if(!rr.notes&&m.summary)rr.notes={summary:m.summary,actions:(m.actions||[]).slice()};
+    if((!rr.tags||!rr.tags.length)&&m.tags&&m.tags.length)rr.tags=m.tags.slice(); touched=true; } });
+  if(touched) await saveRecords();
+  renderRecords(); if($("archive"))renderArchive();
+  return true;
+}
 async function aiSummarizeFile(storedName){
   const m=currentMeeting(); if(!m){ toast("회의를 먼저 만들어 주세요"); return; }
   if(!sb){ toast("클라우드에 연결되지 않았습니다"); return; }
@@ -1238,16 +1254,10 @@ async function aiSummarizeFile(storedName){
       m.summary=r.summary||""; m.tags=r.tags||[]; m.actions=r.actions||[];
       await saveNow(); aiOK=true;
     }catch(e){ console.warn("AI 요약 실패(원문은 저장됨):",e.message); }
-    // ③ 이미 종료·저장된 같은 제목의 기록에도 반영 (미리보기·MD에 표시)
-    let recTouched=false;
-    (state.records||[]).forEach(rr=>{ if(sameTitle(rr.title,m.title)){
-      rr.rawNote=m.rawNote;
-      if(!rr.notes&&m.summary)rr.notes={summary:m.summary,actions:(m.actions||[]).slice()};
-      if((!rr.tags||!rr.tags.length)&&m.tags&&m.tags.length)rr.tags=m.tags.slice(); recTouched=true; } });
-    if(recTouched) await saveRecords();
+    // ③ 회의·기록 동기화 (미리보기·MD에 표시)
+    await saveNoteToMeeting(m,"");   // rawNote는 위에서 저장됨 — 기록 동기화만 수행
     toast(aiOK?"회의록이 정리되었습니다 — 회의 기록 미리보기에서 확인하세요"
              :"노트 원문을 저장했습니다 (AI 요약은 실패) — 미리보기에서 확인하세요");
-    renderRecords(); if($("archive"))renderArchive();
   }catch(e){
     toast("노트 저장 실패: "+e.message);
     console.error(e);
@@ -2208,6 +2218,15 @@ function consoleHTML(){
        <button class="b-ghost" id="ttsBtn">회의 읽어주기</button>
        <button class="b-gold" id="endBtn2">종료·정리</button>
      </div>
+     <div style="border-top:1px solid var(--line);padding-top:8px;margin-top:4px">
+       <div class="mini" style="margin-bottom:6px">수기 회의록·자료 정리 — 직접 쓰거나 붙여넣고 저장하면 회의 기록(미리보기·MD)에 포함됩니다. <span id="manualNoteInfo"></span></div>
+       <textarea id="manualNote" style="min-height:90px;width:100%" placeholder="회의록을 직접 입력하거나, 정리한 자료를 붙여넣으세요."></textarea>
+       <div class="crow" style="border-top:none;padding-top:6px">
+         <button class="b-deep" id="saveManualNote">노트로 저장</button>
+         <button class="b-ghost" id="attachFromFiles">업로드 자료 첨부</button>
+       </div>
+       <div id="attachPick" class="mini"></div>
+     </div>
      <h3 style="border-top:1px solid var(--line)">즉석 리서치 <span class="tag">Claude</span></h3>
      <div class="cscroll" id="research" style="max-height:140px"></div>
      <div class="crow" style="border-top:none;padding-top:0">
@@ -2224,6 +2243,40 @@ function bindConsole(){
   $("syncBtn").onclick=syncNotes;$("endBtn2").onclick=endMeeting;
   $("ttsBtn").onclick=toggleTTS;
   $("researchBtn").onclick=doResearch;$("researchInput").addEventListener("keydown",e=>{if(e.key==='Enter')doResearch();});
+  const mn=$("manualNote"),mni=$("manualNoteInfo");
+  const noteInfo=()=>{const m=currentMeeting();if(mni)mni.textContent=(m&&m.rawNote)?("현재 노트 "+m.rawNote.length+"자 저장됨"):"";};
+  noteInfo();
+  if($("saveManualNote"))$("saveManualNote").onclick=async()=>{
+    const m=currentMeeting(); if(!m){toast("회의를 먼저 만들어 주세요");return;}
+    if(!mn.value.trim()){toast("내용을 입력해 주세요");return;}
+    await saveNoteToMeeting(m,mn.value);
+    mn.value=""; noteInfo();
+    toast("노트를 저장했습니다 — 회의 기록 미리보기에 포함됩니다");
+  };
+  if($("attachFromFiles"))$("attachFromFiles").onclick=async()=>{
+    if(!sb){toast("클라우드에 연결되지 않았습니다");return;}
+    const box=$("attachPick");
+    if(box.innerHTML){box.innerHTML="";return;}   // 토글
+    box.textContent="자료 목록 불러오는 중…";
+    try{
+      const {data,error}=await sb.storage.from(BUCKET).list("",{limit:100,sortBy:{column:"created_at",order:"desc"}});
+      if(error)throw error;
+      const texts=(data||[]).filter(f=>/\.(txt|md|srt|vtt)$/i.test(f.name));
+      if(!texts.length){box.textContent="첨부 가능한 문서(txt·md)가 없습니다 — 사전 준비 탭에서 업로드하세요";return;}
+      box.innerHTML=texts.map(f=>`<button class="b-ghost" style="margin:3px 4px 0 0" data-att="${esc(f.name)}">${esc(prettyName(f.name))}</button>`).join("");
+      box.querySelectorAll("[data-att]").forEach(b=>b.onclick=async()=>{
+        toast("파일을 읽는 중…");
+        try{
+          const {data:d2,error:e2}=await sb.storage.from(BUCKET).download(b.dataset.att);
+          if(e2)throw e2;
+          const t=await d2.text();
+          mn.value=(mn.value?mn.value+"\n\n":"")+t.trim();
+          box.innerHTML=""; mn.scrollTop=mn.scrollHeight;
+          toast("붙여넣었습니다 — 확인 후 [노트로 저장]을 누르세요");
+        }catch(e){toast("읽기 실패: "+e.message);}
+      });
+    }catch(e){box.textContent="목록 실패: "+e.message;}
+  };
   $("autoSync").onchange=e=>{if(e.target.checked){autoTimer=setInterval(()=>{if(state.segments.length)syncNotes();},30000);toast("30초마다 자동 반영");}else clearInterval(autoTimer);};
   if(listening){$("micBtn").classList.add("on");$("micBtn").textContent="⏹ 녹취 중지";}
 }
