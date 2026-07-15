@@ -1117,7 +1117,7 @@ async function aiSummarizeFile(storedName){
     await saveNow();
     // 이미 종료·저장된 같은 제목의 기록에도 반영 (미리보기·MD에 표시)
     let recTouched=false;
-    (state.records||[]).forEach(rr=>{ if(rr.title===m.title){
+    (state.records||[]).forEach(rr=>{ if(sameTitle(rr.title,m.title)){
       rr.rawNote=m.rawNote; if(!rr.notes)rr.notes={summary:m.summary,actions:(m.actions||[]).slice()};
       if(!rr.tags||!rr.tags.length)rr.tags=(m.tags||[]).slice(); recTouched=true; } });
     if(recTouched) await saveRecords();
@@ -2469,9 +2469,10 @@ function renderArchive(){const box=$("archive");if(!box)return;
     </div>`).join(""):'<div class="mini">아직 아카이브된 회의가 없습니다.</div>';}
 
 // 회의록 미리보기 (화면에서 바로 확인)
-function previewRecord(id){
+function previewRecord(id,boxId){
   const r=state.records.find(x=>x.id===id); if(!r) return;
-  const box=$("pv-"+id); if(!box) return;
+  const bid=boxId||("pv-"+id);
+  const box=$(bid); if(!box) return;
   if(box.innerHTML){ box.innerHTML=""; return; }   // 토글
   const md=recordToMD(r);
   box.innerHTML=`<div style="margin-top:12px;background:var(--mist);border-radius:12px;padding:14px 16px;
@@ -2479,7 +2480,7 @@ function previewRecord(id){
     border:1px solid var(--line)">${esc(md)}</div>
     <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:8px">
       <button class="b-ghost" onclick="copyRecord('${id}')">본문 복사</button>
-      <button class="b-ghost" onclick="previewRecord('${id}')">닫기</button>
+      <button class="b-ghost" onclick="previewRecord('${id}','${bid}')">닫기</button>
     </div>`;
   box.scrollIntoView({behavior:"smooth",block:"nearest"});
 }
@@ -2508,17 +2509,24 @@ function renderRecords(){const list=$("reclist");if(!list)return;
         <div style="margin-top:6px">${(r.tags||[]).map(t=>`<span class="chip"><span class="av">#</span>${esc(t)}</span>`).join("")}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
+        <button class="b-mint" onclick="previewRecord('${r.id}','pv2-${r.id}')">미리보기</button>
         <button class="b-ghost" onclick="switchTab('email');setTimeout(()=>loadEmail('${r.id}'),50)">이메일</button>
         <button class="b-deep" onclick="exportRecord('${r.id}')">MD</button>
       </div>
-    </div>`).join("");
+    </div>
+    <div id="pv2-${r.id}" style="margin-bottom:10px"></div>`).join("");
 }
 // 기록 보정: 회의 객체의 AI 정리 내용(rawNote·summary·tags)을 기록에 채우고, 비정상 소요시간을 정리
+function sameTitle(a,b){
+  const n=s=>String(s||"").replace(/\s+/g,"").toLowerCase();
+  const x=n(a),y=n(b); if(!x||!y) return false;
+  return x===y || x.startsWith(y) || y.startsWith(x);
+}
 function repairRecords(){
   let changed=false;
   (state.records||[]).forEach(r=>{
     if(r.stats && (r.stats.dur<0 || r.stats.dur>1440)){ r.stats.dur=0; changed=true; }
-    const mm=(state.meetings||[]).find(m=>m.title===r.title);
+    const mm=(state.meetings||[]).find(m=>sameTitle(m.title,r.title));
     if(mm){
       if(!r.rawNote && mm.rawNote){ r.rawNote=mm.rawNote; changed=true; }
       if(!r.notes && mm.summary){ r.notes={summary:mm.summary, actions:(mm.actions||[]).slice()}; changed=true; }
@@ -2530,7 +2538,9 @@ function repairRecords(){
 function durLabel(r){ const d=r&&r.stats&&r.stats.dur; return (d>0&&d<=1440)?d+"분":"—"; }
 function moodLine(r){
   if(r.mood && r.mood!=="(분위기 요약 없음)") return r.mood;
-  return (r.notes&&r.notes.summary)?r.notes.summary:(r.mood||"");
+  if(r.notes&&r.notes.summary) return r.notes.summary;
+  if(r.rawNote) return r.rawNote.replace(/\s+/g," ").slice(0,90)+(r.rawNote.length>90?"…":"");
+  return r.mood||"";
 }
 function recordToMD(r){let md=`# MedIT 회의록 — ${r.dt}\n\n**${r.title}**\n\n`;
   md+=`- 목적: ${r.purpose}\n- 소요: ${durLabel(r)} · 발언 ${r.stats.segs}건(교수 ${r.stats.prof}/나 ${r.stats.me}) · ${r.stats.words}단어\n- 참석: ${r.attendees.map(a=>a.name+(a.email?`(${a.email})`:"")).join(", ")||"—"}\n- 태그: ${(r.tags||[]).map(t=>"#"+t).join(" ")}\n\n`;
