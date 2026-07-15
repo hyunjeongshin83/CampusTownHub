@@ -2219,15 +2219,16 @@ function consoleHTML(){
        <button class="b-gold" id="endBtn2">종료·정리</button>
      </div>
      <div style="border-top:1px solid var(--line);padding-top:8px;margin-top:4px">
-       <div class="mini" style="margin-bottom:6px">수기 회의록·자료 정리 — 직접 쓰거나 붙여넣은 뒤 [AI 정리]로 다듬고(선택), [노트로 저장]하면 회의 기록(미리보기·MD)에 포함됩니다. <span id="manualNoteInfo"></span></div>
-       <textarea id="manualNote" style="min-height:90px;width:100%" placeholder="회의록을 직접 입력하거나, 정리한 자료를 붙여넣으세요."></textarea>
-       <div class="crow" style="border-top:none;padding-top:6px">
+       <div class="mini" style="margin-bottom:6px">수기 회의록 — 직접 입력하거나 파일(txt·md)을 첨부하세요. [AI 정리]로 다듬은 뒤 [노트로 저장]하면 회의 기록(미리보기·MD)에 포함됩니다. <span id="manualNoteInfo"></span></div>
+       <textarea id="manualNote" style="min-height:100px;width:100%" placeholder="회의록을 직접 입력하거나, 파일을 이 칸에 끌어다 놓으세요."></textarea>
+       <div class="crow" style="border-top:none;padding-top:6px;align-items:center">
+         <button class="b-ghost" id="noteFileBtn">📎 파일 첨부</button>
+         <input type="file" id="noteFile" accept=".txt,.md,.srt,.vtt,text/plain" style="display:none">
          <button class="b-mint" id="aiTidyNote">AI 정리</button>
          <button class="b-deep" id="saveManualNote">노트로 저장</button>
-         <button class="b-ghost" id="attachFromFiles">업로드 자료 첨부</button>
          <button class="b-ghost" id="undoTidy" style="display:none">되돌리기</button>
+         <span class="mini" id="noteFileName"></span>
        </div>
-       <div id="attachPick" class="mini"></div>
      </div>
      <h3 style="border-top:1px solid var(--line)">즉석 리서치 <span class="tag">Claude</span></h3>
      <div class="cscroll" id="research" style="max-height:140px"></div>
@@ -2277,30 +2278,28 @@ function bindConsole(){
   if($("undoTidy"))$("undoTidy").onclick=()=>{
     if(tidyBackup!==null){ mn.value=tidyBackup; tidyBackup=null; $("undoTidy").style.display="none"; toast("정리 전 원문으로 되돌렸습니다"); }
   };
-  if($("attachFromFiles"))$("attachFromFiles").onclick=async()=>{
-    if(!sb){toast("클라우드에 연결되지 않았습니다");return;}
-    const box=$("attachPick");
-    if(box.innerHTML){box.innerHTML="";return;}   // 토글
-    box.textContent="자료 목록 불러오는 중…";
-    try{
-      const {data,error}=await sb.storage.from(BUCKET).list("",{limit:100,sortBy:{column:"created_at",order:"desc"}});
-      if(error)throw error;
-      const texts=(data||[]).filter(f=>/\.(txt|md|srt|vtt)$/i.test(f.name));
-      if(!texts.length){box.textContent="첨부 가능한 문서(txt·md)가 없습니다 — 사전 준비 탭에서 업로드하세요";return;}
-      box.innerHTML=texts.map(f=>`<button class="b-ghost" style="margin:3px 4px 0 0" data-att="${esc(f.name)}">${esc(prettyName(f.name))}</button>`).join("");
-      box.querySelectorAll("[data-att]").forEach(b=>b.onclick=async()=>{
-        toast("파일을 읽는 중…");
-        try{
-          const {data:d2,error:e2}=await sb.storage.from(BUCKET).download(b.dataset.att);
-          if(e2)throw e2;
-          const t=await d2.text();
-          mn.value=(mn.value?mn.value+"\n\n":"")+t.trim();
-          box.innerHTML=""; mn.scrollTop=mn.scrollHeight;
-          toast("붙여넣었습니다 — 확인 후 [노트로 저장]을 누르세요");
-        }catch(e){toast("읽기 실패: "+e.message);}
-      });
-    }catch(e){box.textContent="목록 실패: "+e.message;}
+  const readNoteFile=(file)=>{
+    if(!file)return;
+    if(!/\.(txt|md|srt|vtt)$/i.test(file.name)){toast("txt·md·srt·vtt 파일만 첨부할 수 있습니다");return;}
+    const rd=new FileReader();
+    rd.onload=()=>{
+      let t=String(rd.result||"").replace(/^\uFEFF/,"").trim();   // BOM 제거
+      if(!t){toast("파일이 비어 있습니다");return;}
+      mn.value=(mn.value?mn.value+"\n\n":"")+t;
+      mn.scrollTop=mn.scrollHeight;
+      const fl=$("noteFileName"); if(fl)fl.textContent="첨부됨: "+file.name;
+      toast("첨부했습니다 — [AI 정리]로 다듬거나 바로 [노트로 저장]하세요");
+    };
+    rd.onerror=()=>toast("파일을 읽지 못했습니다");
+    rd.readAsText(file);
   };
+  if($("noteFileBtn"))$("noteFileBtn").onclick=()=>$("noteFile").click();
+  if($("noteFile"))$("noteFile").onchange=e=>{readNoteFile(e.target.files[0]);e.target.value="";};
+  if(mn){
+    mn.addEventListener("dragover",e=>{e.preventDefault();mn.style.borderColor="var(--mint)";});
+    mn.addEventListener("dragleave",()=>{mn.style.borderColor="";});
+    mn.addEventListener("drop",e=>{e.preventDefault();mn.style.borderColor="";readNoteFile(e.dataTransfer.files[0]);});
+  }
   $("autoSync").onchange=e=>{if(e.target.checked){autoTimer=setInterval(()=>{if(state.segments.length)syncNotes();},30000);toast("30초마다 자동 반영");}else clearInterval(autoTimer);};
   if(listening){$("micBtn").classList.add("on");$("micBtn").textContent="⏹ 녹취 중지";}
 }
