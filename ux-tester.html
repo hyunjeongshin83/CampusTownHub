@@ -132,14 +132,20 @@ async function runAll(){
   if(SB&&AK){
     try{ const r=await fetch(SB+"/rest/v1/",{headers:{apikey:AK}}); add("C","Supabase REST 응답",r.status<500?"ok":"no","HTTP "+r.status); }
     catch(e){ add("C","Supabase REST 응답","no",e.message); }
+    // claude-proxy.ts 코드는 OPTIONS 요청에 CORS로 응답함 → 이 검사가 통과하면 "코드까지 제대로 배포됨"
+    let anyProxy=false;
     for(const fn of ["claude-proxy","quick-service","rapid-service"]){
       try{
-        const r=await fetch(SB+"/functions/v1/"+fn,{method:"POST",headers:{"Content-Type":"application/json",apikey:AK},body:"{}"});
-        const mark=r.status===404?"wa":"ok";
-        const note=r.status===404?"미배포":(r.status===401?"배포됨 (로그인 필요 — 정상)":"HTTP "+r.status+" — 배포됨");
-        add("C","AI 프록시 "+fn,mark,note);
-      }catch(e){ add("C","AI 프록시 "+fn,"wa","확인 불가(CORS) — 사이트 로그인 후 [AI 정리]로 확인: "+e.message); }
+        const r=await fetch(SB+"/functions/v1/"+fn,{method:"OPTIONS"});
+        if(r.ok){ add("C","AI 프록시 "+fn,"ok","배포됨 · claude-proxy.ts 코드 확인 (CORS 응답 정상)"); anyProxy=true; }
+        else add("C","AI 프록시 "+fn,"wa","응답 HTTP "+r.status);
+      }catch(e){
+        add("C","AI 프록시 "+fn,"wa","응답 없음 — ① 이 이름의 함수가 없거나 ② 함수는 있지만 아직 템플릿 코드(claude-proxy.ts 미적용)");
+      }
     }
+    add("C","AI 프록시 종합",anyProxy?"ok":"no",
+      anyProxy?"하나 이상 작동 — 사이트에서 로그인 후 [AI 정리]로 최종 확인"
+              :"작동하는 프록시 없음 — Supabase에서 함수 하나를 열어 claude-proxy.ts 코드로 교체·Deploy하고 Secrets에 ANTHROPIC_API_KEY를 등록하세요");
   }
   const cdn="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master";
   for(const p of ["/js/pptxjs.js","/js/jszip.min.js","/js/divs2slides.js","/css/pptxjs.css"]){
