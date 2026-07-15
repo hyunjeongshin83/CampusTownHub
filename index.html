@@ -2358,7 +2358,12 @@ function renderNotes(){const box=$("notes");if(!box)return;
     sec("안건",n.agenda)+sec("결정",n.decisions)+sec("액션",n.actions)+sec("후속",n.followups)+
     (state.nextActions.length?sec("AI 추천 다음 할 일",state.nextActions):"");}
 async function syncNotes(silent){
-  if(!state.segments.length){if(!silent)toast("녹취 내용이 없습니다");return;}
+  // 입력원: ① 녹취 ② 저장된 수기 노트(m.rawNote) ③ 입력란의 미저장 내용
+  const m=currentMeeting();
+  const mnEl=$("manualNote");
+  const manual=[(m&&m.rawNote)||"",(mnEl&&mnEl.value.trim())||""].filter(Boolean).join("\n\n");
+  if(!state.segments.length && !manual){
+    if(!silent)toast("반영할 내용이 없습니다 — 녹취하거나 수기 회의록을 입력·첨부하세요");return;}
   const b=$("syncBtn");if(b){b.disabled=true;b.textContent="반영 중…";}
   setPill("wait","AI 정리 중");
   const upText=state.uploads.filter(u=>u.text).map(u=>`[자료:${u.name}] ${u.text.slice(0,1500)}`).join("\n");
@@ -2367,7 +2372,10 @@ async function syncNotes(silent){
     '스키마:{"title":"회의 제목(간결)","purpose":"목적 한 줄","summary":"1-2문장 개요","tags":["주제태그"],"agenda":[],"decisions":[],"actions":[],"followups":[],"nextActions":["AI가 추천하는 다음 할 일"]}. '+
     "약학대학 교수와 MedIT(디지털 약료 플랫폼) 대표의 회의입니다. 참석자·자료 맥락을 반영하세요.";
   try{
-    let o=await callClaude(sys,(upText?("사전자료:\n"+upText+"\n\n"):"")+"녹취:\n"+tr,1400);
+    const body=(upText?("사전자료:\n"+upText+"\n\n"):"")
+      +(manual?("회의 노트(수기):\n"+manual.slice(0,12000)+"\n\n"):"")
+      +(tr?("녹취:\n"+tr):"");
+    let o=await callClaude(sys,body,1400);
     o=o.replace(/```json|```/g,"").trim();const j=JSON.parse(o);
     state.notes={summary:j.summary,agenda:j.agenda||[],decisions:j.decisions||[],actions:j.actions||[],followups:j.followups||[]};
     state.topicTags=j.tags||[];state.nextActions=j.nextActions||[];
@@ -2375,7 +2383,10 @@ async function syncNotes(silent){
     if(j.title)state.meeting.title=j.title;
     if(j.purpose)state.meeting.purpose=j.purpose;
     renderNotes();scheduleSave();
-    if(!silent)toast("회의록·제목·다음할일 자동 갱신됨");
+    // 회의 객체·기존 기록에도 반영 → 미리보기·MD 즉시 갱신
+    if(m){ m.summary=j.summary||m.summary; m.tags=j.tags||m.tags; m.actions=j.actions||m.actions;
+           await saveNoteToMeeting(m,(mnEl&&mnEl.value.trim())||""); if(mnEl)mnEl.value=""; }
+    if(!silent)toast("회의록·제목·다음할일 자동 갱신됨 — 회의 기록 미리보기에 반영됨");
   }catch(e){if(!silent)toast("반영 실패: "+e.message);}
   finally{if(b){b.disabled=false;b.textContent="AI 반영";}
     setPill(state.meeting.started&&!state.meeting.ended?"live":"idle",state.meeting.started&&!state.meeting.ended?"회의 진행 중":"회의 대기");}
