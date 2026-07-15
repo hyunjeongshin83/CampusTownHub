@@ -1216,7 +1216,8 @@ function isTextFile(name){ return /\.(txt|md|csv|json|srt|vtt)$/i.test(name||"")
 async function saveNoteToMeeting(m,text){
   text=(text||"").trim();
   if(text && !(m.rawNote||"").includes(text.slice(0,200))){
-    m.rawNote=(m.rawNote?m.rawNote+"\n\n":"")+text;
+    const stamp="[기록 "+new Date().toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})+"]";
+    m.rawNote=(m.rawNote?m.rawNote+"\n\n":"")+stamp+"\n"+text;
   }
   await saveNow();
   let touched=false;
@@ -2795,18 +2796,28 @@ function recordToMD(r){
       if((!r.tags||!r.tags.length)&&mm.tags)r.tags=(mm.tags||[]).slice(); }
   }
   let md=`# MedIT 회의록 — ${r.dt}\n\n**${r.title}**\n\n`;
-  md+=`- 목적: ${r.purpose}\n- 소요: ${durLabel(r)} · 발언 ${r.stats.segs}건(교수 ${r.stats.prof}/나 ${r.stats.me}) · ${r.stats.words}단어\n- 참석: ${r.attendees.map(a=>a.name+(a.email?`(${a.email})`:"")).join(", ")||"—"}\n${(r.tags&&r.tags.length)?`- 태그: ${r.tags.map(t=>"#"+t).join(" ")}\n`:""}\n`;
-  md+=`## 회의 분위기\n${r.mood}\n\n`;
+  md+=`- 목적: ${r.purpose}\n- 소요: ${durLabel(r)} · 참석: ${r.attendees.map(a=>a.name+(a.email?`(${a.email})`:"")).join(", ")||"—"}\n${(r.tags&&r.tags.length)?`- 태그: ${r.tags.map(t=>"#"+t).join(" ")}\n`:""}\n`;
+  if(r.mood&&r.mood!=="(분위기 요약 없음)") md+=`## 회의 분위기\n${r.mood}\n\n`;
   if(r.notes){const n=r.notes,sec=(t,a)=>a&&a.length?`## ${t}\n`+a.map(x=>"- "+x).join("\n")+"\n\n":"";
     if(n.summary)md+=`## 개요\n${n.summary}\n\n`;
     md+=sec("안건",n.agenda)+sec("결정 사항",n.decisions)+sec("액션 아이템",n.actions)+sec("후속",n.followups)+sec("AI 추천 다음 할 일",r.nextActions);}
+  // 회의 내용 — 시간순 구획 ([기록 M.D. HH:MM] 도장 기준으로 나눔)
+  if(r.rawNote){
+    md+=`## 회의 내용 (시간순)\n\n`;
+    const parts=r.rawNote.split(/\n?(?=\[기록 [^\]]+\])/).map(s=>s.trim()).filter(Boolean);
+    if(parts.length>1 || /^\[기록 /.test(r.rawNote.trim())){
+      parts.forEach(p=>{
+        const mm2=p.match(/^\[기록 ([^\]]+)\]\n?([\s\S]*)$/);
+        if(mm2) md+=`### ${mm2[1]}\n${mm2[2].trim()}\n\n`;
+        else md+=p+"\n\n";
+      });
+    } else { md+=r.rawNote+"\n\n"; }
+  }
   const tn=r.tabNotes||{},nm={deck:"슬라이드",app:"복약앱",registry:"약사사이트",console:"콘솔"};
   Object.keys(tn).forEach(k=>{if(tn[k]&&tn[k].length)md+=`## [${nm[k]}] 메모\n`+tn[k].map(x=>`- ${x.text}`).join("\n")+"\n\n";});
-  if(r.rawNote) md+=`## 회의 내용 기록\n${r.rawNote}\n\n`;
   if(r.script) md+=`## 정리된 스크립트\n${r.script}\n\n`;
   if(r.purged&&r.purged.count>0) md+=`> 녹취 원문 ${r.purged.count}건은 ${r.purged.at}에 파기되었습니다.\n\n`;
-  if(r.email)md+=`\n## 이메일 초안\n\`\`\`\n${r.email}\n\`\`\`\n`;
-  return md;}
+  return md;}   // 이메일 초안은 회의록에서 제외 — [이메일] 버튼(이메일 센터)에서 별도 작성·전송
 function exportRecord(id){const r=state.records.find(x=>x.id===id);if(!r)return;
   const blob=new Blob([recordToMD(r)],{type:"text/markdown"});const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);a.download="MedIT_회의록_"+r.dt.replace(/[^0-9]/g,"").slice(0,12)+".md";a.click();toast("회의록을 내려받았습니다");}
