@@ -741,6 +741,7 @@ async function clearUser(){
 }
 async function loadAll(){
   const rec=await store.get("medit:records2");if(rec)state.records=rec;
+  try{repairRecords();}catch(_){}
   const s=await store.get("medit:hub1");
   if(s && typeof s==="object"){
     Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],projects:s.projects||[],pages:s.pages||[],fileNames:s.fileNames||{},
@@ -1050,6 +1051,7 @@ async function downloadFile(name){
     window.open(data.signedUrl,"_blank");
   }catch(e){ toast("다운로드 실패: "+e.message); }
 }
+const FILE_SIZES={};   // 저장 파일명 → 크기(뷰어 10MB 제한 확인용)
 async function viewFile(name){
   if(!sb){ toast("클라우드에 연결되지 않았습니다"); return; }
   try{
@@ -1057,7 +1059,10 @@ async function viewFile(name){
     if(error) throw error;
     const url=data.signedUrl, ext=(name.split(".").pop()||"").toLowerCase();
     if(["ppt","pptx","doc","docx","xls","xlsx"].includes(ext)){
-      window.open("https://docs.google.com/viewer?url="+encodeURIComponent(url),"_blank");
+      // Microsoft Office 뷰어: 그림·서식 포함 렌더링 (10MB 초과 파일은 표시 실패 → 다운로드 안내)
+      const sz=(FILE_SIZES&&FILE_SIZES[name])||0;
+      if(sz>10*1048576){ toast("10MB가 넘는 문서는 뷰어가 열지 못합니다 — 다운로드하거나 PDF로 변환해 올려 주세요"); return; }
+      window.open("https://view.officeapps.live.com/op/view.aspx?src="+encodeURIComponent(url),"_blank");
     } else {
       window.open(url,"_blank");   // PDF·이미지·텍스트는 브라우저가 바로 열어줌
     }
@@ -1110,6 +1115,12 @@ async function aiSummarizeFile(storedName){
     m.actions=r.actions||[];
     m.rawNote=(m.rawNote?m.rawNote+"\n\n":"")+text;   // 원문도 회의 기록에 보관
     await saveNow();
+    // 이미 종료·저장된 같은 제목의 기록에도 반영 (미리보기·MD에 표시)
+    let recTouched=false;
+    (state.records||[]).forEach(rr=>{ if(rr.title===m.title){
+      rr.rawNote=m.rawNote; if(!rr.notes)rr.notes={summary:m.summary,actions:(m.actions||[]).slice()};
+      if(!rr.tags||!rr.tags.length)rr.tags=(m.tags||[]).slice(); recTouched=true; } });
+    if(recTouched) await saveRecords();
     toast("회의록이 정리되었습니다 — 금일 회의 탭에서 확인하세요");
     switchTab("today");
   }catch(e){
@@ -1130,6 +1141,7 @@ async function renderFiles(boxId){
     box.innerHTML='<div class="mini">아직 등록된 자료가 없습니다.'+(canUpload()?" 아래에서 업로드하세요.":"")+'</div>';
     return;
   }
+  files.forEach(f=>{ FILE_SIZES[f.name]=(f.metadata&&f.metadata.size)||0; });
   box.innerHTML=files.map(f=>`<div class="filerow">
     <div class="f-info"><div class="f-name">${esc(prettyName(f.name))}</div><div class="f-meta">${prettySize(f.metadata&&f.metadata.size)}</div></div>
     <div class="f-acts">
@@ -1158,7 +1170,7 @@ function prepHTML(){
   return `<div class="hero">
    <div class="section-title">Before the meeting</div>
    <h2 style="font-size:22px;color:var(--ink);margin-bottom:4px">사전 준비</h2>
-   <div class="mini" style="margin-bottom:16px">회의 전에 참석자 이메일과 관련 자료(스크립트·발표 DOC·영상·관련 문서)를 등록하세요. 문서는 AI 정리에 반영되고, 영상은 목록에 보관됩니다.</div>
+   <div class="mini" style="margin-bottom:16px">회의 전에 참석자 이메일과 관련 자료(스크립트·발표 DOC·영상·관련 문서)를 등록하세요. 문서는 AI 정리에 반영되고, 영상은 목록에 보관됩니다. PPT·Word는 그림 포함 뷰어로 열립니다(10MB 이하) — 큰 파일은 PDF로 변환해 올리면 가장 안정적입니다.</div>
 
    <div class="glass tile" style="margin-bottom:14px">
      <h4>참석자 등록 (이메일)</h4>
@@ -1385,7 +1397,7 @@ function deckHTML(){
       <button class="b-mint autobtn" id="playS">${playing?'정지':'자동 발표'}</button>
       <button class="b-ghost autobtn" id="editScriptS">스크립트 편집</button>
     </div>
-    <div class="mini" style="text-align:center">자동 발표: 음성(TTS)으로 스크립트를 읽고 자막·용어 설명과 함께 슬라이드가 넘어갑니다 · 약 5분</div>
+    <div class="mini" style="text-align:center">자동 발표: 음성(TTS)으로 스크립트를 읽고 자막·용어 설명과 함께 슬라이드가 넘어갑니다 · 약 3분</div>
     <div id="scriptEditor"></div>
   </div>`;
 }
@@ -2203,9 +2215,13 @@ async function endMeeting(){
   }
   const purgedAt=new Date().toLocaleString('ko-KR');
   const segCount=state.segments.length;
+  const cm=currentMeeting()||{};
   const rec={id:"m"+Date.now(),dt:new Date().toLocaleString('ko-KR'),
     title:state.meeting.title,purpose:state.meeting.purpose,mood,stats,
-    notes:state.notes,tags:state.topicTags.slice(),nextActions:state.nextActions.slice(),
+    rawNote:cm.rawNote||"",           // 회의 노트 원문 (AI 정리·직접 입력)
+    notes:state.notes||(cm.summary?{summary:cm.summary,actions:(cm.actions||[]).slice()}:null),
+    tags:(state.topicTags.length?state.topicTags:(cm.tags||[])).slice(),
+    nextActions:state.nextActions.slice(),
     attendees:state.attendees.slice(),
     script,                       // 정리된 스크립트 (보존)
     segments:[],                  // 녹취 원문 — 저장하지 않음 (파기)
@@ -2440,8 +2456,8 @@ function renderArchive(){const box=$("archive");if(!box)return;
       <div style="display:flex;gap:10px;align-items:flex-start">
         <div style="flex:1">
           <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(r.title)}</div>
-          <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${r.stats.dur}분 · 참석 ${r.attendees.length}명 · ${(r.tags||[]).map(t=>"#"+t).join(" ")}</div>
-          <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(r.mood)}</div>
+          <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${durLabel(r)} · 참석 ${r.attendees.length}명 · ${(r.tags||[]).map(t=>"#"+t).join(" ")}</div>
+          <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(moodLine(r))}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px">
           <button class="b-mint" onclick="previewRecord('${r.id}')">미리보기</button>
@@ -2487,8 +2503,8 @@ function renderRecords(){const list=$("reclist");if(!list)return;
     <div class="glass tile" style="margin-bottom:10px;display:flex;gap:12px;align-items:flex-start">
       <div style="flex:1">
         <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(r.title)}</div>
-        <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${r.stats.dur}분 · 발언 ${r.stats.segs}건 · 참석 ${r.attendees.length}명</div>
-        <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(r.mood)}</div>
+        <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${durLabel(r)} · 발언 ${r.stats.segs}건 · 참석 ${r.attendees.length}명</div>
+        <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(moodLine(r))}</div>
         <div style="margin-top:6px">${(r.tags||[]).map(t=>`<span class="chip"><span class="av">#</span>${esc(t)}</span>`).join("")}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
@@ -2497,8 +2513,27 @@ function renderRecords(){const list=$("reclist");if(!list)return;
       </div>
     </div>`).join("");
 }
+// 기록 보정: 회의 객체의 AI 정리 내용(rawNote·summary·tags)을 기록에 채우고, 비정상 소요시간을 정리
+function repairRecords(){
+  let changed=false;
+  (state.records||[]).forEach(r=>{
+    if(r.stats && (r.stats.dur<0 || r.stats.dur>1440)){ r.stats.dur=0; changed=true; }
+    const mm=(state.meetings||[]).find(m=>m.title===r.title);
+    if(mm){
+      if(!r.rawNote && mm.rawNote){ r.rawNote=mm.rawNote; changed=true; }
+      if(!r.notes && mm.summary){ r.notes={summary:mm.summary, actions:(mm.actions||[]).slice()}; changed=true; }
+      if((!r.tags||!r.tags.length) && mm.tags && mm.tags.length){ r.tags=mm.tags.slice(); changed=true; }
+    }
+  });
+  if(changed) saveRecords();
+}
+function durLabel(r){ const d=r&&r.stats&&r.stats.dur; return (d>0&&d<=1440)?d+"분":"—"; }
+function moodLine(r){
+  if(r.mood && r.mood!=="(분위기 요약 없음)") return r.mood;
+  return (r.notes&&r.notes.summary)?r.notes.summary:(r.mood||"");
+}
 function recordToMD(r){let md=`# MedIT 회의록 — ${r.dt}\n\n**${r.title}**\n\n`;
-  md+=`- 목적: ${r.purpose}\n- 소요: ${r.stats.dur}분 · 발언 ${r.stats.segs}건(교수 ${r.stats.prof}/나 ${r.stats.me}) · ${r.stats.words}단어\n- 참석: ${r.attendees.map(a=>a.name+(a.email?`(${a.email})`:"")).join(", ")||"—"}\n- 태그: ${(r.tags||[]).map(t=>"#"+t).join(" ")}\n\n`;
+  md+=`- 목적: ${r.purpose}\n- 소요: ${durLabel(r)} · 발언 ${r.stats.segs}건(교수 ${r.stats.prof}/나 ${r.stats.me}) · ${r.stats.words}단어\n- 참석: ${r.attendees.map(a=>a.name+(a.email?`(${a.email})`:"")).join(", ")||"—"}\n- 태그: ${(r.tags||[]).map(t=>"#"+t).join(" ")}\n\n`;
   md+=`## 회의 분위기\n${r.mood}\n\n`;
   if(r.notes){const n=r.notes,sec=(t,a)=>a&&a.length?`## ${t}\n`+a.map(x=>"- "+x).join("\n")+"\n\n":"";
     if(n.summary)md+=`## 개요\n${n.summary}\n\n`;
