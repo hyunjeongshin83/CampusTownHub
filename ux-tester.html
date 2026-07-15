@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CampusTown Hub — 웹 테스트 (v31 기능 검증)</title>
+<style>
+:root{--mint:#12BDB0;--deep:#0E6E66;--ink:#20312F;--gray:#5B6E6B;--mist:#F1F6F5;--line:#DCE7E5;--bad:#C24A4A;--warn:#B98A2E;}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Pretendard','Noto Sans KR',-apple-system,sans-serif;}
+body{background:#F7FAF9;color:var(--ink);padding:26px;max-width:920px;margin:0 auto;}
+h1{font-size:20px;color:var(--deep);margin-bottom:4px;}
+.mini{font-size:12.5px;color:var(--gray);line-height:1.6;}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:14px 0;}
+.card h3{font-size:14px;color:var(--deep);margin-bottom:10px;}
+button{border:0;border-radius:10px;padding:10px 18px;font-weight:800;font-size:13px;cursor:pointer;}
+.b-mint{background:var(--mint);color:#fff;} .b-ghost{background:var(--mist);color:var(--deep);border:1px solid var(--line);} .b-deep{background:var(--deep);color:#fff;}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.t{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px;}
+.t:last-child{border-bottom:0;}
+.mark{min-width:44px;text-align:center;font-weight:900;border-radius:8px;padding:2px 6px;font-size:12px;}
+.ok{background:#E5F6F4;color:var(--deep);} .no{background:#F9E9E9;color:var(--bad);} .wa{background:#F8F1E1;color:var(--warn);} .sk{background:var(--mist);color:var(--gray);}
+.gauge{height:10px;background:var(--mist);border-radius:6px;overflow:hidden;margin:8px 0;}
+.gauge>div{height:100%;background:var(--mint);width:0;transition:width .4s;}
+code{background:var(--mist);border-radius:5px;padding:1px 5px;font-size:12px;}
+#iframeBox{position:fixed;left:-9999px;top:0;width:1200px;height:800px;}
+</style>
+</head>
+<body>
+<h1>CampusTown Hub 웹 테스트</h1>
+<div class="mini">index.html과 같은 폴더에 두고 실행하세요 — <code>…github.io/CampusTownHub/ux-tester.html</code><br>
+검증 범위: 회의 기록 미리보기·카드 스니펫 / PPT 앱 내 뷰어 / AI 키·공유 프록시 / 보안(키 노출) / 저장소 연결</div>
+
+<div class="card">
+  <div class="row">
+    <button class="b-mint" onclick="runAll()">전체 테스트 실행</button>
+    <button class="b-ghost" onclick="dl('md')">보고서 .md</button>
+    <button class="b-ghost" onclick="dl('json')">보고서 .json</button>
+    <span class="mini" id="stat">대기 중</span>
+  </div>
+  <div class="gauge"><div id="bar"></div></div>
+</div>
+
+<div class="card"><h3>A. 소스 정적 검사 (index.html 코드)</h3><div id="secA" class="mini">실행 전</div></div>
+<div class="card"><h3>B. 런타임 함수 검사 (iframe 로드)</h3><div id="secB" class="mini">실행 전</div></div>
+<div class="card"><h3>C. 외부 연결 검사 (Supabase · PPT 라이브러리 · AI 프록시)</h3><div id="secC" class="mini">실행 전</div></div>
+<div class="card"><h3>수정 제안</h3><div id="fix" class="mini">문제가 발견되면 여기에 코드 수준 제안이 표시됩니다.</div></div>
+
+<div id="iframeBox"></div>
+
+<script>
+const R=[]; // {sec,name,mark:'ok|no|wa|sk',note}
+function add(sec,name,mark,note){R.push({sec,name,mark,note:note||""});draw();}
+function draw(){
+  ["A","B","C"].forEach(s=>{
+    const el=document.getElementById("sec"+s);
+    const rs=R.filter(r=>r.sec===s);
+    if(!rs.length)return;
+    el.innerHTML=rs.map(r=>`<div class="t"><span class="mark ${r.mark}">${{ok:"통과",no:"실패",wa:"주의",sk:"건너뜀"}[r.mark]}</span><span><b>${r.name}</b>${r.note?"<br>"+r.note:""}</span></div>`).join("");
+  });
+  const done=R.length, ok=R.filter(r=>r.mark==="ok").length;
+  document.getElementById("bar").style.width=(done?Math.round(ok/done*100):0)+"%";
+  document.getElementById("stat").textContent=`통과 ${ok} / 검사 ${done}`;
+  const fixes=R.filter(r=>r.mark==="no").map(r=>"• "+r.name+" — "+(r.note||"위 항목 참조"));
+  document.getElementById("fix").innerHTML=fixes.length?fixes.join("<br>"):"발견된 문제 없음";
+}
+
+let SRC="";
+async function runAll(){
+  R.length=0; draw();
+  document.getElementById("stat").textContent="실행 중…";
+
+  /* ---------- A. 정적 검사 ---------- */
+  try{
+    SRC=await (await fetch("./index.html?ts="+Date.now(),{cache:"no-store"})).text();
+    add("A","index.html 읽기","ok",Math.round(SRC.length/1024)+"KB");
+  }catch(e){ add("A","index.html 읽기","no","같은 폴더에서 실행해야 합니다: "+e.message); return; }
+
+  const must=[
+    ["previewRecord(id,boxId)", /function previewRecord\(id,boxId\)/, "미리보기 함수(컨테이너 지정형)"],
+    ["홈 미리보기 버튼", /pv2-\$\{r\.id\}/, "renderRecords에 pv2- 컨테이너·버튼"],
+    ["카드 스니펫", /function recordSnippet/, "카드 밑 상시 미리보기"],
+    ["기록 자동 보정", /function repairRecords/, "3998분·노트 연결 보정"],
+    ["제목 유연 매칭", /function sameTitle/, "공백·부분 일치"],
+    ["소요시간 라벨", /function durLabel/, "비정상 값 — 표시"],
+    ["원문 우선 저장", /원문 먼저 저장/, "AI 실패해도 노트 저장"],
+    ["렌더 시점 폴백", /렌더 시점 폴백|같은 제목의 회의에서 즉시 가져옴/, "recordToMD 폴백"],
+    ["PPT 앱 내 뷰어", /function openPptViewer/, "PPTXjs 모달"],
+    ["PPT 라이브러리 로더", /function ensurePptLibs/, "지연 로드"],
+    ["AI 키 카드", /id="apiKeyStatus"/, "사전 준비 탭 설정 UI"],
+    ["키 등록 함수", /function promptApiKey/, ""],
+    ["공유 프록시 호출", /function callViaProxy/, ""],
+    ["프록시 이름 자동 탐색", /AI_PROXY_NAMES\s*=\s*\[/, "claude-proxy·quick-service·rapid-service"],
+    ["브라우저 직접 호출 헤더", /anthropic-dangerous-direct-browser-access/, "개인 키 경로"],
+  ];
+  must.forEach(([n,re,note])=>add("A",n,re.test(SRC)?"ok":"no",note+(re.test(SRC)?"":" — index.html이 최신 버전인지 확인하세요")));
+
+  add("A","구 뷰어(google viewer) 제거",/docs\.google\.com\/viewer/.test(SRC)?"no":"ok",
+      /docs\.google\.com\/viewer/.test(SRC)?"docs.google.com/viewer 잔존 — 최신 파일로 교체 필요":"");
+  const keyLeak=/sk-ant-[A-Za-z0-9_-]{20,}/.test(SRC);   // 실제 키 패턴만 탐지 (안내문의 "sk-ant-…" 예시는 제외)
+  add("A","보안: API 키 소스 미포함",keyLeak?"no":"ok",
+      keyLeak?"소스에 실제 키 패턴 발견 — 즉시 제거하고 해당 키를 폐기하세요":"실제 키 패턴 없음");
+  add("A","보안: 파기 문구 0건 억제",/purged&&r\.purged\.count>0/.test(SRC)?"ok":"wa","녹취 0건 파기 문구 표시 여부");
+
+  /* ---------- B. 런타임 검사 ---------- */
+  await new Promise(res=>{
+    const f=document.createElement("iframe");
+    f.src="./index.html?uxtest="+Date.now();
+    document.getElementById("iframeBox").innerHTML=""; document.getElementById("iframeBox").appendChild(f);
+    let done=false;
+    const finish=()=>{if(!done){done=true;res();}};
+    f.onload=()=>setTimeout(()=>{
+      let w; try{ w=f.contentWindow; }catch(e){ add("B","iframe 접근","no",e.message); return finish(); }
+      const fns=["previewRecord","recordSnippet","recordToMD","repairRecords","durLabel","sameTitle","moodLine","openPptViewer","ensurePptLibs","promptApiKey","refreshApiKeyStatus","callViaProxy","callClaude"];
+      fns.forEach(n=>add("B","전역 함수 "+n,typeof w[n]==="function"?"ok":"no",typeof w[n]!=="function"?"정의되지 않음":""));
+      try{ add("B","durLabel 보정 로직",w.durLabel({stats:{dur:3998}})==="—"&&w.durLabel({stats:{dur:45}})==="45분"?"ok":"no","3998→'—', 45→'45분'"); }catch(e){ add("B","durLabel 보정 로직","no",e.message); }
+      try{ add("B","sameTitle 유연 매칭",w.sameTitle("MedIT × 약학대학 (2026.07.10) — 고령화 Age-Tech","MedIT×약학대학 (2026.07.10)")===true?"ok":"no","공백 무시·부분 일치"); }catch(e){ add("B","sameTitle 유연 매칭","no",e.message); }
+      try{ const s=w.recordSnippet({rawNote:"가나다 ".repeat(100)}); add("B","recordSnippet 220자 제한",s.length<=221&&s.endsWith("…")?"ok":"no","현재 길이 "+s.length); }catch(e){ add("B","recordSnippet 220자 제한","no",e.message); }
+      try{ const md=w.recordToMD({id:"t",dt:"-",title:"__uxtest__",purpose:"-",mood:"(분위기 요약 없음)",stats:{dur:0,segs:0,pWords:0,mWords:0},attendees:[],tags:[],rawNote:"테스트 노트 본문",nextActions:[]});
+        add("B","recordToMD 노트 포함",md.includes("테스트 노트 본문")?"ok":"no","회의 내용 기록 섹션");
+        add("B","recordToMD 파기 0건 억제",md.includes("파기되었습니다")?"no":"ok","");
+      }catch(e){ add("B","recordToMD","no",e.message); }
+      try{ add("B","MedITHub 액션 레이어",w.MedITHub&&typeof w.MedITHub.listMeetings==="function"?"ok":"wa",""); }catch(e){ add("B","MedITHub 액션 레이어","wa",e.message); }
+      finish();
+    },2500);
+    setTimeout(finish,9000);
+  });
+
+  /* ---------- C. 외부 연결 ---------- */
+  const urlM=SRC.match(/SUPABASE_URL\s*=\s*"([^"]+)"/), keyM=SRC.match(/SUPABASE_ANON_KEY\s*=\s*"([^"]+)"/);
+  const SB=urlM&&urlM[1], AK=keyM&&keyM[1];
+  add("C","Supabase 설정 추출",SB&&AK?"ok":"no",SB?SB:"SUPABASE_URL 미발견");
+  if(SB&&AK){
+    try{ const r=await fetch(SB+"/rest/v1/",{headers:{apikey:AK}}); add("C","Supabase REST 응답",r.status<500?"ok":"no","HTTP "+r.status); }
+    catch(e){ add("C","Supabase REST 응답","no",e.message); }
+    for(const fn of ["claude-proxy","quick-service","rapid-service"]){
+      try{
+        const r=await fetch(SB+"/functions/v1/"+fn,{method:"POST",headers:{"Content-Type":"application/json",apikey:AK},body:"{}"});
+        const mark=r.status===404?"wa":"ok";
+        const note=r.status===404?"미배포":(r.status===401?"배포됨 (로그인 필요 — 정상)":"HTTP "+r.status+" — 배포됨");
+        add("C","AI 프록시 "+fn,mark,note);
+      }catch(e){ add("C","AI 프록시 "+fn,"wa","확인 불가(CORS) — 사이트 로그인 후 [AI 정리]로 확인: "+e.message); }
+    }
+  }
+  const cdn="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master";
+  for(const p of ["/js/pptxjs.js","/js/jszip.min.js","/js/divs2slides.js","/css/pptxjs.css"]){
+    try{ const r=await fetch(cdn+p,{method:"HEAD"}); add("C","PPT 라이브러리 "+p.split("/").pop(),r.ok?"ok":"no","HTTP "+r.status); }
+    catch(e){ add("C","PPT 라이브러리 "+p.split("/").pop(),"no",e.message); }
+  }
+  document.getElementById("stat").textContent="완료 — "+document.getElementById("stat").textContent;
+}
+
+function dl(kind){
+  const ts=new Date().toLocaleString("ko-KR");
+  let blob,fname;
+  if(kind==="json"){
+    blob=new Blob([JSON.stringify({at:ts,results:R},null,2)],{type:"application/json"});
+    fname="uxtest-report.json";
+  }else{
+    const md=["# CampusTown Hub 웹 테스트 보고서","","- 시각: "+ts,"- 통과: "+R.filter(r=>r.mark==="ok").length+" / "+R.length,"",
+      ...["A","B","C"].map(s=>"## 섹션 "+s+"\n"+R.filter(r=>r.sec===s).map(r=>`- [${{ok:"통과",no:"실패",wa:"주의",sk:"건너뜀"}[r.mark]}] ${r.name}${r.note?" — "+r.note:""}`).join("\n")),
+      "","## 수정 제안",...(R.filter(r=>r.mark==="no").map(r=>"- "+r.name+": "+(r.note||"본문 참조"))||[])].join("\n");
+    blob=new Blob([md],{type:"text/markdown"});
+    fname="uxtest-report.md";
+  }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=fname; a.click();
+}
+</script>
+</body>
+</html>
