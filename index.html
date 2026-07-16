@@ -2279,8 +2279,11 @@ function bindConsole(){
     tst("AI가 자료를 정리하는 중… (수 초~수십 초)");
     try{
       const sys="회의 노트 정리 담당자. 아래 원문을 사실 위주로 담백하게 정리한다. "+
-        "짧은 문장. 과장·수식어·철학적 표현 금지. 원문에 없는 내용을 추가하지 않는다. "+
-        "출력 형식(마크다운): ## 요약(3~4문장) / ## 논의 사항(항목) / ## 결정 사항(항목, 없으면 생략) / ## 다음 액션(번호 목록, 없으면 생략). "+
+        "짧은 문장. 과장·수식어·철학적 표현 금지. 원문에 없는 내용을 추가하지 않되, 원문에 있는 항목은 사소해 보여도 빠뜨리지 않는다. "+
+        "출력 형식(마크다운): ## 요약(3~4문장) / ## 논의 사항(항목) / "+
+        "## 아이디어·제안(원문에 나온 아이디어·구상·제안을 모두 나열, 예: 신기술 적용, 서비스 구상, 기관 제안) / "+
+        "## 조사·리서치 항목(조사가 필요하다고 언급된 것) / "+
+        "## 결정 사항(없으면 생략) / ## 다음 액션(번호 목록, 없으면 생략). "+
         "다른 말 없이 정리 결과만 출력.";
       const out=await callClaude(sys, src.slice(0,15000), 1800);
       if(!out.trim()) throw new Error("빈 응답");
@@ -2373,7 +2376,10 @@ function renderNotes(){const box=$("notes");if(!box)return;
   const n=state.notes,sec=(t,a)=>`<div class="nsec"><h4>${t}</h4>`+(a&&a.length?"<ul>"+a.map(x=>`<li>${esc(x)}</li>`).join("")+"</ul>":'<div class="mini">—</div>')+"</div>";
   box.innerHTML=(n.summary?`<div class="rcard"><div>${esc(n.summary)}</div></div>`:"")+
     (state.topicTags.length?`<div style="margin-bottom:8px">${state.topicTags.map(t=>`<span class="chip"><span class="av">#</span>${esc(t)}</span>`).join("")}</div>`:"")+
-    sec("안건",n.agenda)+sec("결정",n.decisions)+sec("액션",n.actions)+sec("후속",n.followups)+
+    sec("안건",n.agenda)+
+    (n.ideas&&n.ideas.length?sec("아이디어·제안",n.ideas):"")+
+    (n.research&&n.research.length?sec("조사·리서치",n.research):"")+
+    sec("결정",n.decisions)+sec("액션",n.actions)+sec("후속",n.followups)+
     (state.nextActions.length?sec("AI 추천 다음 할 일",state.nextActions):"");}
 async function syncNotes(silent){
   // 입력원: ① 녹취 ② 저장된 수기 노트(m.rawNote) ③ 입력란의 미저장 내용
@@ -2387,7 +2393,7 @@ async function syncNotes(silent){
   const upText=state.uploads.filter(u=>u.text).map(u=>`[자료:${u.name}] ${u.text.slice(0,1500)}`).join("\n");
   const tr=state.segments.map(s=>`[${s.who}] ${s.text}`).join("\n");
   const sys="당신은 한국어 회의 서기입니다. 순수 JSON만 출력(설명·코드펜스 없이). "+
-    '스키마:{"title":"회의 제목(간결)","purpose":"목적 한 줄","summary":"1-2문장 개요","tags":["주제태그"],"agenda":[],"decisions":[],"actions":[],"followups":[],"nextActions":["AI가 추천하는 다음 할 일"]}. '+
+    '스키마:{"title":"회의 제목(간결)","purpose":"목적 한 줄","summary":"1-2문장 개요","tags":["주제태그"],"agenda":[],"ideas":["원문에 나온 아이디어·구상·제안 — 사소해 보여도 모두"],"research":["조사 필요 항목"],"decisions":[],"actions":[],"followups":[],"nextActions":["AI가 추천하는 다음 할 일"]}. '+
     "약학대학 교수와 MedIT(디지털 약료 플랫폼) 대표의 회의입니다. 참석자·자료 맥락을 반영하세요.";
   try{
     const body=(upText?("사전자료:\n"+upText+"\n\n"):"")
@@ -2395,7 +2401,7 @@ async function syncNotes(silent){
       +(tr?("녹취:\n"+tr):"");
     let o=await callClaude(sys,body,1400);
     o=o.replace(/```json|```/g,"").trim();const j=JSON.parse(o);
-    state.notes={summary:j.summary,agenda:j.agenda||[],decisions:j.decisions||[],actions:j.actions||[],followups:j.followups||[]};
+    state.notes={summary:j.summary,agenda:j.agenda||[],ideas:j.ideas||[],research:j.research||[],decisions:j.decisions||[],actions:j.actions||[],followups:j.followups||[]};
     state.topicTags=j.tags||[];state.nextActions=j.nextActions||[];
     // AI auto-edit meeting title/purpose
     if(j.title)state.meeting.title=j.title;
@@ -2403,7 +2409,10 @@ async function syncNotes(silent){
     renderNotes();scheduleSave();
     // 회의 객체·기존 기록에도 반영 → 미리보기·MD 즉시 갱신
     if(m){ m.summary=j.summary||m.summary; m.tags=j.tags||m.tags; m.actions=j.actions||m.actions;
-           await saveNoteToMeeting(m,(mnEl&&mnEl.value.trim())||""); if(mnEl)mnEl.value=""; }
+           await saveNoteToMeeting(m,(mnEl&&mnEl.value.trim())||""); if(mnEl)mnEl.value="";
+           // 기존 기록에 정리 결과(아이디어 포함) 전체를 반영
+           let tt=false;(state.records||[]).forEach(rr=>{ if(sameTitle(rr.title,m.title)){ rr.notes=state.notes; tt=true; } });
+           if(tt)await saveRecords(); renderRecords(); if($("archive"))renderArchive(); }
     if(!silent)toast("회의록·제목·다음할일 자동 갱신됨 — 회의 기록 미리보기에 반영됨");
   }catch(e){if(!silent)toast("반영 실패: "+e.message);}
   finally{if(b){b.disabled=false;b.textContent="AI 반영";}
@@ -2809,7 +2818,7 @@ function recordToMD(r){
   if(r.mood&&r.mood!=="(분위기 요약 없음)") md+=`## 회의 분위기\n${r.mood}\n\n`;
   if(r.notes){const n=r.notes,sec=(t,a)=>a&&a.length?`## ${t}\n`+a.map(x=>"- "+x).join("\n")+"\n\n":"";
     if(n.summary)md+=`## 개요\n${n.summary}\n\n`;
-    md+=sec("안건",n.agenda)+sec("결정 사항",n.decisions)+sec("액션 아이템",n.actions)+sec("후속",n.followups)+sec("AI 추천 다음 할 일",r.nextActions);}
+    md+=sec("안건",n.agenda)+sec("아이디어·제안",n.ideas)+sec("조사·리서치 항목",n.research)+sec("결정 사항",n.decisions)+sec("액션 아이템",n.actions)+sec("후속",n.followups)+sec("AI 추천 다음 할 일",r.nextActions);}
   // 회의 내용 — 시간순 구획 ([기록 M.D. HH:MM] 도장 기준으로 나눔)
   if(r.rawNote){
     md+=`## 회의 내용 (시간순)\n\n`;
