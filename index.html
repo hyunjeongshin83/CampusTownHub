@@ -551,6 +551,7 @@ body{letter-spacing:-0.015em;}
   <div class="tab" data-tab="video">화상회의</div>
   <div class="tab" data-tab="projects">프로젝트</div>
   <div class="tab" data-tab="schedule">일정</div>
+  <div class="tab" data-tab="lit">문헌</div>
   <div class="tab" data-tab="console">진행 콘솔 <span class="badge" id="segBadge">0</span></div>
   <div class="tab" data-tab="email">회의록·이메일</div>
 </div>
@@ -615,6 +616,7 @@ const state={
   segments:[], notes:null, research:[], nextActions:[], topicTags:[],
   liveDoc:{paras:[],cursor:0},   // 실시간 회의록: 확정 문단 + 다음에 정리할 발언 위치
   schedule:{goals:[],done:[]},   // 일정: 목표(마일스톤)와 수동 '한 일' 카드
+  lit:{q:"",items:[]},           // 문헌 리서치 결과 (PubMed 등 — Claude 웹 검색)
   deckIdx:0, records:[], meetingStart:null,
 };
 // 기본 데이터 시드 (최초 1회)
@@ -754,7 +756,7 @@ async function saveSession(){await store.set("medit:hub1",{
   accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,currentMeetingId:state.currentMeetingId,
   uploads:state.uploads.map(u=>({name:u.name,type:u.type,size:u.size,text:u.text})),
   tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
-  nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule});}
+  nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit});}
 async function saveRecords(){await store.set("medit:records2",state.records);}
 // 로그인 세션은 이 브라우저에만 저장 (클라우드 공유 X — 남의 기기에 로그인이 옮겨가면 안 됨)
 async function saveUser(){
@@ -781,6 +783,7 @@ async function loadAll(){
     if(s.meeting&&typeof s.meeting==="object")Object.assign(state.meeting,s.meeting);
     if(s.liveDoc&&typeof s.liveDoc==="object")state.liveDoc={paras:Array.isArray(s.liveDoc.paras)?s.liveDoc.paras:[],cursor:Number(s.liveDoc.cursor)||0};
     if(s.schedule&&typeof s.schedule==="object")state.schedule={goals:Array.isArray(s.schedule.goals)?s.schedule.goals:[],done:Array.isArray(s.schedule.done)?s.schedule.done:[]};
+    if(s.lit&&typeof s.lit==="object")state.lit={q:s.lit.q||"",items:Array.isArray(s.lit.items)?s.lit.items:[]};
   }
   // 배열이 아닌 값이 들어와도 안전하게 정규화 (데이터가 비었거나 깨진 경우)
   ["accounts","meetings","companies","jobs","projects","pages","uploads","segments","research","nextActions","topicTags","records"].forEach(k=>{
@@ -819,7 +822,7 @@ function refreshApiKeyStatus(){
 //     로그인한 사용자는 각자 키 없이 사용. (배포 안 되어 있으면 자동으로 ②로 넘어감)
 //  ② 개인 키 — 이 브라우저에 등록한 본인 키
 const AI_PROXY_NAMES=["claude-proxy","super-processor","quick-service","rapid-service"];   // 순서대로 시도
-async function callViaProxy(system,user,maxTokens){
+async function callViaProxy(system,user,maxTokens,opts){
   if(!authReady) throw new Error("Supabase 인증 초기화 안 됨");
   const {data:{session}}=await sb.auth.getSession();
   if(!session) throw new Error("로그인 필요 — 사이트에 로그인한 뒤 다시 시도");
@@ -834,7 +837,7 @@ async function callViaProxy(system,user,maxTokens){
           "Authorization":"Bearer "+SUPABASE_ANON_KEY,   // 관문 통과용 (프로젝트 공개키)
           "apikey":SUPABASE_ANON_KEY,
           "x-user-token":session.access_token},          // 로그인 확인용 — 함수 코드가 직접 검증
-        body:JSON.stringify({system,user,maxTokens:maxTokens||1000})});
+        body:JSON.stringify({system,user,maxTokens:maxTokens||1000,search:!!(opts&&opts.search)})});
       if(res.status===404){ fails.push(fn+": 미배포"); continue; }
       const d=await res.json().catch(()=>({}));
       if(!res.ok){ fails.push(fn+": "+res.status+(d.error?"("+d.error+")":"")); continue; }
@@ -844,6 +847,31 @@ async function callViaProxy(system,user,maxTokens){
     }catch(e){ fails.push(fn+": "+(e.message||"연결 실패")); }
   }
   throw new Error(fails.join(" · ")||"배포된 프록시 함수 없음");
+}
+// AI 출력 JSON 파서 — 코드펜스 제거, 앞뒤 잡음 제거, 토큰 한도로 잘린 경우 괄호·문자열을 닫아 복구
+function parseLooseJSON(txt){
+  txt=String(txt||"").replace(/```json|```/g,"").trim();
+  const tryP=s=>{ try{ return JSON.parse(s); }catch(_){ return undefined; } };
+  let r=tryP(txt); if(r!==undefined) return r;
+  const a=txt.search(/[\[{]/); if(a<0) throw new Error("JSON을 찾지 못했습니다");
+  txt=txt.slice(a);
+  r=tryP(txt); if(r!==undefined) return r;
+  // 스캔: 문자열 내부 여부와 괄호 깊이 추적
+  let inStr=false, escp=false, lastGood=-1; const stack=[];
+  for(let i=0;i<txt.length;i++){
+    const c=txt[i];
+    if(inStr){ if(escp)escp=false; else if(c==="\\")escp=true; else if(c==='"')inStr=false; continue; }
+    if(c==='"')inStr=true;
+    else if(c==='{'||c==='[')stack.push(c);
+    else if(c==='}'||c===']'){ stack.pop(); if(!stack.length) lastGood=i; }
+  }
+  if(lastGood>=0){ r=tryP(txt.slice(0,lastGood+1)); if(r!==undefined) return r; }
+  let fixed=txt;
+  if(inStr) fixed+='"';
+  fixed=fixed.replace(/,\s*("(?:[^"\\]|\\.)*"?\s*:?\s*)?$/,"");   // 끝의 잘린 항목 제거
+  for(let i=stack.length-1;i>=0;i--) fixed+=(stack[i]==='{'?'}':']');
+  r=tryP(fixed); if(r!==undefined) return r;
+  throw new Error("응답이 중간에 잘렸습니다 — 다시 시도해 주세요");
 }
 async function callClaude(system,user,maxTokens){
   // ① 공유 프록시
@@ -975,6 +1003,7 @@ function renderStage(tab){
   else if(tab==="today")st.innerHTML=todayHTML();
   else if(tab==="projects")st.innerHTML=projectsHTML();
   else if(tab==="schedule")st.innerHTML=scheduleHTML();
+  else if(tab==="lit")st.innerHTML=litHTML();
   else if((state.pages||[]).some(p=>p.id===tab))st.innerHTML=pageHTML(tab);
   else if(tab==="console")st.innerHTML=consoleHTML();
   else if(tab==="email")st.innerHTML=emailHTML();
@@ -985,6 +1014,7 @@ function renderStage(tab){
   if(tab==="today")bindToday();
   if(tab==="projects")bindProjects();
   if(tab==="schedule")bindSchedule();
+  if(tab==="lit")bindLit();
   if(tab==="console")bindConsole();
   if(tab==="email")bindEmail();
   refreshBadges();
@@ -1164,6 +1194,108 @@ function bindSchedule(){
   renderGoals(); renderDone();
   const ga=$("goalAdd"); if(ga)ga.onclick=()=>openGoalForm();
   const da=$("doneAdd"); if(da)da.onclick=openDoneForm;
+}
+
+// ==================== 문헌 리서치 (PubMed 등 — Claude 웹 검색 → 병원약학 정리 → 내보내기) ====================
+function litHTML(){
+  return `<div class="hero">
+   <div class="section-title">Literature · 문헌</div>
+   <h2 style="font-size:23px;color:var(--ink);margin-bottom:4px">문헌 리서치 — 병원약학 데이터 정리</h2>
+   <div class="mini" style="margin-bottom:14px">PubMed 등에서 Claude가 웹 검색으로 문헌을 찾아 병원약학 관점으로 한국어 정리합니다. 필요한 항목만 선택해 MD·CSV로 내보내 약사 사이트·연구 자료에 사용하세요.</div>
+   <div class="glass tile" style="margin-bottom:12px">
+     <div style="display:flex;gap:8px;flex-wrap:wrap">
+       <input id="litQ" placeholder="검색 주제 (예: elderly medication adherence QR code / 노인 복약순응)" value="${esc(state.lit.q||"")}" style="flex:1;min-width:240px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
+       <button class="b-deep" id="litGo">Claude로 검색</button>
+     </div>
+     <div class="mini" id="litMsg" style="margin-top:8px;line-height:1.5"></div>
+   </div>
+   <div id="litActs" style="display:none;margin-bottom:10px;display:none">
+     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+       <label class="mini" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="litAll" checked> 전체 선택</label>
+       <span style="flex:1"></span>
+       <button class="b-mint" id="litMD">MD 내보내기</button>
+       <button class="b-mint" id="litCSV">CSV 내보내기</button>
+       <button class="b-ghost" id="litCopy">본문 복사</button>
+     </div>
+   </div>
+   <div id="litList"></div>
+  </div>`;
+}
+let litBusy=false;
+function litSelected(){ 
+  const boxes=[...document.querySelectorAll("[data-litchk]")];
+  const idx=boxes.filter(b=>b.checked).map(b=>Number(b.dataset.litchk));
+  return (state.lit.items||[]).filter((_,i)=>idx.indexOf(i)>=0);
+}
+function renderLit(){
+  const box=$("litList"); if(!box)return;
+  const items=state.lit.items||[];
+  const acts=$("litActs"); if(acts)acts.style.display=items.length?"block":"none";
+  box.innerHTML=items.length?items.map((it,i)=>`
+    <div class="glass tile" style="margin-bottom:8px;display:flex;gap:10px;align-items:flex-start">
+      <input type="checkbox" data-litchk="${i}" checked style="margin-top:4px">
+      <div style="flex:1">
+        <div style="font-weight:800;color:var(--deep);font-size:13.5px;line-height:1.45">${esc(it.title||"")}</div>
+        <div class="mini" style="margin:2px 0">${esc([it.authors,it.year,it.source].filter(Boolean).join(" · "))}</div>
+        ${it.summary?`<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-top:3px">${esc(it.summary)}</div>`:""}
+        ${it.relevance?`<div class="mini" style="margin-top:4px;color:var(--deep)">병원약학 관련성: ${esc(it.relevance)}</div>`:""}
+      </div>
+      ${it.url?`<button class="b-ghost" style="padding:4px 10px;font-size:12px" onclick="window.open('${esc(it.url)}','_blank')">원문 ↗</button>`:""}
+    </div>`).join("")
+    :'<div class="mini">검색 결과가 여기에 표시됩니다.</div>';
+  const all=$("litAll"); if(all)all.onchange=()=>document.querySelectorAll("[data-litchk]").forEach(b=>b.checked=all.checked);
+}
+async function litSearch(){
+  if(litBusy)return;
+  const q=($("litQ").value||"").trim(); const msg=$("litMsg");
+  if(!q){ if(msg)msg.textContent="검색 주제를 입력하세요."; return; }
+  litBusy=true; const b=$("litGo"); if(b){b.disabled=true;b.textContent="검색 중… (10~40초)";}
+  if(msg){msg.textContent="Claude가 PubMed 등에서 문헌을 검색·정리하는 중입니다…"; msg.style.color="";}
+  try{
+    const sys="병원약학(hospital pharmacy) 문헌 리서치 담당. 웹 검색으로 PubMed·학술 출처의 실제 문헌을 찾아라. "+
+      "실존 문헌만, URL은 실제 접근 가능한 주소만(불확실하면 url 생략). 순수 JSON 배열만 출력(설명·코드펜스 금지), 최대 8건: "+
+      '[{"title":"원제","authors":"제1저자 등","year":"연도","source":"학술지/출처(예: PubMed, JMIR)","url":"","summary":"한국어 3~4문장 요약","relevance":"병원약학·약사 실무 관점 한 줄"}]';
+    let o=await callViaProxy(sys,"검색 주제: "+q,3200,{search:true});
+    const arr=parseLooseJSON(o);
+    state.lit={q,items:Array.isArray(arr)?arr.slice(0,10):[]};
+    scheduleSave(); renderLit();
+    if(msg){msg.textContent=state.lit.items.length+"건 정리됨 — 항목을 선택해 내보내세요. (출처 링크는 반드시 원문에서 재확인)";}
+  }catch(e){
+    if(msg){msg.textContent="검색 실패: "+(e.message||e)+" — 프록시가 웹 검색을 지원하도록 갱신되었는지(함수 재배포), [사전 준비]→[AI 연결 점검]을 확인하세요."; msg.style.color="#C24A4A";}
+  }finally{ litBusy=false; if(b){b.disabled=false;b.textContent="Claude로 검색";} }
+}
+function litToMD(items){
+  let md="# 문헌 정리 — "+(state.lit.q||"")+"\n생성: "+new Date().toLocaleString('ko-KR')+" · 도구: Claude 웹 검색 (출처는 원문 링크에서 재확인)\n\n";
+  items.forEach((it,i)=>{
+    md+="## "+(i+1)+". "+(it.title||"")+"\n";
+    md+="- 저자·연도·출처: "+[it.authors,it.year,it.source].filter(Boolean).join(" · ")+"\n";
+    if(it.url)md+="- 링크: "+it.url+"\n";
+    if(it.summary)md+="- 요약: "+it.summary+"\n";
+    if(it.relevance)md+="- 병원약학 관련성: "+it.relevance+"\n";
+    md+="\n";
+  });
+  return md;
+}
+function litToCSV(items){
+  const escC=v=>'"'+String(v||"").replace(/"/g,'""')+'"';
+  const rows=[["title","authors","year","source","url","summary_ko","relevance"].join(",")];
+  items.forEach(it=>rows.push([it.title,it.authors,it.year,it.source,it.url,it.summary,it.relevance].map(escC).join(",")));
+  return "\uFEFF"+rows.join("\n");   // BOM — 엑셀 한글 호환
+}
+function litDownload(name,mime,content){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([content],{type:mime}));
+  a.download=name; a.click();
+}
+function bindLit(){
+  if(!state.lit||typeof state.lit!=="object")state.lit={q:"",items:[]};
+  renderLit();
+  const g=$("litGo"); if(g)g.onclick=litSearch;
+  const qi=$("litQ"); if(qi)qi.addEventListener("keydown",e=>{if(e.key==='Enter')litSearch();});
+  const stamp=()=>new Date().toISOString().slice(0,10).replace(/-/g,"");
+  const md=$("litMD"); if(md)md.onclick=()=>{const s=litSelected(); if(!s.length){toast("선택된 항목이 없습니다");return;} litDownload("문헌정리_"+stamp()+".md","text/markdown",litToMD(s)); toast(s.length+"건 MD로 내보냈습니다");};
+  const cv=$("litCSV"); if(cv)cv.onclick=()=>{const s=litSelected(); if(!s.length){toast("선택된 항목이 없습니다");return;} litDownload("문헌정리_"+stamp()+".csv","text/csv",litToCSV(s)); toast(s.length+"건 CSV로 내보냈습니다");};
+  const cp=$("litCopy"); if(cp)cp.onclick=()=>{const s=litSelected(); if(!s.length){toast("선택된 항목이 없습니다");return;} navigator.clipboard&&navigator.clipboard.writeText(litToMD(s)); toast("복사했습니다");};
 }
 
 // ==================== RAIL ====================
@@ -1615,9 +1747,8 @@ async function aiSummarizeFile(storedName){
       toast("AI가 회의록을 정리하는 중…");
       const sys="회의 노트를 정리하는 담당자. 아래 노트를 읽고 JSON만 출력: "+
         '{"summary":"3~4문장 요약","tags":["핵심 키워드"],"actions":["다음 액션"]}';
-      let o=await callClaude(sys, text.slice(0,12000), 1500);
-      o=o.replace(/```json|```/g,"").trim();
-      const r=JSON.parse(o);
+      let o=await callClaude(sys, text.slice(0,12000), 2200);
+      const r=parseLooseJSON(o);
       m.summary=r.summary||""; m.tags=r.tags||[]; m.actions=r.actions||[];
       await saveNow(); aiOK=true;
     }catch(e){ console.warn("AI 요약 실패(원문은 저장됨):",e.message); }
@@ -2843,9 +2974,8 @@ async function guessSpeakers(){
     const sys="회의 화자 추정 담당. 발언 내용(말투·자기지칭·전문영역·호칭·문답 흐름)만으로 각 발언의 화자를 참석자 명단에서 고른다. "+
       "명단에 없는 이름 금지. 확신이 없으면 그 발언은 결과에서 제외. 순수 JSON 배열만 출력: [{\"i\":번호,\"who\":\"이름\"}]";
     const user="참석자 명단: "+names.join(", ")+"\n\n발언 목록(#번호 [현재 표시] 내용):\n"+tr;
-    let o=await callViaProxy(sys,user,800);
-    o=String(o||"").replace(/```json|```/g,"").trim();
-    const arr=JSON.parse(o);
+    let o=await callViaProxy(sys,user,1200);
+    const arr=parseLooseJSON(o);
     let n=0;
     (Array.isArray(arr)?arr:[]).forEach(g=>{
       const s=state.segments[g.i];
@@ -3005,8 +3135,8 @@ async function syncNotes(silent){
       +(manual?("회의 노트(수기):\n"+manual.slice(0,12000)+"\n\n"):"")
       +(ldParas?("실시간 회의록(문단 정리):\n"+ldParas.slice(0,8000)+"\n\n"):"")
       +(tr?("녹취:\n"+tr):"");
-    let o=await callClaude(sys,body,1400);
-    o=o.replace(/```json|```/g,"").trim();const j=JSON.parse(o);
+    let o=await callClaude(sys,body,3200);
+    const j=parseLooseJSON(o);
     state.notes={summary:j.summary,agenda:j.agenda||[],ideas:j.ideas||[],research:j.research||[],decisions:j.decisions||[],actions:j.actions||[],followups:j.followups||[]};
     state.topicTags=j.tags||[];state.nextActions=j.nextActions||[];
     // AI auto-edit meeting title/purpose
