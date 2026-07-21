@@ -519,6 +519,7 @@ body{letter-spacing:-0.015em;}
       <div><div class="gate-title">캠퍼스타운 허브</div><div class="gate-sub">CampusTown Hub · 회의 협업 플랫폼</div></div>
     </div>
     <div id="authArea"></div>
+    <div style="text-align:center;margin-top:14px"><button onclick="openInviteeGuide()" style="background:rgba(255,255,255,.1);color:#CFEEEA;border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">초대자 가이드 — 가입·앱 등록·업데이트 안내</button></div>
     <div class="gate-hint">숙명 스타트업 캠퍼스 입점기업·거래처·기관·교수·학생을 위해 작성된 회의 운영 사이트입니다.<br><span style="opacity:.7">© 2026 MedIT. All rights reserved.</span></div>
   </div>
 </div>
@@ -528,6 +529,7 @@ body{letter-spacing:-0.015em;}
     <div class="ct-logo"><span class="ct-mark">CT</span><div><div class="name">캠퍼스타운 허브</div><div class="sub">CampusTown Hub · 회의 협업 플랫폼</div></div></div>
   </div>
   <div class="hspace"></div>
+  <button id="guideBtn" onclick="openInviteeGuide()" style="background:rgba(255,255,255,.12);color:#DFF7F4;border:1px solid rgba(255,255,255,.25);border-radius:9px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">초대자 가이드</button>
   <div class="pill idle" id="pill"><span class="led"></span><span id="pillText">회의 대기</span></div>
   <span class="clock" id="clock"></span>
   <div class="hdr-user" id="hdrUser" style="display:none">
@@ -588,6 +590,7 @@ const state={
   uploads:[],
   tabNotes:{deck:[],app:[],registry:[],console:[]},
   segments:[], notes:null, research:[], nextActions:[], topicTags:[],
+  liveDoc:{paras:[],cursor:0},   // 실시간 회의록: 확정 문단 + 다음에 정리할 발언 위치
   deckIdx:0, records:[], meetingStart:null,
 };
 // 기본 데이터 시드 (최초 1회)
@@ -727,7 +730,7 @@ async function saveSession(){await store.set("medit:hub1",{
   accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,currentMeetingId:state.currentMeetingId,
   uploads:state.uploads.map(u=>({name:u.name,type:u.type,size:u.size,text:u.text})),
   tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
-  nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart});}
+  nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,meeting:state.meeting,liveDoc:state.liveDoc});}
 async function saveRecords(){await store.set("medit:records2",state.records);}
 // 로그인 세션은 이 브라우저에만 저장 (클라우드 공유 X — 남의 기기에 로그인이 옮겨가면 안 됨)
 async function saveUser(){
@@ -751,6 +754,8 @@ async function loadAll(){
       currentMeetingId:s.currentMeetingId||null,uploads:s.uploads||[],
       tabNotes:s.tabNotes||state.tabNotes,segments:s.segments||[],notes:s.notes||null,research:s.research||[],
       nextActions:s.nextActions||[],topicTags:s.topicTags||[],meetingStart:s.meetingStart||null});
+    if(s.meeting&&typeof s.meeting==="object")Object.assign(state.meeting,s.meeting);
+    if(s.liveDoc&&typeof s.liveDoc==="object")state.liveDoc={paras:Array.isArray(s.liveDoc.paras)?s.liveDoc.paras:[],cursor:Number(s.liveDoc.cursor)||0};
   }
   // 배열이 아닌 값이 들어와도 안전하게 정규화 (데이터가 비었거나 깨진 경우)
   ["accounts","meetings","companies","jobs","projects","pages","uploads","segments","research","nextActions","topicTags","records"].forEach(k=>{
@@ -788,7 +793,7 @@ function refreshApiKeyStatus(){
 //  ① 공유 프록시 — Supabase Edge Function "claude-proxy". 운영자의 키를 서버에 두고,
 //     로그인한 사용자는 각자 키 없이 사용. (배포 안 되어 있으면 자동으로 ②로 넘어감)
 //  ② 개인 키 — 이 브라우저에 등록한 본인 키
-const AI_PROXY_NAMES=["claude-proxy","quick-service","rapid-service"];   // 순서대로 시도
+const AI_PROXY_NAMES=["claude-proxy","super-processor","quick-service","rapid-service"];   // 순서대로 시도
 async function callViaProxy(system,user,maxTokens){
   if(!authReady) throw new Error("Supabase 인증 초기화 안 됨");
   const {data:{session}}=await sb.auth.getSession();
@@ -834,6 +839,96 @@ async function callClaude(system,user,maxTokens){
   if(!res.ok)throw new Error("API "+res.status);
   const d=await res.json();return d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");
 }
+// AI 연결 점검 — 어느 경로(공유 프록시/개인 키)가 살아있는지 화면에 보여줌
+async function testAI(){
+  const el=$("aiTestMsg"); if(el){el.textContent="점검 중… (수 초)"; el.style.color="";}
+  // ① 공유 프록시
+  try{
+    const r=await callViaProxy("한 단어로만 답하세요.","확인",16);
+    if(el){el.textContent="✔ 공유 프록시 정상 — 로그인만으로 AI 반영·AI 정리를 쓸 수 있습니다."; el.style.color="var(--deep)";}
+    return;
+  }catch(e){
+    var why=e.message||String(e);
+  }
+  // ② 개인 키
+  const k=getApiKey();
+  if(k){
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:16,messages:[{role:"user",content:"확인"}]})});
+      if(res.ok){ if(el){el.textContent="공유 프록시 사용 불가("+why+") — ✔ 등록된 개인 키로는 AI를 쓸 수 있습니다."; el.style.color="var(--deep)";} return; }
+      if(el){el.textContent="공유 프록시 사용 불가("+why+") · 개인 키도 오류("+res.status+") — 새 키를 등록해 주세요."; el.style.color="#C24A4A";}
+      return;
+    }catch(e2){}
+  }
+  if(el){el.textContent="✖ AI 사용 불가 — 공유 프록시: "+why+" · 운영자는 Supabase Edge Function(claude-proxy)에 새 Anthropic 키를 넣어 재배포해 주세요. 또는 [키 등록·교체]로 개인 키를 등록하면 바로 사용할 수 있습니다."; el.style.color="#C24A4A";}
+}
+window.testAI=testAI;
+
+// ==================== 초대자 가이드 ====================
+const INVITEE_GUIDE_TEXT=[
+"[캠퍼스타운 허브] 초대자 안내",
+"",
+"1) 최신 버전 받기 (사이트 수정사항 반영)",
+"   화면이 예전 그대로라면 강력 새로고침을 해주세요.",
+"   · PC(Chrome·Edge): Ctrl+Shift+R (Mac: Cmd+Shift+R)",
+"   · 휴대폰: 브라우저 설정 → 인터넷 사용 기록 → 캐시 삭제 후 재접속",
+"",
+"2) 로그인 (Google 전용 · 회원가입 없음)",
+"   · 숙명 구성원: @sookmyung.ac.kr 구글 계정으로 로그인",
+"   · 거래처·기관: 초대받은 이메일의 구글 계정으로 로그인",
+"     (개최자가 참석자로 등록한 이메일만 허용됩니다 — 초대 이메일과 로그인 계정이 같아야 합니다)",
+"   · 네이버·다음 등 구글이 아닌 이메일로 초대받은 경우:",
+"     [초대 이메일로 인증코드 로그인]을 누르고 그 주소로 받은 6자리 코드를 입력하면 됩니다.",
+"     (원하시면 accounts.google.com에서 그 이메일 그대로 구글 계정을 만들어 Google 버튼을 써도 됩니다)",
+"",
+"3) 약사 참여 등록 (앱·연구 등록)",
+"   지역사회·전국 약사·제약사·의사 참여 등록: registry.html 페이지에서 등록해 주세요.",
+"",
+"4) 회의 참여 방법",
+"   · 회의 목록에서 초대된 회의를 선택합니다.",
+"   · [사전 준비] 탭에서 자료를 [바로보기]로 확인합니다 (PPT는 사이트 안에서, txt·md는 미리보기 창으로 열립니다).",
+"   · [진행 콘솔] 탭에서 타이핑 메모와 음성 녹취(권한 허용 시)가 가능합니다.",
+"",
+"5) AI 기능",
+"   로그인만 하면 공유 AI(운영자 프록시)를 쓸 수 있습니다.",
+"   동작하지 않으면 [사전 준비] 탭의 [AI 연결 점검]을 눌러 상태를 확인해 주세요.",
+"",
+"6) 문의",
+"   서면(이메일)으로 진행 가능합니다: hyunjeong.shin@sookmyung.ac.kr",
+"",
+"바쁘신 중, 감사드립니다 —신현정 드림"].join("\n");
+function openInviteeGuide(){
+  let modal=$("guideModal");
+  if(!modal){
+    modal=document.createElement("div"); modal.id="guideModal";
+    modal.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:20px";
+    const row=(num,title,body)=>`<div style="display:flex;gap:10px;margin-bottom:13px"><span style="flex:none;width:22px;height:22px;border-radius:50%;background:var(--mint);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">${num}</span><div><div style="font-weight:800;color:var(--deep);font-size:13.5px;margin-bottom:2px">${title}</div><div class="mini" style="line-height:1.65">${body}</div></div></div>`;
+    modal.innerHTML=`
+    <div style="background:#fff;border-radius:16px;max-width:min(620px,96vw);width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
+        <div style="flex:1;font-weight:800;color:var(--deep);font-size:15px">초대자 가이드 — 가입·앱 등록·업데이트 안내</div>
+        <button class="b-ghost" id="guideCopy">안내문 복사</button>
+        <button class="b-deep" id="guideClose">닫기</button>
+      </div>
+      <div style="overflow:auto;padding:16px 18px">
+        ${row(1,"최신 버전 받기 (사이트 수정사항 반영)","사이트가 예전 화면 그대로라면 강력 새로고침을 해주세요.<br>· PC(Chrome·Edge): <b>Ctrl+Shift+R</b> (Mac: Cmd+Shift+R)<br>· 휴대폰: 브라우저 설정 → 인터넷 사용 기록 → 캐시 삭제 후 재접속")}
+        ${row(2,"로그인 (Google 전용 · 회원가입 없음)","· 숙명 구성원: <b>@sookmyung.ac.kr</b> 구글 계정으로 로그인<br>· 거래처·기관: <b>초대받은 이메일의 구글 계정</b>으로 로그인 (개최자가 참석자로 등록한 이메일만 허용 — 초대 이메일과 로그인 계정이 같아야 합니다)<br>· 네이버·다음 등 구글이 아닌 이메일로 초대받은 경우: <b>[초대 이메일로 인증코드 로그인]</b>을 누르고 그 주소로 받은 6자리 코드를 입력하면 됩니다.")}
+        ${row(3,"약사 참여 등록 (앱·연구 등록)","지역사회·전국 약사·제약사·의사 참여 등록 페이지에서 등록해 주세요. <a href='registry.html' target='_blank' style='color:var(--mint);font-weight:700'>등록 페이지 열기 →</a>")}
+        ${row(4,"회의 참여 방법","회의 목록에서 초대된 회의를 선택합니다. [사전 준비] 탭에서 자료를 [바로보기]로 확인하고(PPT는 사이트 안에서, txt·md는 미리보기 창으로), [진행 콘솔] 탭에서 타이핑 메모와 음성 녹취(권한 허용 시)가 가능합니다. 녹취가 안 되는 환경에서는 입력칸에서 휴대폰 키보드의 마이크(받아쓰기)를 쓰거나, 녹음 앱 전사본(txt)을 수기 회의록에 첨부해 [AI 정리]하면 됩니다.")}
+        ${row(5,"AI 기능","로그인만 하면 공유 AI(운영자 프록시)를 쓸 수 있습니다. 동작하지 않으면 [사전 준비] 탭의 <b>[AI 연결 점검]</b>으로 상태를 확인해 주세요.")}
+        ${row(6,"문의","서면(이메일)으로 진행 가능합니다: <b>hyunjeong.shin@sookmyung.ac.kr</b>")}
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    $("guideClose").onclick=()=>{modal.style.display="none";};
+    modal.onclick=e=>{if(e.target===modal)modal.style.display="none";};
+    $("guideCopy").onclick=()=>{ if(navigator.clipboard){navigator.clipboard.writeText(INVITEE_GUIDE_TEXT);toast("안내문을 복사했습니다 — 초대 메일에 붙여넣어 보내세요");} };
+  }
+  modal.style.display="flex";
+}
+window.openInviteeGuide=openInviteeGuide;
 
 // ==================== TABS ====================
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
@@ -908,8 +1003,8 @@ function homeHTML(){
      <h1 id="coverTitle">${esc(m.title)}</h1>
      <div class="meta">
        <div>목적 <b id="coverPurpose">${esc(m.purpose)}</b></div>
-       <div>시작 <b>${fmtTime(m.started)}</b></div>
-       <div><b>${dur}분</b></div>
+       <div>일시 <b id="coverWhen" style="cursor:pointer;border-bottom:1px dashed rgba(255,255,255,.5)" title="클릭해 회의 일시 수정">${fmtTime(m.when||m.started)}</b></div>
+       <div><b>${(dur>0&&dur<=720)?dur+"분":"—"}</b></div>
        <div>참석 <b>${state.attendees.length}명</b></div>
      </div>
    </div>
@@ -976,6 +1071,18 @@ function homeHTML(){
   </div>`;
 }
 function bindHome(){
+  const cw=$("coverWhen");
+  if(cw)cw.onclick=()=>{
+    const cur=state.meeting.when?new Date(state.meeting.when):null;
+    const def=cur?cur.getFullYear()+"-"+String(cur.getMonth()+1).padStart(2,"0")+"-"+String(cur.getDate()).padStart(2,"0")+" "+String(cur.getHours()).padStart(2,"0")+":"+String(cur.getMinutes()).padStart(2,"0"):"2026-07-10 10:00";
+    const v=prompt("회의 일시 입력 (예: 2026-07-10 10:00)",def);
+    if(v===null)return;
+    const t=new Date(v.trim().replace(" ","T"));
+    if(isNaN(t.getTime())){toast("형식이 올바르지 않습니다 — 예: 2026-07-10 10:00");return;}
+    state.meeting.when=t.getTime(); scheduleSave();
+    cw.textContent=fmtTime(state.meeting.when);
+    toast("회의 일시를 설정했습니다 — 회의록·기록에 이 일시가 사용됩니다");
+  };
   const sb=$("startMeetingBtn");if(sb)sb.onclick=startMeeting;
   const eb=$("endMeetingBtn");if(eb)eb.onclick=endMeeting;
   // 첫 페이지 슬라이드 컨트롤
@@ -1129,10 +1236,60 @@ async function viewFile(name){
       const sz=(FILE_SIZES&&FILE_SIZES[name])||0;
       if(sz>10*1048576){ toast("10MB가 넘는 문서는 뷰어가 열지 못합니다 — 다운로드하거나 PDF로 변환해 올려 주세요"); return; }
       window.open("https://view.officeapps.live.com/op/view.aspx?src="+encodeURIComponent(url),"_blank");
+    } else if(/^(txt|md|markdown|csv|json|srt|vtt|log)$/.test(ext)){
+      openTextViewer(name);        // .md 등은 브라우저가 내려받기만 하므로 앱 안에서 표시
     } else {
-      window.open(url,"_blank");   // PDF·이미지·텍스트는 브라우저가 바로 열어줌
+      window.open(url,"_blank");   // PDF·이미지는 브라우저가 바로 열어줌
     }
   }catch(e){ toast("열기 실패: "+e.message); }
+}
+// ---------- 앱 내 텍스트·MD 미리보기 ----------
+function mdToHtml(text){
+  // 간단 표시용 — 제목·목록만 가볍게 꾸미고 나머지는 원문 그대로 (esc 후 처리라 안전)
+  return esc(text).split("\n").map(line=>{
+    const m=line.match(/^(#{1,4})\s+(.*)$/);
+    if(m) return '<div style="font-weight:800;color:var(--deep);font-size:'+(16-m[1].length)+'px;margin:10px 0 4px">'+m[2]+'</div>';
+    if(/^(-|\*|·)\s+/.test(line)) return '<div style="padding-left:14px">· '+line.replace(/^(-|\*|·)\s+/,"")+'</div>';
+    return line?('<div>'+line+'</div>'):'<div style="height:8px"></div>';
+  }).join("");
+}
+async function openTextViewer(storedName){
+  if(!sb){ toast("클라우드에 연결되지 않았습니다"); return; }
+  toast("파일을 여는 중…");
+  try{
+    const {data,error}=await sb.storage.from(BUCKET).download(storedName);
+    if(error) throw error;
+    let text=(await data.text()).replace(/^\uFEFF/,"");
+    let modal=$("txtModal");
+    if(!modal){
+      modal=document.createElement("div"); modal.id="txtModal";
+      modal.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:20px";
+      modal.innerHTML=`
+      <div style="background:#fff;border-radius:16px;max-width:min(860px,96vw);width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+        <div style="display:flex;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)">
+          <div id="txtTitle" style="flex:1;font-weight:800;color:var(--deep);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+          <button class="b-mint" id="txtAI" style="display:none">AI 정리</button>
+          <button class="b-ghost" id="txtDl">다운로드</button>
+          <button class="b-deep" id="txtClose">닫기</button>
+        </div>
+        <div id="txtBody" style="overflow:auto;background:#fff;padding:16px 20px;font-size:13px;line-height:1.75;color:var(--ink)"></div>
+      </div>`;
+      document.body.appendChild(modal);
+      $("txtClose").onclick=()=>{modal.style.display="none";};
+      modal.onclick=e=>{if(e.target===modal)modal.style.display="none";};
+    }
+    $("txtTitle").textContent=prettyName(storedName);
+    $("txtBody").innerHTML=text.trim()?mdToHtml(text):'<div class="mini">파일이 비어 있습니다.</div>';
+    $("txtDl").onclick=()=>downloadFile(storedName);
+    const ai=$("txtAI");
+    if(ai){
+      const can=isTextFile(prettyName(storedName))&&(typeof canEditMeeting==="function")&&canEditMeeting();
+      ai.style.display=can?"":"none";
+      ai.onclick=()=>{modal.style.display="none";aiSummarizeFile(storedName);};
+    }
+    modal.style.display="flex";
+    $("txtBody").scrollTop=0;
+  }catch(e){ toast("미리보기 실패: "+e.message); }
 }
 // ---------- 앱 내 PPT 뷰어 (PPTXjs — 브라우저에서 직접 렌더링, 그림 포함) ----------
 let pptLibsReady=false;
@@ -1318,8 +1475,10 @@ function prepHTML(){
      <div style="flex:1;min-width:220px">
        <h4 style="margin-bottom:3px">AI 키 (선택)</h4>
        <div class="mini" id="apiKeyStatus">공유 프록시(운영자 키)가 배포되어 있으면 로그인만으로 AI를 쓸 수 있습니다. 없으면 개인 키를 등록하세요 — 키는 이 브라우저에만 저장됩니다. 키 없이도 노트 저장·미리보기는 작동합니다.</div>
+       <div class="mini" id="aiTestMsg" style="margin-top:5px"></div>
      </div>
-     <div style="display:flex;gap:6px">
+     <div style="display:flex;gap:6px;flex-wrap:wrap">
+       <button class="b-deep" onclick="testAI()">AI 연결 점검</button>
        <button class="b-mint" onclick="promptApiKey()">키 등록·교체</button>
        <button class="b-ghost" onclick="setApiKey('');refreshApiKeyStatus()">삭제</button>
      </div>
@@ -1327,6 +1486,7 @@ function prepHTML(){
 
    <div class="glass tile" style="margin-bottom:14px">
      <h4>참석자 등록 (이메일)</h4>
+     <div class="mini" style="margin-bottom:8px;line-height:1.55">여기에 등록된 이메일이 로그인 허용 명단이 됩니다. 거래처·기관 등 외부 참석자는 <b>구글 로그인에 쓰는 이메일과 동일하게</b> 등록해 주세요.</div>
      <div class="grid" style="grid-template-columns:1fr 1.4fr auto;gap:8px;margin-bottom:10px">
        <input id="atName" placeholder="이름 (예: 방준석 교수님)" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
        <input id="atEmail" placeholder="이메일" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
@@ -1397,9 +1557,13 @@ function buildInvite(names){
 `■ 장소: ${m.place||""}\n\n`+
 `■ 회의 운영 사이트 (자료·회의록)\n${site}\n\n`+
 `■ 접속 방법\n`+
-`1. 위 주소로 들어가 "회원가입"을 누르세요\n`+
-`2. 본인 이메일과 비밀번호로 가입하세요\n`+
-`   (초대된 이메일로만 가입할 수 있습니다)\n`+
+`1. 위 주소로 들어가세요\n`+
+`2. [Google 계정으로 로그인]을 누르세요 (별도 회원가입 없음)\n`+
+`   · 숙명 구성원: @sookmyung.ac.kr 구글 계정\n`+
+`   · 거래처·기관(구글 계정): 이 초대를 받으신 이메일의 구글 계정\n`+
+`   · 네이버·다음 등 그 외 이메일: [초대 이메일로 인증코드 로그인] 선택 후\n`+
+`     이 주소로 받은 6자리 코드를 입력\n`+
+`   ※ 초대받은 이메일과 로그인 주소가 같아야 합니다\n`+
 `3. 로그인하시면 이 회의가 목록에 표시됩니다\n\n`+
 `■ 부탁드리는 것\n`+
 `회의 전에 사이트에 올린 자료를 한 번 읽어봐 주시면 감사하겠습니다.\n\n`+
@@ -1868,7 +2032,7 @@ function projectsHTML(){
    <div class="mini" style="margin-bottom:16px">회의를 진행하며 나온 제안과 만들어진 결과물입니다. 새 아이디어가 나오면 여기에 추가하세요.</div>
    <div id="projForm" style="display:none;margin-bottom:14px"></div>
    <div id="projGrid"></div>
-   ${canEdit?'<button class="b-deep" id="projAdd" style="margin-top:14px">+ 프로젝트 추가</button>':''}
+   ${canEdit?'<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="b-deep" id="projAdd">+ 프로젝트 추가</button><button class="b-mint" onclick="openAddAppSite()">+ 앱·사이트 추가</button></div>':''}
   </div>`;
 }
 
@@ -1882,12 +2046,17 @@ function guessPage(title){
 function autoLinkProjects(){
   let changed=false;
   (state.projects||[]).forEach(p=>{
-    if(p.url) return;
-    if(/약사|등록|registry/i.test(p.title)){ p.url="registry.html"; changed=true; }
-    else if(/복약|접종|MediNote/i.test(p.title)){ p.url="MediNote_app.html"; changed=true; }
+    if(!p.url){
+      if(/약사|등록|registry/i.test(p.title)){ p.url="registry.html"; changed=true; }
+      else if(/복약|접종|MediNote/i.test(p.title)){ p.url="MediNote_app.html"; changed=true; }
+    }
+    // 복약·접종 앱은 앱 본편 + 데모 2개를 함께 연결 (없을 때만 자동 채움)
+    if(!p.url2 && /복약|접종|MediNote/i.test(p.title) && p.url==="MediNote_app.html"){ p.url2="demo.html"; changed=true; }
   });
   if(changed) saveNow();
 }
+// 항상 최신 내용을 불러오도록 캐시 우회 주소 생성 — 파일이 수정되면 카드에서도 그 내용으로 표시됨
+function fresh(url){ return url + (url.indexOf("?")>=0?"&":"?") + "v=" + Date.now(); }
 
 function renderProjects(){
   autoLinkProjects();
@@ -1914,7 +2083,9 @@ function renderProjects(){
       <div class="p-desc">${esc(p.desc||"")}</div>
       ${(p.tags&&p.tags.length)?`<div class="p-tags">${p.tags.map(t=>`<span>${esc(t)}</span>`).join("")}</div>`:""}
       <div class="p-acts">
-        ${p.url?`<button class="b-mint" data-open="${p.id}">열어보기</button>`:""}
+        ${p.url?`<button class="b-mint" data-open="${p.id}">${p.url2?"① "+esc(shortName(p.url)):"열어보기"}</button>`:""}
+        ${p.url2?`<button class="b-mint" data-open2="${p.id}">② ${esc(shortName(p.url2))}</button>`:""}
+        ${(p.url&&p.url2)?`<button class="b-deep" data-openboth="${p.id}">나란히 보기</button>`:""}
         ${p.detail?`<button class="${p.url?'b-ghost':'b-mint'}" data-detail="${p.id}">내용 보기</button>`:""}
         ${(!p.url&&!p.detail&&guessPage(p.title))?`<button class="b-mint" data-openurl="${esc(guessPage(p.title))}">열어보기</button>`:""}
         ${(!p.url&&!p.detail&&!guessPage(p.title))?`<span class="mini" style="align-self:center">아직 만들어지지 않았습니다</span>`:""}
@@ -1924,6 +2095,8 @@ function renderProjects(){
     </div>`).join("")+'</div><div id="projView"></div>';
 
   box.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openProject(b.dataset.open));
+  box.querySelectorAll("[data-open2]").forEach(b=>b.onclick=()=>openProject(b.dataset.open2,2));
+  box.querySelectorAll("[data-openboth]").forEach(b=>b.onclick=()=>openProjectBoth(b.dataset.openboth));
   box.querySelectorAll("[data-openurl]").forEach(b=>b.onclick=()=>{
     const url=b.dataset.openurl;
     const v=$("projView"); if(!v) return;
@@ -1958,21 +2131,60 @@ function showDetail(kind){
     v.scrollIntoView({behavior:"smooth",block:"nearest"});
   }
 }
-function openProject(id){
-  const p=(state.projects||[]).find(x=>x.id===id); if(!p||!p.url) return;
+function shortName(url){
+  const u=String(url||"").split("?")[0];
+  if(/demo/i.test(u)) return "데모";
+  if(/MediNote/i.test(u)) return "앱";
+  if(/registry/i.test(u)) return "등록";
+  return u.replace(/\.html?$/i,"");
+}
+function openProject(id,which){
+  const p=(state.projects||[]).find(x=>x.id===id); if(!p) return;
+  const url=which===2?p.url2:p.url; if(!url) return;
   const v=$("projView"); if(!v) return;
   v.innerHTML=`<div class="glass tile" style="margin-top:14px;padding:0;overflow:hidden">
     <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
-      <b>${esc(p.title)}</b>
+      <b>${esc(p.title)} — ${esc(shortName(url))}</b>
       <div style="display:flex;gap:7px">
+        <button class="b-ghost" id="pvRe">새로고침</button>
         <button class="b-ghost" id="pvNew">새 탭에서 열기</button>
         <button class="b-ghost" id="pvClose">닫기</button>
       </div>
     </div>
-    <iframe src="${esc(p.url)}" style="width:100%;height:640px;border:0;display:block"></iframe>
+    <iframe id="pvFrame" src="${esc(fresh(url))}" style="width:100%;height:640px;border:0;display:block"></iframe>
   </div>`;
   $("pvClose").onclick=()=>{v.innerHTML="";};
-  $("pvNew").onclick=()=>window.open(p.url,"_blank");
+  $("pvNew").onclick=()=>window.open(fresh(url),"_blank");
+  $("pvRe").onclick=()=>{const f=$("pvFrame");if(f)f.src=fresh(url);};
+  v.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+// 두 페이지를 나란히 표시 — 파일이 수정되면 캐시 우회로 항상 최신 내용이 뜸
+function openProjectBoth(id){
+  const p=(state.projects||[]).find(x=>x.id===id); if(!p||!p.url||!p.url2) return;
+  const v=$("projView"); if(!v) return;
+  const pane=(url,label,fid)=>`<div style="flex:1;min-width:320px;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 13px;border-bottom:1px solid var(--line);background:var(--mist)">
+        <b style="font-size:13px">${esc(label)}</b>
+        <button class="b-ghost" data-newtab="${esc(url)}" style="padding:4px 9px;font-size:12px">새 탭</button>
+      </div>
+      <iframe id="${fid}" src="${esc(fresh(url))}" style="width:100%;height:600px;border:0;display:block"></iframe>
+    </div>`;
+  v.innerHTML=`<div class="glass tile" style="margin-top:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <b>${esc(p.title)} — 나란히 보기</b>
+      <div style="display:flex;gap:7px">
+        <button class="b-ghost" id="pvbRe">둘 다 새로고침</button>
+        <button class="b-ghost" id="pvbClose">닫기</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      ${pane(p.url,"① "+shortName(p.url),"pvbF1")}
+      ${pane(p.url2,"② "+shortName(p.url2),"pvbF2")}
+    </div>
+  </div>`;
+  $("pvbClose").onclick=()=>{v.innerHTML="";};
+  $("pvbRe").onclick=()=>{const a=$("pvbF1"),b=$("pvbF2");if(a)a.src=fresh(p.url);if(b)b.src=fresh(p.url2);};
+  v.querySelectorAll("[data-newtab]").forEach(b=>b.onclick=()=>window.open(fresh(b.dataset.newtab),"_blank"));
   v.scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 
@@ -2002,17 +2214,20 @@ function openProjectForm(id){
         <textarea id="pf_desc" placeholder="이 프로젝트가 무엇인지 한두 문장으로">${p?esc(p.desc||""):''}</textarea>
       </div>
       <div class="pf-row">
-        <div><label>연결할 페이지 <span style="font-weight:500">(선택)</span></label>
-          <input id="pf_url" list="pf_urls" placeholder="예: registry.html" value="${p?esc(p.url||""):''}">
+        <div><label>연결할 페이지 ① <span style="font-weight:500">(선택)</span></label>
+          <input id="pf_url" list="pf_urls" placeholder="예: MediNote_app.html" value="${p?esc(p.url||""):''}">
           <datalist id="pf_urls">
             <option value="registry.html">약사 참여 등록 사이트</option>
             <option value="MediNote_app.html">복약·접종 앱 (MediNote)</option>
+            <option value="demo.html">복약·접종 앱 데모</option>
             <option value="selftest.html">자가진단</option>
           </datalist>
         </div>
-        <div><label>태그 <span style="font-weight:500">(쉼표로 구분)</span></label>
-          <input id="pf_tags" placeholder="예: 모바일, 복약" value="${p&&p.tags?esc(p.tags.join(", ")):''}"></div>
+        <div><label>연결할 페이지 ② <span style="font-weight:500">(선택 — 2개면 나란히 보기 가능)</span></label>
+          <input id="pf_url2" list="pf_urls" placeholder="예: demo.html" value="${p?esc(p.url2||""):''}"></div>
       </div>
+      <div class="pf-fld"><label>태그 <span style="font-weight:500">(쉼표로 구분)</span></label>
+        <input id="pf_tags" placeholder="예: 모바일, 복약" value="${p&&p.tags?esc(p.tags.join(", ")):''}"></div>
       <div class="pf-acts">
         <button class="b-mint" id="pfSave">${id?"저장":"추가"}</button>
         ${id?`<button class="b-ghost" id="pfDelete">삭제</button>`:""}
@@ -2034,16 +2249,17 @@ function saveProjectForm(){
   const desc=($("pf_desc").value||"").trim();
   const status=$("pf_status").value;
   const url=($("pf_url").value||"").trim();
+  const url2=($("pf_url2")&&$("pf_url2").value||"").trim();
   const tags=($("pf_tags").value||"").split(",").map(t=>t.trim()).filter(Boolean);
   const msg=$("pfMsg");
   if(!title){ msg.innerHTML='<span style="color:#C0492A">제목을 입력하세요.</span>'; return; }
   if(editingId){
     const p=(state.projects||[]).find(x=>x.id===editingId);
-    if(p) Object.assign(p,{title,desc,status,url,tags});
+    if(p) Object.assign(p,{title,desc,status,url,url2,tags});
     toast("수정되었습니다");
   } else {
     state.projects=state.projects||[];
-    state.projects.push({id:"p_"+Date.now(),title,desc,status,url,tags,meeting:state.currentMeetingId});
+    state.projects.push({id:"p_"+Date.now(),title,desc,status,url,url2,tags,meeting:state.currentMeetingId});
     toast("프로젝트가 추가되었습니다");
   }
   scheduleSave(); closeProjectForm(); renderProjects();
@@ -2205,19 +2421,26 @@ function consoleHTML(){
    <div class="glass cpanel">
      <h3>실시간 녹취 <span class="tag" id="segCount">${state.segments.length}</span></h3>
      <div class="privacy-note">음성은 저장되지 않고 텍스트로만 변환됩니다. 회의 종료 시 녹취 원문은 자동 파기되고, 회의록과 정리된 스크립트만 남습니다.</div>
+     <div class="mini" style="padding:6px 14px 0;line-height:1.55">녹취가 안 될 때: ① 아래 입력칸에서 휴대폰 키보드의 마이크(받아쓰기) 사용 ② 타이핑 메모 ③ 녹음 앱 전사본(txt·md)을 수기 회의록 [파일 첨부] 후 [AI 정리]. 크롬 브라우저 로그인은 필요 없습니다.</div>
      <div class="cscroll" id="transcript"></div>
      <div class="crow">
        <button class="b-mint" id="micBtn">녹취 시작</button>
+       <select id="micWho" title="마이크 입력의 발화자 — 음성인식은 목소리로 사람을 구분하지 못하므로 여기서 지정합니다" style="padding:7px 9px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px;color:var(--ink);background:#fff;max-width:130px"></select>
+       <span class="mini" id="langChip" title="발언 언어를 자동으로 감지해 인식 언어를 전환하고, 외국어는 한국어로 번역해 회의록에 등록합니다" style="border:1px solid var(--line);border-radius:9px;padding:6px 10px;background:var(--mist);white-space:nowrap">언어 자동 감지·번역</span>
        <button class="b-ghost" id="clearBtn">지우기</button>
-       <span class="mini" id="micHint">브라우저 음성인식(한국어)</span>
+       <span class="mini" id="micHint">브라우저 음성인식</span>
      </div>
+     <div class="mini" style="padding:0 14px 6px;line-height:1.55">※ 음성인식은 목소리로 화자를 구분하지 못합니다. 마이크 입력은 위에서 선택한 발화자로, 타이핑은 '나'로 기록됩니다. 기록된 발언의 이름을 누르면 수정할 수 있습니다. 발언 언어는 자동 감지되어 인식이 전환되고, 외국어 발언은 한국어 번역이 함께 회의록에 등록됩니다.</div>
      <div class="crow" style="border-top:none;padding-top:0">
        <input id="typeInput" placeholder="직접 입력(내 메모) · Enter">
        <button class="b-deep" id="addBtn">추가</button>
      </div>
    </div>
    <div class="glass cpanel" style="overflow-y:auto">
-     <h3>회의록 (AI 반영) <span class="tag">Claude</span></h3>
+     <h3>실시간 회의록 <span class="tag">문장 → 문단 → 전체</span></h3>
+     <div class="mini" style="padding:8px 14px 0;line-height:1.55">발언은 <b>문장 단위</b>로 즉시 기록되고, 분량이 쌓이면 자동으로 <b>문단</b>으로 정리됩니다. [AI 반영]·[종료·정리]가 <b>전체 회의록</b>을 완성합니다.</div>
+     <div class="cscroll" id="liveDoc" style="flex:none;max-height:170px;overflow-y:auto"></div>
+     <h3 style="border-top:1px solid var(--line)">회의록 (AI 반영) <span class="tag">Claude</span></h3>
      <div class="cscroll" id="notes" style="flex:none;max-height:150px;overflow-y:auto"></div>
      <div class="crow">
        <button class="b-deep" id="syncBtn">AI 반영</button>
@@ -2250,9 +2473,10 @@ function consoleHTML(){
    </div></div>`;
 }
 function bindConsole(){
-  renderTranscript();renderNotes();renderResearch();
+  renderTranscript();renderNotes();renderResearch();fillMicWho();renderLiveDoc();
+  const chip=$("langChip"); if(chip&&autoLang!=="ko-KR")chip.textContent="자동 감지: "+micLangLabel(autoLang);
   $("micBtn").onclick=()=>listening?stopMic():startMic();
-  $("clearBtn").onclick=()=>{if(confirm("녹취를 모두 지울까요?")){state.segments=[];renderTranscript();refreshBadges();scheduleSave();}};
+  $("clearBtn").onclick=()=>{if(confirm("녹취를 모두 지울까요? (이미 정리된 문단은 실시간 회의록에 남습니다)")){state.segments=[];if(state.liveDoc)state.liveDoc.cursor=0;renderTranscript();renderLiveDoc();refreshBadges();scheduleSave();}};
   $("addBtn").onclick=addTyped;$("typeInput").addEventListener("keydown",e=>{if(e.key==='Enter')addTyped();});
   $("syncBtn").onclick=syncNotes;$("endBtn2").onclick=endMeeting;
   $("ttsBtn").onclick=toggleTTS;
@@ -2326,28 +2550,180 @@ function bindConsole(){
 }
 function renderTranscript(interim){const box=$("transcript");if(!box)return;
   if(!state.segments.length&&!interim){box.innerHTML='<div class="mini" style="font-style:italic">회의를 시작하면 자동으로 녹취됩니다. 타이핑도 가능합니다.</div>';return;}
-  let h=state.segments.map(s=>`<div class="note ${s.who==='나'?'me':''}"><span class="who">${esc(s.who)} · ${s.time}</span>${esc(s.text)}</div>`).join("");
+  let h=state.segments.map((s,i)=>`<div class="note ${s.who==='나'?'me':''}"><span class="who" style="cursor:pointer" title="클릭해 발화자 이름 수정" onclick="editSegWho(${i})">${esc(s.who)} · ${s.time}${s.lang&&s.lang!=="ko"?" · "+micLangLabel(SCRIPT2LANG[s.lang]||s.lang):""}</span>${esc(s.text)}${s.needKo?'<div class="mini" style="margin-top:3px;font-style:italic">한국어로 번역 중…</div>':(s.ko?`<div style="margin-top:3px;padding-top:3px;border-top:1px dashed var(--line);color:var(--deep)">→ ${esc(s.ko)}</div>`:"")}</div>`).join("");
   if(interim)h+=`<div class="note" style="opacity:.5;font-style:italic"><span class="who">발화 (인식중…)</span>${esc(interim)}</div>`;
   box.innerHTML=h;box.scrollTop=box.scrollHeight;const sc=$("segCount");if(sc)sc.textContent=state.segments.length;}
 function addSegment(text,who){if(!text.trim())return;
-  state.segments.push({text:text.trim(),who:who||'교수님',time:new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})});
-  renderTranscript();refreshBadges();scheduleSave();}
+  const seg={text:text.trim(),who:who||'교수님',time:new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})};
+  const d=detectLang(seg.text);
+  if(d){ seg.lang=d;
+    if(SCRIPT2LANG[d]) setAutoLang(SCRIPT2LANG[d]);            // 다음 발언부터 해당 언어로 인식
+    if(d!=="ko"){ seg.needKo=true; translateSegment(seg); }    // 한국어 번역을 회의록에 등록
+  }
+  state.segments.push(seg);
+  renderTranscript();refreshBadges();scheduleSave();
+  renderLiveDoc();maybeCondense();}
+
+// ==================== 실시간 회의록 (문장 → 문단 → 전체) ====================
+function liveDocReset(){ state.liveDoc={paras:[],cursor:0}; renderLiveDoc(); }
+function liveDocPending(){
+  const ld=state.liveDoc||(state.liveDoc={paras:[],cursor:0});
+  if(ld.cursor>state.segments.length) ld.cursor=state.segments.length;   // 지우기 등으로 어긋난 경우 보정
+  return state.segments.slice(ld.cursor);
+}
+function renderLiveDoc(){
+  const box=$("liveDoc"); if(!box) return;
+  const ld=state.liveDoc||{paras:[],cursor:0};
+  const pend=liveDocPending();
+  if(!ld.paras.length && !pend.length){
+    box.innerHTML='<div class="mini" style="font-style:italic;padding:8px 14px">발언이 시작되면 이 자리에 문장 단위로 바로 기록됩니다.</div>';
+    return;
+  }
+  let html=ld.paras.map(p=>`<div class="rcard" style="margin-bottom:7px"><div style="line-height:1.7">${esc(p)}</div></div>`).join("");
+  if(pend.length){
+    html+=`<div style="background:var(--mist);border:1px dashed var(--line);border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.7;color:var(--gray)">`+
+      `<div class="mini" style="margin-bottom:4px">작성 중 — ${pend.length}문장 (분량이 쌓이면 문단으로 정리됩니다)</div>`+
+      pend.map(s=>`<div>· <b>${esc(s.who)}</b> ${s.needKo?esc(s.text)+' <span class="mini" style="font-style:italic">(번역 중…)</span>':esc(segKo(s))}</div>`).join("")+`</div>`;
+  }
+  box.innerHTML=html; box.scrollTop=box.scrollHeight;
+}
+// 문장을 사람별로 묶어 평문 문단으로 (AI 실패·미사용 시 대체)
+function plainPara(segs){
+  const out=[]; let cur=null;
+  segs.forEach(s=>{
+    if(cur&&cur.who===s.who) cur.texts.push(segKo(s));
+    else { cur={who:s.who,texts:[segKo(s)]}; out.push(cur); }
+  });
+  return out.map(g=>g.who+": "+g.texts.join(" ")).join(" / ");
+}
+function segsAllReady(list){ return !list.some(s=>s.needKo); }
+let condensing=false;
+async function maybeCondense(force){
+  const ld=state.liveDoc||(state.liveDoc={paras:[],cursor:0});
+  const pend=liveDocPending();
+  const enough=pend.length>=6 || pend.map(s=>segKo(s)).join(" ").length>=400;
+  if(condensing || !pend.length || (!force&&!enough)) return;
+  if(!segsAllReady(pend)){ setTimeout(()=>maybeCondense(force),2500); return; }   // 번역 완료 대기
+  condensing=true;
+  const batch=pend.slice();
+  const nextCursor=ld.cursor+batch.length;
+  let para="";
+  try{
+    // 공유 프록시만 조용히 시도 — 실패해도 회의 흐름을 끊지 않고 평문 문단으로 대체
+    const tr=batch.map(s=>`[${s.who}] ${segKo(s)}`).join("\n");
+    para=await callViaProxy(
+      "회의 서기. 아래 발언 묶음을 회의록 문단 1개(2~4문장, 한국어)로 정리하라. 발언자·핵심 내용 유지, 군말 제거, 순수 텍스트만.",
+      tr, 300);
+    para=String(para||"").trim();
+  }catch(_){ para=""; }
+  if(!para) para=plainPara(batch);
+  ld.paras.push(para); ld.cursor=nextCursor;
+  condensing=false;
+  renderLiveDoc(); scheduleSave();
+  // 남은 분량이 이미 기준을 넘었으면 이어서 정리
+  if(liveDocPending().length>=6) maybeCondense();
+}
+window.liveDocReset=liveDocReset;
 function addTyped(){const v=$("typeInput").value;if(v.trim()){addSegment(v,'나');$("typeInput").value="";}}
+function editSegWho(i){
+  const s=state.segments[i]; if(!s) return;
+  const v=prompt("이 발언의 발화자 이름 수정",s.who||"");
+  if(v===null) return;
+  s.who=(v.trim()||s.who); renderTranscript(); scheduleSave();
+}
+window.editSegWho=editSegWho;
 
 let recog=null,listening=false,autoTimer=null;
-function initRecog(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){const h=$("micHint");if(h)h.textContent="음성인식 미지원 — 타이핑 사용";const b=$("micBtn");if(b)b.disabled=true;return;}
-  recog=new SR();recog.lang='ko-KR';recog.continuous=true;recog.interimResults=true;
-  recog.onresult=e=>{let it="";for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];
-    if(r.isFinal)addSegment(r[0].transcript,'교수님');else it+=r[0].transcript;}renderTranscript(it);};
-  recog.onerror=e=>{if(e.error==='not-allowed'){toast("마이크 권한이 필요합니다");stopMic();}};
-  recog.onend=()=>{if(listening){try{recog.start();}catch(_){}}};
+// ==================== 언어 자동 감지 · 인식 전환 · 한국어 번역 ====================
+const MIC_LANGS=[["ko-KR","한국어"],["en-US","English"],["ja-JP","日本語"],["zh-CN","中文"],["ru-RU","Русский"],["ar-SA","العربية"],["th-TH","ไทย"],["hi-IN","हिन्दी"],["vi-VN","Tiếng Việt"],["es-ES","Español"],["fr-FR","Français"],["de-DE","Deutsch"]];
+let autoLang="ko-KR";                       // 현재 인식 언어 — 발언 감지에 따라 자동 전환
+function micLangVal(){ return autoLang; }
+function micLangLabel(code){ const f=MIC_LANGS.find(x=>x[0]===code); return f?f[1]:code; }
+// 글자(스크립트) 기반 언어 감지 — 한글·라틴·가나·한자·키릴·아랍·태국·데바나가리
+function detectLang(text){
+  const t=String(text||""); if(!t.trim()) return null;
+  const n=(re)=>(t.match(re)||[]).length;
+  const counts={ ko:n(/[\uAC00-\uD7AF]/g), ja:n(/[\u3040-\u30FF]/g), zh:n(/[\u4E00-\u9FFF]/g),
+    ru:n(/[\u0400-\u04FF]/g), ar:n(/[\u0600-\u06FF]/g), th:n(/[\u0E00-\u0E7F]/g),
+    hi:n(/[\u0900-\u097F]/g), en:n(/[A-Za-z]/g) };
+  if(counts.ja>0 && counts.ja>=counts.zh) counts.zh=0;      // 가나가 있으면 일본어
+  let best=null,bv=0; Object.keys(counts).forEach(k=>{ if(counts[k]>bv){bv=counts[k];best=k;} });
+  if(!best||bv<2) return null;
+  const total=counts.ko+counts.ja+counts.zh+counts.ru+counts.ar+counts.th+counts.hi+counts.en;
+  return (bv/Math.max(total,1)>=0.5)?best:null;             // 절반 이상일 때만 확정
 }
-function startMic(){if(!recog)initRecog();if(!recog)return;try{recog.start();}catch(_){}
-  listening=true;const b=$("micBtn");if(b){b.classList.add("on");b.textContent="⏹ 녹취 중지";}
-  setPill("live","녹취 중");}
+const SCRIPT2LANG={ko:"ko-KR",en:"en-US",ja:"ja-JP",zh:"zh-CN",ru:"ru-RU",ar:"ar-SA",th:"th-TH",hi:"hi-IN"};
+function setAutoLang(code,why){
+  if(!code||code===autoLang) return;
+  autoLang=code;
+  if(recog){ recog.lang=code; if(listening){ try{recog.stop();}catch(_){} } }   // stop → onend가 새 언어로 재시작
+  const chip=$("langChip"); if(chip)chip.textContent="자동 감지: "+micLangLabel(code);
+  micStatus((why||"발언 언어 감지")+" — 인식 언어를 "+micLangLabel(code)+"(으)로 자동 전환했습니다");
+}
+// 외국어 발언 → 한국어 번역 (공유 프록시만 조용히 시도 — 실패해도 원문 유지)
+function segKo(s){ return (s&&(s.ko||s.text))||""; }
+async function translateSegment(seg){
+  try{
+    const out=await callViaProxy(
+      "전문 통역사. 아래 발언을 자연스러운 한국어 1~2문장으로 번역하라. 설명 없이 번역문만 출력.",
+      seg.text, 300);
+    const t=String(out||"").trim();
+    if(t) seg.ko=t;
+  }catch(_){/* 번역 실패 — 원문 그대로 회의록에 사용 */}
+  seg.needKo=false;
+  renderTranscript(); renderLiveDoc(); scheduleSave();
+  maybeCondense();
+}
+function micWhoVal(){ const s=$("micWho"); return (s&&s.value)||"교수님"; }
+function fillMicWho(){
+  const s=$("micWho"); if(!s) return;
+  const prev=s.value;
+  const names=[]; (state.attendees||[]).forEach(a=>{ if(a.name&&names.indexOf(a.name)<0) names.push(a.name); });
+  ["교수님","나"].forEach(n=>{ if(names.indexOf(n)<0) names.push(n); });
+  s.innerHTML=names.map(n=>`<option${n===prev?" selected":""}>${esc(n)}</option>`).join("");
+  if(!prev){ // 기본값: 참석자 중 '교수' 포함 이름 우선
+    const def=names.find(n=>/교수/.test(n))||names[0];
+    if(def) s.value=def;
+  }
+}
+function micStatus(msg,bad){const el=$("micHint");if(el){el.textContent=msg;el.style.color=bad?"#C24A4A":"";}}
+const MIC_BLOCK_HELP="마이크 권한이 차단되어 있습니다 — 주소창 왼쪽 자물쇠(사이트 정보) → 마이크 [허용] 후 새로고침해 주세요";
+function initRecog(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){micStatus("이 브라우저는 음성인식을 지원하지 않습니다 — Chrome·Edge에서 열거나, 타이핑·휴대폰 키보드의 마이크(받아쓰기)로 입력해 주세요",true);const b=$("micBtn");if(b)b.disabled=true;return;}
+  recog=new SR();recog.lang=micLangVal();recog.continuous=true;recog.interimResults=true;
+  recog.onstart=()=>micStatus("듣는 중… 말씀하시면 텍스트로 기록됩니다");
+  recog.onresult=e=>{let it="";for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];
+    if(r.isFinal)addSegment(r[0].transcript,micWhoVal());else it+=r[0].transcript;}renderTranscript(it);};
+  recog.onerror=e=>{
+    if(e.error==='no-speech'||e.error==='aborted')return;                 // 무음·일시중단 — 계속 대기
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){micStatus(MIC_BLOCK_HELP+" · 그동안은 타이핑 또는 휴대폰 키보드의 마이크(받아쓰기)로 입력할 수 있습니다",true);toast("마이크 권한이 필요합니다");stopMic();return;}
+    if(e.error==='audio-capture'){micStatus("마이크 장치를 찾을 수 없습니다 — 연결 상태를 확인하시고, 그동안은 타이핑·휴대폰 받아쓰기로 입력해 주세요",true);stopMic();return;}
+    if(e.error==='network'){micStatus("음성인식 서버에 연결하지 못했습니다 — 인터넷 연결 확인(사내망이면 휴대폰 LTE 시도) · 타이핑·휴대폰 받아쓰기로도 입력 가능합니다",true);stopMic();return;}
+    micStatus("음성인식 오류: "+e.error,true);};
+  recog.onend=()=>{if(listening){try{recog.start();}catch(_){}}else micStatus("브라우저 음성인식 · "+micLangLabel(micLangVal()));};
+}
+async function startMic(){
+  if(!recog)initRecog(); if(!recog)return;
+  // ① 마이크 권한을 먼저 요청 — 차단·미지원 상태를 즉시 화면에 안내
+  try{
+    if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
+      const s=await navigator.mediaDevices.getUserMedia({audio:true});
+      s.getTracks().forEach(t=>t.stop());
+    }
+  }catch(err){
+    const denied=err&&(err.name==="NotAllowedError"||err.name==="SecurityError"||err.name==="PermissionDeniedError");
+    micStatus(denied?MIC_BLOCK_HELP:("마이크를 열 수 없습니다: "+((err&&err.message)||err)),true);
+    toast("마이크를 사용할 수 없습니다"); return;
+  }
+  // ② 음성인식 시작
+  listening=true;
+  try{recog.start();}catch(_){/* 이미 시작된 경우 무시 */}
+  const b=$("micBtn");if(b){b.classList.add("on");b.textContent="⏹ 녹취 중지";}
+  setPill("live","녹취 중"); micStatus("듣는 중…");
+}
 function stopMic(){listening=false;if(recog){try{recog.stop();}catch(_){}}
   const b=$("micBtn");if(b){b.classList.remove("on");b.textContent="녹취 시작";}
+  micStatus("브라우저 음성인식 · "+micLangLabel(micLangVal()));
   if(!(state.meeting.started&&!state.meeting.ended))setPill("idle","회의 대기");}
 
 // TTS — 회의 읽어주기 (마이크 불필요, 스피커만)
@@ -2372,7 +2748,7 @@ function toggleTTS(){
   ttsOn=true; const b=$("ttsBtn"); if(b)b.textContent="⏹ 읽기 중지";
 }
 function renderNotes(){const box=$("notes");if(!box)return;
-  if(!state.notes){box.innerHTML='<div class="mini" style="font-style:italic">녹취가 쌓이면 \u2018AI 반영\u2019으로 회의록이 생성됩니다.</div>';return;}
+  if(!state.notes){box.innerHTML='<div class="mini" style="font-style:italic">발언은 위 실시간 회의록에 바로 기록됩니다. [AI 반영]을 누르면 전체가 구조화된 회의록(개요·안건·결정·액션)으로 완성됩니다.</div>';return;}
   const n=state.notes,sec=(t,a)=>`<div class="nsec"><h4>${t}</h4>`+(a&&a.length?"<ul>"+a.map(x=>`<li>${esc(x)}</li>`).join("")+"</ul>":'<div class="mini">—</div>')+"</div>";
   box.innerHTML=(n.summary?`<div class="rcard"><div>${esc(n.summary)}</div></div>`:"")+
     (state.topicTags.length?`<div style="margin-bottom:8px">${state.topicTags.map(t=>`<span class="chip"><span class="av">#</span>${esc(t)}</span>`).join("")}</div>`:"")+
@@ -2386,18 +2762,22 @@ async function syncNotes(silent){
   const m=currentMeeting();
   const mnEl=$("manualNote");
   const manual=[(m&&m.rawNote)||"",(mnEl&&mnEl.value.trim())||""].filter(Boolean).join("\n\n");
-  if(!state.segments.length && !manual){
+  const hasLive=!!(state.liveDoc&&state.liveDoc.paras&&state.liveDoc.paras.length);
+  if(!state.segments.length && !manual && !hasLive){
     if(!silent)toast("반영할 내용이 없습니다 — 녹취하거나 수기 회의록을 입력·첨부하세요");return;}
   const b=$("syncBtn");if(b){b.disabled=true;b.textContent="반영 중…";}
   setPill("wait","AI 정리 중");
+  try{ await maybeCondense(true); }catch(_){}   // 남은 문장을 문단으로 먼저 정리
   const upText=state.uploads.filter(u=>u.text).map(u=>`[자료:${u.name}] ${u.text.slice(0,1500)}`).join("\n");
-  const tr=state.segments.map(s=>`[${s.who}] ${s.text}`).join("\n");
+  const ldParas=((state.liveDoc&&state.liveDoc.paras)||[]).join("\n");
+  const tr=state.segments.map(s=>`[${s.who}] ${segKo(s)}`).join("\n");
   const sys="당신은 한국어 회의 서기입니다. 순수 JSON만 출력(설명·코드펜스 없이). "+
     '스키마:{"title":"회의 제목(간결)","purpose":"목적 한 줄","summary":"1-2문장 개요","tags":["주제태그"],"agenda":[],"ideas":["원문에 나온 아이디어·구상·제안 — 사소해 보여도 모두"],"research":["조사 필요 항목"],"decisions":[],"actions":[],"followups":[],"nextActions":["AI가 추천하는 다음 할 일"]}. '+
     "약학대학 교수와 MedIT(디지털 약료 플랫폼) 대표의 회의입니다. 참석자·자료 맥락을 반영하세요.";
   try{
     const body=(upText?("사전자료:\n"+upText+"\n\n"):"")
       +(manual?("회의 노트(수기):\n"+manual.slice(0,12000)+"\n\n"):"")
+      +(ldParas?("실시간 회의록(문단 정리):\n"+ldParas.slice(0,8000)+"\n\n"):"")
       +(tr?("녹취:\n"+tr):"");
     let o=await callClaude(sys,body,1400);
     o=o.replace(/```json|```/g,"").trim();const j=JSON.parse(o);
@@ -2439,6 +2819,7 @@ function computeStats(){
 }
 async function endMeeting(){
   if(listening)stopMic();
+  try{ await maybeCondense(true); }catch(_){}   // 남은 문장을 문단으로 마무리
   state.meeting.ended=Date.now();
   setPill("wait","종료 정리 중");
   const b2=$("endBtn2");if(b2){b2.disabled=true;b2.textContent="정리 중…";}
@@ -2447,7 +2828,7 @@ async function endMeeting(){
   const stats=computeStats();
   let mood="(분위기 요약 없음)";
   if(state.segments.length){try{
-    const tr=state.segments.map(s=>`[${s.who}] ${s.text}`).join("\n");
+    const tr=state.segments.map(s=>`[${s.who}] ${segKo(s)}`).join("\n");
     mood=await callClaude("회의 분위기 분석가. 녹취를 읽고 3-4문장 한국어로 분위기·톤·합의 정도를 요약. 순수 텍스트.",tr,400);
   }catch(e){mood="분위기 요약 실패: "+e.message;}}
   // email draft
@@ -2456,17 +2837,18 @@ async function endMeeting(){
   let script="";
   if(state.segments.length){
     try{
-      const tr=state.segments.map(s=>`[${s.who}] ${s.text}`).join("\n");
+      const tr=state.segments.map(s=>`[${s.who}] ${segKo(s)}`).join("\n");
       script=await callClaude("회의 녹취 정리 담당. 녹취를 읽기 쉬운 스크립트로 정리하라. 중복·잡음·군말 제거, 발언 순서 유지, 한국어. 순수 텍스트만 출력.",tr,2000);
     }catch(e){
-      // AI 정리 실패 시: 원문을 그대로 두지 않고 최소 정리본만 생성
-      script=state.segments.map(s=>`[${s.who}] ${s.text}`).join("\n");
+      // AI 정리 실패 시: 원문을 그대로 두지 않고 최소 정리본만 생성 (번역문 우선)
+      script=state.segments.map(s=>`[${s.who}] ${segKo(s)}`).join("\n");
     }
   }
   const purgedAt=new Date().toLocaleString('ko-KR');
   const segCount=state.segments.length;
   const cm=currentMeeting()||{};
-  const rec={id:"m"+Date.now(),dt:new Date().toLocaleString('ko-KR'),
+  const recDT=state.meeting.when?new Date(state.meeting.when).toLocaleString('ko-KR'):new Date().toLocaleString('ko-KR');
+  const rec={id:"m"+Date.now(),dt:recDT,
     title:state.meeting.title,purpose:state.meeting.purpose,mood,stats,
     rawNote:cm.rawNote||"",           // 회의 노트 원문 (AI 정리·직접 입력)
     notes:state.notes||(cm.summary?{summary:cm.summary,actions:(cm.actions||[]).slice()}:null),
@@ -2474,12 +2856,14 @@ async function endMeeting(){
     nextActions:state.nextActions.slice(),
     attendees:state.attendees.slice(),
     script,                       // 정리된 스크립트 (보존)
+    liveParas:((state.liveDoc&&state.liveDoc.paras)||[]).slice(),   // 실시간 회의록 문단 (보존)
     segments:[],                  // 녹취 원문 — 저장하지 않음 (파기)
     purged:{at:purgedAt,count:segCount},   // 파기 기록
     research:state.research.slice(),tabNotes:JSON.parse(JSON.stringify(state.tabNotes)),email};
   state.records.unshift(rec);await saveRecords();
   // 녹취 원문 파기 (메모리에서도 즉시 제거)
   state.segments=[];state.notes=null;state.research=[];state.nextActions=[];state.topicTags=[];
+  state.liveDoc={paras:[],cursor:0};
   state.tabNotes={deck:[],app:[],registry:[],console:[]};
   state.meeting.started=null;state.meeting.ended=null;state.meetingStart=null;
   await saveSession();
@@ -2602,7 +2986,7 @@ const MAIL_TPL={
 `회의: ${m.title||""}\n일시: ${fmtDate(m.date)} ${m.time||""}\n장소: ${m.place||""}\n\n`+
 `아래 회의 운영 사이트에서 자료와 회의록을 확인하실 수 있습니다.\n`+
 `캠퍼스타운 허브: ${location.origin+location.pathname}\n\n`+
-`본인 이메일로 가입하시면 초대된 회의가 목록에 표시됩니다.\n\n감사합니다.`};
+`숙명 Google 계정(@sookmyung.ac.kr)으로 로그인하시면 초대된 회의가 목록에 표시됩니다. (별도 회원가입 없음)\n\n감사합니다.`};
   },
   minutes(){
     const m=currentMeeting()||{};
@@ -2706,7 +3090,7 @@ function renderArchive(){const box=$("archive");if(!box)return;
       <div style="display:flex;gap:10px;align-items:flex-start">
         <div style="flex:1;cursor:pointer" onclick="previewRecord('${r.id}')" title="회의록 미리보기">
           <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(r.title)}</div>
-          <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${durLabel(r)} · 참석 ${r.attendees.length}명 · ${(r.tags||[]).map(t=>"#"+t).join(" ")}</div>
+          <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${durLabel(r)} · 참석 ${(r.attendees||[]).length}명 · ${(r.tags||[]).map(t=>"#"+t).join(" ")}</div>
           <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(moodLine(r))}</div>
           ${recordSnippet(r)?`<div style="margin-top:7px;background:var(--mist);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.6;color:var(--gray);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${esc(recordSnippet(r))}</div>`:""}
         </div>
@@ -2725,7 +3109,7 @@ function previewRecord(id,boxId){
   const bid=boxId||("pv-"+id);
   const box=$(bid); if(!box) return;
   if(box.innerHTML){ box.innerHTML=""; return; }   // 토글
-  const md=recordToMD(r);
+  let md=""; try{ md=recordToMD(r); }catch(e){ md="(미리보기 생성 오류: "+e.message+")\n\n새로고침(Ctrl+Shift+R) 후 다시 시도해 주세요."; }
   box.innerHTML=`<div style="margin-top:12px;background:var(--mist);border-radius:12px;padding:14px 16px;
     max-height:420px;overflow-y:auto;font-size:13px;line-height:1.7;color:var(--gray);white-space:pre-wrap;
     border:1px solid var(--line)">${esc(md)}</div>
@@ -2755,7 +3139,7 @@ function renderRecords(){const list=$("reclist");if(!list)return;
     <div class="glass tile" style="margin-bottom:10px;display:flex;gap:12px;align-items:flex-start">
       <div style="flex:1;cursor:pointer" onclick="previewRecord('${r.id}','pv2-${r.id}')" title="회의록 미리보기">
         <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(r.title)}</div>
-        <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${durLabel(r)} · 발언 ${r.stats.segs}건 · 참석 ${r.attendees.length}명</div>
+        <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${durLabel(r)}${(r.stats&&r.stats.segs>0)?` · 발언 ${r.stats.segs}건`:""} · 참석 ${(r.attendees||[]).length}명</div>
         <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(moodLine(r))}</div>
         ${recordSnippet(r)?`<div style="margin-top:7px;background:var(--mist);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.6;color:var(--gray);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${esc(recordSnippet(r))}</div>`:""}
         <div style="margin-top:6px">${(r.tags||[]).map(t=>`<span class="chip"><span class="av">#</span>${esc(t)}</span>`).join("")}</div>
@@ -2777,8 +3161,18 @@ function sameTitle(a,b){
 function repairRecords(){
   let changed=false;
   (state.records||[]).forEach(r=>{
-    if(r.stats && (r.stats.dur<0 || r.stats.dur>1440)){ r.stats.dur=0; changed=true; }
+    if(!r.stats||typeof r.stats!=="object"){ r.stats={segs:0,prof:0,me:0,words:0,dur:0}; changed=true; }
+    if(r.stats && (Number(r.stats.dur)<0 || Number(r.stats.dur)>1440 || isNaN(Number(r.stats.dur)))){ r.stats.dur=0; changed=true; }
+    if(!Array.isArray(r.attendees)){ r.attendees=[]; changed=true; }
     const mm=(state.meetings||[]).find(m=>sameTitle(m.title,r.title));
+    // 기록 일시가 회의 일시와 어긋나면(저장 시각으로 찍힌 경우) 회의 일시로 교정
+    if(mm && mm.date){
+      const t=new Date(mm.date+"T"+(/^\d{2}:\d{2}/.test(mm.time||"")?mm.time:"10:00"));
+      if(!isNaN(t.getTime())){
+        const md=(t.getMonth()+1)+". "+t.getDate()+".";
+        if(String(r.dt||"").indexOf(md)<0){ r.dt=t.toLocaleString('ko-KR'); changed=true; }
+      }
+    }
     if(mm){
       if(!r.rawNote && mm.rawNote){ r.rawNote=mm.rawNote; changed=true; }
       if(!r.notes && mm.summary){ r.notes={summary:mm.summary, actions:(mm.actions||[]).slice()}; changed=true; }
@@ -2814,7 +3208,7 @@ function recordToMD(r){
       if((!r.tags||!r.tags.length)&&mm.tags)r.tags=(mm.tags||[]).slice(); }
   }
   let md=`# MedIT 회의록 — ${r.dt}\n\n**${r.title}**\n\n`;
-  md+=`- 목적: ${r.purpose}\n- 소요: ${durLabel(r)} · 참석: ${r.attendees.map(a=>a.name+(a.email?`(${a.email})`:"")).join(", ")||"—"}\n${(r.tags&&r.tags.length)?`- 태그: ${r.tags.map(t=>"#"+t).join(" ")}\n`:""}\n`;
+  md+=`- 목적: ${r.purpose||"—"}\n- 소요: ${durLabel(r)} · 참석: ${(r.attendees||[]).map(a=>a.name+(a.email?`(${a.email})`:"")).join(", ")||"—"}\n${(r.tags&&r.tags.length)?`- 태그: ${r.tags.map(t=>"#"+t).join(" ")}\n`:""}\n`;
   if(r.mood&&r.mood!=="(분위기 요약 없음)") md+=`## 회의 분위기\n${r.mood}\n\n`;
   if(r.notes){const n=r.notes,sec=(t,a)=>a&&a.length?`## ${t}\n`+a.map(x=>"- "+x).join("\n")+"\n\n":"";
     if(n.summary)md+=`## 개요\n${n.summary}\n\n`;
@@ -2833,6 +3227,7 @@ function recordToMD(r){
   }
   const tn=r.tabNotes||{},nm={deck:"슬라이드",app:"복약앱",registry:"약사사이트",console:"콘솔"};
   Object.keys(tn).forEach(k=>{if(tn[k]&&tn[k].length)md+=`## [${nm[k]}] 메모\n`+tn[k].map(x=>`- ${x.text}`).join("\n")+"\n\n";});
+  if(r.liveParas&&r.liveParas.length) md+=`## 실시간 회의록 (문단)\n`+r.liveParas.map(p=>"- "+p).join("\n")+"\n\n";
   if(r.script) md+=`## 정리된 스크립트\n${r.script}\n\n`;
   if(r.purged&&r.purged.count>0) md+=`> 녹취 원문 ${r.purged.count}건은 ${r.purged.at}에 파기되었습니다.\n\n`;
   return md;}   // 이메일 초안은 회의록에서 제외 — [이메일] 버튼(이메일 센터)에서 별도 작성·전송
@@ -2927,6 +3322,7 @@ function importData(){
       state.currentMeetingId=d.currentMeetingId||null;
       seedData(); await saveSession(); await saveRecords();
       toast("데이터를 가져왔습니다");
+      if(state.user&&state.user.role&&!allowedEmail(state.user.email)){ state.user={role:null,name:"",email:"",id:null}; clearUser(); }
       if(state.user&&state.user.role)showMeetingList(); else renderAuth();
     }catch(e){ toast("가져오기 실패: "+e.message); }
   };
@@ -2990,27 +3386,97 @@ function renderTabs(){
   // 페이지 추가 버튼
   if(canEdit && !bar.querySelector("#tabAdd")){
     const add=document.createElement("div");
-    add.className="tab tab-add"; add.id="tabAdd"; add.textContent="+ 페이지";
+    add.className="tab tab-add"; add.id="tabAdd"; add.textContent="+ 앱·사이트";
     add.onclick=addPageFlow;
     bar.appendChild(add);
   }
 }
-function addPageFlow(){
-  const label=prompt("탭 이름 (예: 약국 재고 관리)"); if(!label) return;
-  const url=prompt("HTML 파일명 또는 주소\n예: registry.html 또는 https://...","");
-  if(!url) return;
-  try{ addPage({label:label.trim(),url:url.trim()}); toast("'"+label+"' 탭이 추가되었습니다"); }
-  catch(e){ toast(e.message); }
+function addPageFlow(){ openAddAppSite(); }
+// ==================== 앱·사이트 추가 (폼) ====================
+// 이름·주소를 입력해 상단 탭과 프로젝트 카드에 등록. 같은 저장소의 html 파일과 외부 https 주소 모두 지원.
+function openAddAppSite(){
+  const canEdit=state.user.role==="operator"||state.user.role==="host";
+  if(!canEdit){ toast("개최자·운영자만 추가할 수 있습니다"); return; }
+  let modal=$("addAppModal");
+  if(!modal){
+    modal=document.createElement("div"); modal.id="addAppModal";
+    modal.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:20px";
+    modal.innerHTML=`
+    <div style="background:#fff;border-radius:16px;max-width:min(560px,96vw);width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
+        <div style="flex:1;font-weight:800;color:var(--deep);font-size:15px">앱·사이트 추가</div>
+        <button class="b-deep" id="aaClose">닫기</button>
+      </div>
+      <div style="overflow:auto;padding:16px 18px">
+        <div class="mini" style="margin-bottom:12px;line-height:1.6">같은 저장소의 HTML 파일(예: <b>MediNote_app.html</b>, <b>registry.html</b>, <b>demo.html</b>)이나 외부 주소(<b>https://…</b>)를 등록합니다. 파일이 수정되면 열 때마다 최신 내용으로 표시됩니다.</div>
+        <div style="display:grid;gap:10px">
+          <div><label style="font-size:12.5px;font-weight:700;color:var(--deep)">종류</label>
+            <select id="aa_kind" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"><option value="app">앱</option><option value="site">사이트</option></select></div>
+          <div><label style="font-size:12.5px;font-weight:700;color:var(--deep)">이름</label>
+            <input id="aa_name" placeholder="예: 복약·접종 앱" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
+          <div><label style="font-size:12.5px;font-weight:700;color:var(--deep)">주소 (HTML 파일명 또는 https)</label>
+            <input id="aa_url" list="aa_urls" placeholder="예: MediNote_app.html 또는 https://…" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
+            <datalist id="aa_urls">
+              <option value="MediNote_app.html">복약·접종 앱 (MediNote)</option>
+              <option value="demo.html">복약·접종 앱 데모</option>
+              <option value="registry.html">약사 참여 등록 사이트</option>
+              <option value="ux-tester.html">UX 테스터</option>
+            </datalist></div>
+          <div><label style="font-size:12.5px;font-weight:700;color:var(--deep)">설명 (선택)</label>
+            <input id="aa_desc" placeholder="한 줄 설명" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
+          <label class="mini" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="aa_tab" checked> 상단 탭으로 등록</label>
+          <label class="mini" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="aa_proj" checked> 프로젝트 카드로 등록</label>
+        </div>
+        <div class="mini" id="aa_msg" style="margin-top:10px"></div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="b-mint" id="aaSave" style="flex:1">추가</button>
+        </div>
+        <div class="mini" style="margin-top:10px;line-height:1.55">※ 일부 외부 사이트는 보안 정책상 화면 안 표시(iframe)를 막습니다 — 그 경우 [새 탭에서 열기]로 열립니다.</div>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    $("aaClose").onclick=()=>{modal.style.display="none";};
+    modal.onclick=e=>{if(e.target===modal)modal.style.display="none";};
+    $("aaSave").onclick=()=>{
+      const name=($("aa_name").value||"").trim();
+      const url=($("aa_url").value||"").trim();
+      const desc=($("aa_desc").value||"").trim();
+      const kind=$("aa_kind").value;
+      const msg=$("aa_msg");
+      if(!name||!url){ msg.innerHTML='<span style="color:#C0492A">이름과 주소를 입력해 주세요.</span>'; return; }
+      if(!/^https?:\/\//i.test(url) && !/\.html?$/i.test(url)){ msg.innerHTML='<span style="color:#C0492A">주소는 .html 파일명 또는 https:// 로 시작해야 합니다.</span>'; return; }
+      let added=[];
+      if($("aa_tab").checked){
+        try{ addPage({label:name,url}); added.push("탭"); }catch(e){ msg.innerHTML='<span style="color:#C0492A">'+esc(e.message)+'</span>'; return; }
+      }
+      if($("aa_proj").checked){
+        state.projects=state.projects||[];
+        state.projects.push({id:"p_"+Date.now(),title:name,desc:desc||(kind==="app"?"앱":"사이트"),status:"데모",url,tags:[kind==="app"?"앱":"사이트"],meeting:state.currentMeetingId});
+        added.push("프로젝트 카드");
+      }
+      scheduleSave();
+      if(state.activeTab==="projects")renderProjects();
+      modal.style.display="none";
+      $("aa_name").value="";$("aa_url").value="";$("aa_desc").value="";
+      toast("'"+name+"' 추가됨 ("+(added.join("·")||"등록 안 함")+")");
+    };
+  }
+  modal.style.display="flex";
+  $("aa_name").focus();
 }
+window.openAddAppSite=openAddAppSite;
 function pageHTML(id){
   const p=(state.pages||[]).find(x=>x.id===id);
   if(!p) return '<div class="hero"><div class="mini">페이지를 찾을 수 없습니다.</div></div>';
   return `<div class="hero" style="padding:0">
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;gap:8px">
       <b style="font-size:17px">${esc(p.label)}</b>
-      <button class="b-ghost" onclick="window.open('${esc(p.url)}','_blank')">새 탭에서 열기</button>
+      <div style="display:flex;gap:7px">
+        <button class="b-ghost" onclick="var f=document.getElementById('pgF_${esc(p.id)}');if(f)f.src=f.src.split('?')[0]+'?v='+Date.now()">새로고침</button>
+        <button class="b-ghost" onclick="window.open('${esc(p.url)}','_blank')">새 탭에서 열기</button>
+      </div>
     </div>
-    <iframe src="${esc(p.url)}" style="width:100%;height:720px;border:0;border-radius:16px;display:block"></iframe>
+    <iframe id="pgF_${esc(p.id)}" src="${esc(fresh(p.url))}" style="width:100%;height:720px;border:0;border-radius:16px;display:block"></iframe>
   </div>`;
 }
 
@@ -3033,46 +3499,84 @@ window.MedITHub={
   version:"1.1",
 };
 
-// ==================== 로그인 / 회원가입 ====================
-let authMode="login"; // 'login' | 'signup'
+// ==================== 로그인 — Google(숙명 계정) 전용 ====================
+let authMode="login";               // (하위호환용 — 화면은 Google 단일 로그인만 제공)
+let authGateMsg="";                 // 로그인 화면에 표시할 오류·안내
 function renderAuth(){
   const box=$("authArea"); if(!box)return;
-  if(authMode==="login"){
-    box.innerHTML=`
-      <div class="auth-tabs"><button class="at on" id="toLogin">로그인</button><button class="at" id="toSignup">회원가입</button></div>
-      <div class="social-list" style="margin-bottom:14px">
-        <button class="social2 s-google" data-p="Gmail">${ICON.google}<span>Google로 계속하기</span></button>
+  box.innerHTML=`
+    <div class="invite-notice">별도 회원가입·비밀번호가 없습니다.<br>· 숙명 구성원: <b>@sookmyung.ac.kr</b> 구글 계정으로 로그인<br>· 거래처·기관: 개최자가 <b>참석자로 초대한 이메일</b>로 로그인 — 구글 계정이면 아래 Google 버튼, 네이버·다음 등 그 외 이메일이면 <b>인증코드 로그인</b>을 사용하세요.</div>
+    <div class="social-list" style="margin:14px 0 8px">
+      <button class="social2 s-google" id="gLogin">${ICON.google}<span>Google 계정으로 로그인</span></button>
+      <button class="social2 s-email" id="otpToggle">${ICON.mail}<span>초대 이메일로 인증코드 로그인</span></button>
+    </div>
+    <div id="otpForm" style="display:none">
+      <div class="social-or">네이버·다음 등 모든 이메일 — 초대받은 주소로 6자리 코드를 보내드립니다</div>
+      <input class="auth-in" id="otpEmail" placeholder="초대받은 이메일 (예: name@naver.com)" autocomplete="off">
+      <button class="b-mint auth-btn" id="otpSend">인증코드 받기</button>
+      <div id="otpStep2" style="display:none">
+        <input class="auth-in" id="otpCode" placeholder="메일로 받은 6자리 코드" autocomplete="off" inputmode="numeric" style="margin-top:8px">
+        <button class="b-mint auth-btn" id="otpVerify">확인하고 로그인</button>
+        <div class="mini" style="margin-top:6px;opacity:.8;text-align:center">메일이 안 오면 스팸함을 확인하거나 1분 뒤 다시 요청해 주세요.</div>
       </div>
-      <div class="social-or">또는 이메일로 로그인</div>
-      <input class="auth-in" id="loginEmail" placeholder="이메일" autocomplete="off">
-      <input class="auth-in" id="loginPw" type="password" placeholder="비밀번호" autocomplete="off">
-      <button class="b-mint auth-btn" id="doLogin">로그인</button>
-      <div class="auth-msg" id="authMsg"></div>
-      `;
-    $("toSignup").onclick=()=>{authMode="signup";renderAuth();};
-    $("doLogin").onclick=doLogin;
-    $("loginPw").addEventListener("keydown",e=>{if(e.key==='Enter')doLogin();});
-  } else {
-    box.innerHTML=`
-      <div class="auth-tabs"><button class="at" id="toLogin">로그인</button><button class="at on" id="toSignup">회원가입</button></div>
-      <div class="invite-notice">${OPEN_SIGNUP?"본인 이메일로 가입하실 수 있습니다. 가입 후 초대된 회의가 목록에 표시됩니다.":"초대받은 이메일로만 가입할 수 있습니다."}</div>
-      <div class="social-list">
-        <button class="social2 s-google" data-p="Gmail">${ICON.google}<span>Google로 계속하기</span></button>
-        <button class="social2 s-email" id="emailToggle">${ICON.mail}<span>개인 이메일로 가입</span></button>
-      </div>
-      <div id="emailForm" class="email-form" style="display:none">
-        <div class="social-or">개인 이메일(기타)로 가입</div>
-        <input class="auth-in" id="suName" placeholder="이름" autocomplete="off">
-        <input class="auth-in" id="suEmail" placeholder="이메일" autocomplete="off">
-        <input class="auth-in" id="suPw" type="password" placeholder="비밀번호" autocomplete="off">
-        <button class="b-mint auth-btn" id="doSignup">가입하고 시작</button>
-      </div>
-      <div class="auth-msg" id="authMsg"></div>`;
-    $("toLogin").onclick=()=>{authMode="login";renderAuth();};
-    $("doSignup").onclick=doSignup;
-    $("emailToggle").onclick=()=>{const f=$("emailForm");f.style.display=f.style.display==="none"?"block":"none";if(f.style.display==="block")$("suName").focus();};
-    box.querySelectorAll(".social2[data-p]").forEach(b=>b.onclick=()=>socialSignup(b.dataset.p));
+    </div>
+    <div class="auth-msg" id="authMsg">${authGateMsg?'<span class="gate-err">'+esc(authGateMsg)+'</span>':''}</div>`;
+  $("gLogin").onclick=()=>{ authGateMsg=""; oauthLogin("Google"); };
+  $("otpToggle").onclick=()=>{ const f=$("otpForm"); f.style.display=f.style.display==="none"?"block":"none"; if(f.style.display==="block")$("otpEmail").focus(); };
+  $("otpSend").onclick=otpSend;
+  $("otpEmail").addEventListener("keydown",e=>{if(e.key==='Enter')otpSend();});
+  $("otpVerify").onclick=otpVerify;
+  $("otpCode").addEventListener("keydown",e=>{if(e.key==='Enter')otpVerify();});
+}
+// ---- 인증코드(OTP) 로그인 — 구글 계정이 없는 이메일(네이버·다음 등)용 ----
+async function otpSend(){
+  const email=($("otpEmail").value||"").trim().toLowerCase();
+  const msg=$("authMsg");
+  if(!email||email.indexOf("@")<0){ msg.innerHTML='<span class="gate-err">이메일을 입력해 주세요.</span>'; return; }
+  if(!allowedEmail(email)){ msg.innerHTML='<span class="gate-err">초대되지 않은 이메일입니다 — 개최자가 이 주소를 참석자로 등록해야 합니다.</span>'; return; }
+  if(!authReady){ msg.innerHTML='<span class="gate-err">인증 서버에 연결되지 않았습니다.</span>'; return; }
+  msg.innerHTML='<span style="color:#8FD9D2">인증코드를 보내는 중…</span>';
+  try{
+    const {error}=await sb.auth.signInWithOtp({email,options:{shouldCreateUser:true}});
+    if(error) throw error;
+    $("otpStep2").style.display="block"; $("otpCode").focus();
+    msg.innerHTML='<span style="color:#8FD9D2">'+esc(email)+' 로 6자리 코드를 보냈습니다. 메일함을 확인해 주세요.</span>';
+  }catch(e){
+    msg.innerHTML='<span class="gate-err">코드 발송 실패: '+esc(e.message)+(/rate/i.test(e.message)?' — 잠시 후 다시 시도해 주세요':'')+'</span>';
   }
+}
+async function otpVerify(){
+  const email=($("otpEmail").value||"").trim().toLowerCase();
+  const token=($("otpCode").value||"").trim();
+  const msg=$("authMsg");
+  if(!token){ msg.innerHTML='<span class="gate-err">메일로 받은 코드를 입력해 주세요.</span>'; return; }
+  msg.innerHTML='<span style="color:#8FD9D2">확인 중…</span>';
+  try{
+    const {error}=await sb.auth.verifyOtp({email,token,type:"email"});
+    if(error) throw error;
+    const u=await restoreSession();
+    if(u){ saveUser(); showMeetingList(); return; }
+    msg.innerHTML='<span class="gate-err">로그인에 실패했습니다 — 다시 시도해 주세요.</span>';
+  }catch(e){
+    msg.innerHTML='<span class="gate-err">코드가 올바르지 않거나 만료되었습니다. 다시 받아 주세요.</span>';
+  }
+}
+// ---- 로그인 허용 정책 ----
+//  ① 숙명 계정(@sookmyung.ac.kr, 하위 도메인 포함): 항상 허용
+//  ② 외부 거래처·기관: 개최자가 어느 회의든 참석자로 등록(초대)한 이메일이면,
+//     그 이메일의 구글 계정으로 로그인 허용 — 초대 명단이 곧 허용 명단
+//  ③ ALLOW_EXTRA_EMAILS: 초대와 무관하게 항상 허용할 예외 이메일 (코드에서 관리)
+const ALLOWED_DOMAINS=["sookmyung.ac.kr"];
+const ALLOW_EXTRA_EMAILS=[];
+function allowedEmail(email){
+  const e=(email||"").trim().toLowerCase(); if(!e)return false;
+  if(ALLOW_EXTRA_EMAILS.some(x=>x.toLowerCase()===e))return true;
+  const dom=e.split("@")[1]||"";
+  if(ALLOWED_DOMAINS.some(d=>dom===d||dom.endsWith("."+d)))return true;
+  // 외부 계정 — 초대(참석자 등록)되어 있으면 허용
+  if((state.accounts||[]).some(a=>(a.email||"").trim().toLowerCase()===e))return true;
+  if((state.meetings||[]).some(m=>(m.attendees||[]).some(a=>(a.email||"").trim().toLowerCase()===e)))return true;
+  return false;
 }
 const ICON={
   google:'<svg viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>',
@@ -3167,7 +3671,9 @@ async function oauthLogin(provider){
     if(error)throw error;
     // 성공 시 브라우저가 provider로 이동 → 돌아오면 restoreSession()이 처리
   }catch(e){
-    toast("로그인 실패: "+e.message);
+    let m=e.message||String(e);
+    if(/provider is not enabled|Unsupported provider/i.test(m)) m+=" — Supabase → Authentication → Providers에서 Google을 켜고 Client ID·Secret을 넣어 주세요";
+    authGateMsg="Google 로그인 실패: "+m; renderAuth();
     console.error(e);
   }
 }
@@ -3204,12 +3710,36 @@ function userFromAuth(u){
   return {role,name:acc&&acc.claimed?acc.name:name,email,id:u.id};
 }
 
+// 구글에서 돌아올 때 URL에 담긴 오류를 읽어 로그인 화면에 표시
+function captureOAuthError(){
+  try{
+    const q=new URLSearchParams(location.search);
+    const hs=new URLSearchParams((location.hash||"").replace(/^#/,""));
+    const err=q.get("error_description")||hs.get("error_description")||q.get("error")||hs.get("error");
+    if(err){
+      let m=decodeURIComponent(String(err).replace(/\+/g," "));
+      if(/access_denied/i.test(m)) m+=" — Google 동의화면이 '테스트' 상태면 테스트 사용자로 등록된 계정만 로그인됩니다";
+      if(/redirect/i.test(m)) m+=" — Google Cloud의 승인된 리디렉션 URI 설정을 확인하세요";
+      authGateMsg="Google 로그인 오류: "+m;
+      history.replaceState(null,"",location.pathname);   // 주소창 정리
+    }
+  }catch(_){}
+}
+
 // 페이지 로드 시 세션 복원 (OAuth 리다이렉트 포함) — 진짜 자동 로그인
 async function restoreSession(){
   if(!authReady)return null;
+  captureOAuthError();
   try{
     const {data:{session}}=await sb.auth.getSession();
     if(session&&session.user){
+      // 숙명 계정만 허용 — 그 외에는 즉시 로그아웃하고 안내
+      if(!allowedEmail(session.user.email)){
+        try{ await sb.auth.signOut(); }catch(_){}
+        authGateMsg="허용되지 않은 계정입니다 — 숙명 계정(@sookmyung.ac.kr)이 아니면, 개최자가 이 이메일을 회의 참석자로 등록해야 로그인할 수 있습니다. 로그인한 계정: "+(session.user.email||"알 수 없음");
+        renderAuth();
+        return null;
+      }
       const u=userFromAuth(session.user);
       // 계정 목록에 없으면 등록 (초대 명단과 연결)
       let acc=state.accounts.find(a=>(a.email||"").toLowerCase()===u.email);
