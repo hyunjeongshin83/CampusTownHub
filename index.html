@@ -1381,7 +1381,7 @@ async function saveNoteToMeeting(m,text){
   }
   await saveNow();
   let touched=false;
-  (state.records||[]).forEach(rr=>{ if(sameTitle(rr.title,m.title)){
+  (state.records||[]).forEach(rr=>{ if(!rr.final && sameTitle(rr.title,m.title)){   // 확정(지난 회차) 기록은 보호
     rr.rawNote=m.rawNote;
     if(!rr.notes&&m.summary)rr.notes={summary:m.summary,actions:(m.actions||[]).slice()};
     if((!rr.tags||!rr.tags.length)&&m.tags&&m.tags.length)rr.tags=m.tags.slice(); touched=true; } });
@@ -2791,7 +2791,7 @@ async function syncNotes(silent){
     if(m){ m.summary=j.summary||m.summary; m.tags=j.tags||m.tags; m.actions=j.actions||m.actions;
            await saveNoteToMeeting(m,(mnEl&&mnEl.value.trim())||""); if(mnEl)mnEl.value="";
            // 기존 기록에 정리 결과(아이디어 포함) 전체를 반영
-           let tt=false;(state.records||[]).forEach(rr=>{ if(sameTitle(rr.title,m.title)){ rr.notes=state.notes; tt=true; } });
+           let tt=false;(state.records||[]).forEach(rr=>{ if(!rr.final && sameTitle(rr.title,m.title)){ rr.notes=state.notes; tt=true; } });
            if(tt)await saveRecords(); renderRecords(); if($("archive"))renderArchive(); }
     if(!silent)toast("회의록·제목·다음할일 자동 갱신됨 — 회의 기록 미리보기에 반영됨");
   }catch(e){if(!silent)toast("반영 실패: "+e.message);}
@@ -2859,8 +2859,10 @@ async function endMeeting(){
     liveParas:((state.liveDoc&&state.liveDoc.paras)||[]).slice(),   // 실시간 회의록 문단 (보존)
     segments:[],                  // 녹취 원문 — 저장하지 않음 (파기)
     purged:{at:purgedAt,count:segCount},   // 파기 기록
-    research:state.research.slice(),tabNotes:JSON.parse(JSON.stringify(state.tabNotes)),email};
+    research:state.research.slice(),tabNotes:JSON.parse(JSON.stringify(state.tabNotes)),email,final:true};
   state.records.unshift(rec);await saveRecords();
+  // 이번 회차 내용은 기록에 보존됨 — 회의 객체를 비워 다음 회차를 새로 시작
+  if(cm&&cm.id){ cm.rawNote=""; cm.summary=""; cm.tags=[]; cm.actions=[]; }
   // 녹취 원문 파기 (메모리에서도 즉시 제거)
   state.segments=[];state.notes=null;state.research=[];state.nextActions=[];state.topicTags=[];
   state.liveDoc={paras:[],cursor:0};
@@ -3084,23 +3086,33 @@ ${(r.nextActions||[]).map(x=>"· "+x).join("\n")||"—"}
 감사합니다.
 바쁘신 중, 감사드립니다 — 신현정 드림`;
 }
-function renderArchive(){const box=$("archive");if(!box)return;
-  box.innerHTML=state.records.length?state.records.map(r=>`
-    <div class="glass tile" style="margin-bottom:10px">
-      <div style="display:flex;gap:10px;align-items:flex-start">
-        <div style="flex:1;cursor:pointer" onclick="previewRecord('${r.id}')" title="회의록 미리보기">
-          <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(r.title)}</div>
-          <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${durLabel(r)} · 참석 ${(r.attendees||[]).length}명 · ${(r.tags||[]).map(t=>"#"+t).join(" ")}</div>
-          <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(moodLine(r))}</div>
-          ${recordSnippet(r)?`<div style="margin-top:7px;background:var(--mist);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.6;color:var(--gray);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${esc(recordSnippet(r))}</div>`:""}
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <button class="b-mint" onclick="previewRecord('${r.id}')">미리보기</button>
-          <button class="b-ghost" onclick="loadEmail('${r.id}')">이메일</button>
-          <button class="b-deep" onclick="exportRecord('${r.id}')">MD</button>
-        </div>
+// 회차 한 줄 (주제 묶음 내부) — 각 날짜의 회의록이 독립적으로 미리보기·이메일·MD 제공
+function sessionRow(r,pvPrefix){
+  return `<div style="border-top:1px dashed var(--line);padding:9px 0 2px">
+    <div style="display:flex;gap:10px;align-items:flex-start">
+      <div style="flex:1;cursor:pointer" onclick="previewRecord('${r.id}','${pvPrefix}${r.id}')" title="이 회차 회의록 미리보기">
+        <div style="font-size:13px;font-weight:700;color:var(--deep)">${esc(r.dt)} <span class="mini" style="font-weight:500">· ${durLabel(r)}${(r.stats&&r.stats.segs>0)?` · 발언 ${r.stats.segs}건`:""} · 참석 ${(r.attendees||[]).length}명</span></div>
+        <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(moodLine(r))}</div>
       </div>
-      <div id="pv-${r.id}"></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="b-mint" onclick="previewRecord('${r.id}','${pvPrefix}${r.id}')">미리보기</button>
+        <button class="b-ghost" onclick="loadEmail('${r.id}')">이메일</button>
+        <button class="b-deep" onclick="exportRecord('${r.id}')">MD</button>
+      </div>
+    </div>
+    <div id="${pvPrefix}${r.id}"></div>
+  </div>`;
+}
+function renderArchive(){const box=$("archive");if(!box)return;
+  const groups=groupRecords();
+  box.innerHTML=groups.length?groups.map(g=>`
+    <div class="glass tile" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px">
+        <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(g.title)}</div>
+        <span class="mini" style="white-space:nowrap">회의 ${g.items.length}회</span>
+      </div>
+      ${(g.items[0].tags&&g.items[0].tags.length)?`<div class="mini" style="margin-bottom:4px">${g.items[0].tags.map(t=>"#"+t).join(" ")}</div>`:""}
+      ${g.items.map(r=>sessionRow(r,"pv-")).join("")}
     </div>`).join(""):'<div class="mini">아직 아카이브된 회의가 없습니다.</div>';}
 
 // 회의록 미리보기 (화면에서 바로 확인)
@@ -3135,24 +3147,29 @@ window.loadEmail=loadEmail;
 function renderRecords(){const list=$("reclist");if(!list)return;
   refreshBadges();
   if(!state.records.length){list.innerHTML='<div class="glass tile"><div class="mini">아직 저장된 회의가 없습니다. 회의를 시작하고 종료하면 여기 쌓입니다.</div></div>';return;}
-  list.innerHTML=state.records.map(r=>`
-    <div class="glass tile" style="margin-bottom:10px;display:flex;gap:12px;align-items:flex-start">
-      <div style="flex:1;cursor:pointer" onclick="previewRecord('${r.id}','pv2-${r.id}')" title="회의록 미리보기">
-        <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(r.title)}</div>
-        <div class="mini" style="margin:3px 0">${esc(r.dt)} · ${durLabel(r)}${(r.stats&&r.stats.segs>0)?` · 발언 ${r.stats.segs}건`:""} · 참석 ${(r.attendees||[]).length}명</div>
-        <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(moodLine(r))}</div>
-        ${recordSnippet(r)?`<div style="margin-top:7px;background:var(--mist);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.6;color:var(--gray);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${esc(recordSnippet(r))}</div>`:""}
-        <div style="margin-top:6px">${(r.tags||[]).map(t=>`<span class="chip"><span class="av">#</span>${esc(t)}</span>`).join("")}</div>
+  const groups=groupRecords();
+  list.innerHTML=groups.map(g=>`
+    <div class="glass tile" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px">
+        <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(g.title)}</div>
+        <span class="mini" style="white-space:nowrap">회의 ${g.items.length}회</span>
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <button class="b-mint" onclick="previewRecord('${r.id}','pv2-${r.id}')">미리보기</button>
-        <button class="b-ghost" onclick="switchTab('email');setTimeout(()=>loadEmail('${r.id}'),50)">이메일</button>
-        <button class="b-deep" onclick="exportRecord('${r.id}')">MD</button>
-      </div>
-    </div>
-    <div id="pv2-${r.id}" style="margin-bottom:10px"></div>`).join("");
+      <div style="margin:2px 0 6px">${(g.items[0].tags||[]).map(t=>`<span class="chip"><span class="av">#</span>${esc(t)}</span>`).join("")}</div>
+      ${g.items.map(r=>sessionRow(r,"pv2-")).join("")}
+    </div>`).join("");
 }
 // 기록 보정: 회의 객체의 AI 정리 내용(rawNote·summary·tags)을 기록에 채우고, 비정상 소요시간을 정리
+function normTitle(t){ return String(t||"").replace(/\s+/g,"").toLowerCase(); }
+// 같은 주제(제목)로 기록을 묶는다 — 주제 아래 날짜별 회차 목록
+function groupRecords(){
+  const groups=[], idx={};
+  (state.records||[]).forEach(r=>{
+    const k=normTitle(r.title)||"untitled";
+    if(!(k in idx)){ idx[k]=groups.length; groups.push({key:k,title:r.title,items:[]}); }
+    groups[idx[k]].items.push(r);   // records는 최신순(unshift)이라 회차도 최신순 유지
+  });
+  return groups;
+}
 function sameTitle(a,b){
   const n=s=>String(s||"").replace(/\s+/g,"").toLowerCase();
   const x=n(a),y=n(b); if(!x||!y) return false;
@@ -3173,11 +3190,13 @@ function repairRecords(){
         if(String(r.dt||"").indexOf(md)<0){ r.dt=t.toLocaleString('ko-KR'); changed=true; }
       }
     }
-    if(mm){
+    if(mm && !r.final){
       if(!r.rawNote && mm.rawNote){ r.rawNote=mm.rawNote; changed=true; }
       if(!r.notes && mm.summary){ r.notes={summary:mm.summary, actions:(mm.actions||[]).slice()}; changed=true; }
       if((!r.tags||!r.tags.length) && mm.tags && mm.tags.length){ r.tags=mm.tags.slice(); changed=true; }
     }
+    // 한 번 채워진 기존 기록은 확정 — 이후 같은 제목 회의(다음 회차)가 덮어쓰지 못함
+    if(r.final===undefined){ r.final=true; changed=true; }
   });
   if(changed) saveRecords();
 }
@@ -3201,7 +3220,7 @@ function moodLine(r){
 }
 function recordToMD(r){
   // 기록에 노트가 없으면 같은 제목의 회의에서 즉시 가져옴 (저장 여부와 무관하게 표시 보장)
-  if(!r.rawNote||!r.notes){
+  if((!r.rawNote||!r.notes) && !r.final){
     const mm=(state.meetings||[]).find(m=>sameTitle(m.title,r.title));
     if(mm){ if(!r.rawNote&&mm.rawNote)r.rawNote=mm.rawNote;
       if(!r.notes&&mm.summary)r.notes={summary:mm.summary,actions:(mm.actions||[]).slice()};
