@@ -3540,7 +3540,9 @@ function renderAuth(){
       </div>
     </div>
     <div class="auth-msg" id="authMsg">${authGateMsg?'<span class="gate-err">'+esc(authGateMsg)+'</span>':''}</div>`;
-  $("gLogin").onclick=()=>{ authGateMsg=""; oauthLogin("Google"); };
+  $("gLogin").onclick=()=>{ authGateMsg="";
+    const m=$("authMsg"); if(m)m.innerHTML='<span style="color:#8FD9D2">구글 로그인 페이지로 이동 중… (이 문구가 계속 남아 있으면 아래 안내를 확인하세요)</span>';
+    oauthLogin("Google"); };
   $("otpToggle").onclick=()=>{ const f=$("otpForm"); f.style.display=f.style.display==="none"?"block":"none"; if(f.style.display==="block")$("otpEmail").focus(); };
   $("otpSend").onclick=otpSend;
   $("otpEmail").addEventListener("keydown",e=>{if(e.key==='Enter')otpSend();});
@@ -3668,7 +3670,8 @@ let authReady=false;
 
 function initAuth(){
   if(!SUPABASE_URL||!SUPABASE_ANON_KEY)return false;
-  if(!window.supabase){ console.warn("Supabase 라이브러리 로드 실패"); return false; }
+  if(!window.supabase){ console.warn("Supabase 라이브러리 로드 실패");
+    authGateMsg="인증 모듈(supabase-js) 로드 실패 — 인터넷 연결 또는 cdn.jsdelivr.net 차단 여부를 확인하고 새로고침해 주세요."; return false; }
   try{
     sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
     authReady=true;
@@ -3678,7 +3681,9 @@ function initAuth(){
 
 // 소셜 로그인 (진짜 OAuth — Google/Kakao 등)
 async function oauthLogin(provider){
-  if(!authReady){ toast("인증 설정이 필요합니다 (Supabase Auth)"); return; }
+  if(!authReady){
+    authGateMsg="인증 모듈이 로드되지 않았습니다 — 인터넷 연결과 보안 프로그램(광고 차단·사내 방화벽)이 cdn.jsdelivr.net 을 막고 있는지 확인한 뒤 새로고침해 주세요.";
+    renderAuth(); return; }
   const map={Gmail:"google",Google:"google",Kakao:"kakao",Apple:"apple",Naver:"google"};
   const p=map[provider]||"google";
   if(provider==="Naver"){ toast("네이버는 준비 중입니다. Google 또는 이메일을 사용해 주세요."); return; }
@@ -3936,7 +3941,19 @@ function enterHub(){
 }
 // ==================== INIT ====================
 (async function(){
-  await loadAll();
+  // 어떤 오류든 첫 화면에 표시 (콘솔에만 남지 않도록)
+  window.addEventListener("error",ev=>{
+    try{ const a=$("authArea");
+      if(a&&!a.querySelector(".boot-err")){
+        const d=document.createElement("div"); d.className="boot-err";
+        d.style.cssText="margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(255,120,100,.15);color:#FFB4A2;font-size:12.5px;line-height:1.6";
+        d.textContent="스크립트 오류: "+(ev.message||"")+" ("+(ev.filename||"").split("/").pop()+":"+(ev.lineno||"")+") — 이 문구를 그대로 전달해 주세요";
+        a.appendChild(d); }
+    }catch(_){}
+  });
+  // 6초가 지나도 로그인 영역이 비어 있으면 강제로 로그인 화면 표시
+  setTimeout(()=>{ try{ const a=$("authArea"); if(a&&!a.innerHTML.trim()){ authGateMsg=authGateMsg||"초기화가 지연되어 로그인 화면을 표시합니다 (클라우드 응답 지연 가능)"; renderAuth(); } }catch(_){} },6000);
+  try{ await loadAll(); }catch(e){ authGateMsg="데이터 불러오기 오류: "+(e.message||e); }
   const m=currentMeeting();
   if(m&&m.started&&!m.ended)setPill("live","회의 진행 중");else setPill("idle","회의 대기");
 
