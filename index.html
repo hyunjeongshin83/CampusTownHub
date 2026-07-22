@@ -611,6 +611,7 @@ const state={
   // 잡(Job): 회의에서 이어지는 제안·과업. 다음 회의로 연결 가능.
   projects:[],           // 회의에서 나온 프로젝트 (카드)
   fileNames:{},          // 업로드 파일의 원본 한글 이름 매핑
+  fileMeeting:{},        // 업로드 파일 ↔ 회의 매핑 (일정별 자료 정리용)
   pages:[],              // 커스텀 탭 (HTML 페이지를 탭으로 등록)
   jobs:[],               // {id,title,desc,fromMeetingId,linkedMeetingIds:[],status}
   meeting:null,          // = 현재 회의 (currentMeetingId로 참조, 하위호환)
@@ -758,7 +759,7 @@ function refreshAll(){
   if(state.activeTab) renderStage(state.activeTab);
 }
 async function saveSession(){await store.set("medit:hub1",{
-  accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,currentMeetingId:state.currentMeetingId,
+  accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,fileMeeting:state.fileMeeting,currentMeetingId:state.currentMeetingId,
   uploads:state.uploads.map(u=>({name:u.name,type:u.type,size:u.size,text:u.text})),
   tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
   nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos});}
@@ -781,7 +782,7 @@ async function loadAll(){
   try{repairRecords();}catch(_){}
   const s=await store.get("medit:hub1");
   if(s && typeof s==="object"){
-    Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],projects:s.projects||[],pages:s.pages||[],fileNames:s.fileNames||{},
+    Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],projects:s.projects||[],pages:s.pages||[],fileNames:s.fileNames||{},fileMeeting:s.fileMeeting||{},
       currentMeetingId:s.currentMeetingId||null,uploads:s.uploads||[],
       tabNotes:s.tabNotes||state.tabNotes,segments:s.segments||[],notes:s.notes||null,research:s.research||[],
       nextActions:s.nextActions||[],topicTags:s.topicTags||[],meetingStart:s.meetingStart||null});
@@ -1603,6 +1604,8 @@ async function uploadFiles(files){
       // 원본 이름 매핑 저장 (목록에서 한글 이름으로 표시)
       state.fileNames=state.fileNames||{};
       state.fileNames[safe]=f.name;
+      state.fileMeeting=state.fileMeeting||{};
+      if(state.currentMeetingId) state.fileMeeting[safe]=state.currentMeetingId;   // 이 회의의 자료로 연결
       await saveNow();
       if(st)st.textContent=f.name+" 업로드 완료";
     }catch(e){
@@ -1691,6 +1694,31 @@ async function openTextViewer(storedName){
     $("txtBody").scrollTop=0;
   }catch(e){ toast("미리보기 실패: "+e.message); }
 }
+// 슬라이드 탭 — 현재 회의에 연결된 발표 자료(PPT·PDF) 목록
+async function renderDeckMeetingFiles(){
+  const box=$("deckMeetingFiles"); if(!box)return;
+  const files=await listFiles();
+  if(files===null){ box.textContent="클라우드에 연결되지 않았습니다."; return; }
+  const mid=state.currentMeetingId;
+  const mine=files.filter(f=>{
+    const ext=(f.name.match(/\.[^.]+$/)||[""])[0].toLowerCase();
+    if(!/^\.(pptx?|pdf)$/.test(ext)) return false;
+    const owner=(state.fileMeeting||{})[f.name];
+    return owner?owner===mid:true;                       // 과거(연결 정보 없는) 자료는 모든 회의에서 보이도록
+  });
+  if(!mine.length){ box.innerHTML='이 회의에 연결된 발표 자료가 없습니다 — <b>[사전 준비]</b> 탭에서 PPT·PDF를 업로드하면 여기에 표시됩니다.'; return; }
+  box.innerHTML=mine.map(f=>{
+    const ext=(f.name.match(/\.[^.]+$/)||[""])[0].toLowerCase();
+    const legacy=!(state.fileMeeting||{})[f.name];
+    return `<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--line)">
+      <b style="flex:1;font-size:12.5px;color:var(--deep);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(prettyName(f.name))}</b>
+      ${legacy?'<span class="mini" style="flex:none">회의 미지정</span>':""}
+      ${/pptx?/.test(ext)?`<button class="b-mint" style="padding:4px 11px;font-size:12px" onclick="openPptView('${esc(f.name)}')">화면에서 열기</button>`:`<button class="b-mint" style="padding:4px 11px;font-size:12px" onclick="viewFile('${esc(f.name)}')">열기</button>`}
+      <button class="b-ghost" style="padding:4px 11px;font-size:12px" onclick="downloadFile('${esc(f.name)}')">다운로드</button>
+    </div>`;
+  }).join("");
+}
+window.renderDeckMeetingFiles=renderDeckMeetingFiles;
 // ---------- 앱 내 PPT 뷰어 (PPTXjs — 브라우저에서 직접 렌더링, 그림 포함) ----------
 let pptLibsReady=false;
 function loadOnce(tag,attrs){return new Promise((ok,no)=>{
@@ -1972,9 +2000,21 @@ function buildInvite(names){
 `회의 전에 사이트에 올린 자료를 한 번 읽어봐 주시면 감사하겠습니다.\n\n`+
 `감사합니다.\n\n신현정 드림`;
 }
-function openMail(to,subj,body){
-  window.location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+// Gmail 웹 작성 창을 열어 수신자·제목·본문을 채워 보냄 (기본 메일 앱과 무관 — 브라우저 Gmail 계정 사용)
+// URL 길이 한도를 넘는 긴 본문은 클립보드에 복사하고 본문만 붙여넣도록 안내
+function openGmail(to,subj,body){
+  const base="https://mail.google.com/mail/?view=cm&fs=1";
+  let url=base+"&to="+encodeURIComponent(to||"")+"&su="+encodeURIComponent(subj||"")+"&body="+encodeURIComponent(body||"");
+  if(url.length>7500){
+    if(navigator.clipboard) navigator.clipboard.writeText(body||"");
+    url=base+"&to="+encodeURIComponent(to||"")+"&su="+encodeURIComponent(subj||"");
+    window.open(url,"_blank");
+    toast("본문이 길어 클립보드에 복사했습니다 — Gmail 창에 붙여넣기(Ctrl+V) 해주세요");
+    return;
+  }
+  window.open(url,"_blank");
 }
+function openMail(to,subj,body){ openGmail(to,subj,body); }
 function inviteOne(i){
   const a=state.attendees[i]; if(!a||!a.email){ toast("이메일이 없습니다"); return; }
   const m=currentMeeting()||{};
@@ -2102,8 +2142,20 @@ const SLIDES=[
 ];
 let autoAdv=null, playing=false;
 function deckHTML(){
+  const m=currentMeeting()||{};
   const sl=SLIDES[state.deckIdx];
+  const head=`<div class="glass tile" style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap">
+      <div><b style="font-size:14.5px;color:var(--deep)">${esc(m.title||"회의를 먼저 선택하세요")}</b>
+        <span class="mini"> · ${esc(fmtDate(m.date))} ${esc(m.time||"")}${m.place?" · "+esc(m.place):""}</span></div>
+      <span class="mini">이 회의의 발표 자료</span>
+    </div>
+    <div id="deckMeetingFiles" class="mini" style="margin-top:8px">발표 자료를 불러오는 중…</div>
+  </div>`;
+  setTimeout(renderDeckMeetingFiles,0);
   return `<div class="slidewrap">
+    ${head}
+    <div class="section-title" style="margin-top:2px">허브 소개 슬라이드</div>
     <div class="slide ${sl.cls}">${sl.html}</div>
     <div class="progress"><div class="bar" id="progBar" style="width:${(state.deckIdx+1)/SLIDES.length*100}%"></div></div>
     <div class="caption-box" id="captionBox">
@@ -2312,8 +2364,8 @@ function renderOutreach(){
   box.querySelectorAll("[data-odel]").forEach(b=>b.onclick=()=>removeOutreach(b.dataset.odel));
   box.querySelectorAll("[data-omail]").forEach(b=>b.onclick=()=>{
     const o=(currentMeeting().outreach||[]).find(x=>x.id===b.dataset.omail); if(!o)return;
-    window.location.href=`mailto:${encodeURIComponent(o.to||"")}?subject=${encodeURIComponent(o.subj||"")}&body=${encodeURIComponent(o.body||"")}`;
-    toast("메일 앱을 엽니다");
+    openGmail(o.to||"",o.subj||"",o.body||"");
+    toast("Gmail 작성 창을 엽니다");
   });
   const a=$("oAdd"); if(a) a.onclick=()=>openOutreachForm(null);
 }
@@ -2755,9 +2807,8 @@ function inviteByEmail(link){
   const body=`안녕하세요,\n\n아래 회의에 초대합니다.\n\n`+
     `회의: ${m.title||""}\n일시: ${fmtDate(m.date)} ${m.time||""}\n장소: ${m.place||""}\n`+
     `화상회의 링크: ${link}\n\n감사합니다.`;
-  const url=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
-  window.location.href=url;
-  toast("메일 앱으로 초대장을 엽니다");
+  openGmail(to,subj,body);
+  toast("Gmail로 초대장을 엽니다");
 }
 
 function appHTML(){
@@ -3482,7 +3533,8 @@ function emailHTML(){
   return `<div class="hero">
    <div class="section-title">Mail · 이메일 센터</div>
    <h2 style="font-size:23px;color:var(--ink);margin-bottom:4px">이메일</h2>
-   <div class="mini" style="margin-bottom:16px">아래에서 종류를 고르면 수신자·제목·본문이 자동으로 채워집니다. 확인 후 메일 앱으로 보내세요.</div>
+   <div class="mini" style="margin-bottom:6px">아래에서 종류를 고르면 수신자·제목·본문이 자동으로 채워집니다. 확인 후 메일 앱으로 보내세요.</div>
+   <div class="mini" style="margin-bottom:16px;color:var(--deep);font-weight:700">현재 회의: ${esc(m.title||"—")} · ${esc(fmtDate(m.date))} ${esc(m.time||"")}</div>
 
    <div class="mail-kinds">
      <button class="mk" data-kind="invite">
@@ -3511,7 +3563,8 @@ function emailHTML(){
      <div class="fld"><label>제목</label><input id="emSubj" placeholder="제목"></div>
      <div class="fld"><label>본문</label><textarea id="emBody" style="min-height:280px" placeholder="위에서 종류를 선택하면 자동으로 채워집니다"></textarea></div>
      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
-       <button class="b-mint" id="emOpen">메일 앱으로 열기</button>
+       <button class="b-mint" id="emOpen">Gmail로 보내기</button>
+       <button class="b-ghost" id="emOpenApp" title="기본 메일 앱(아웃룩 등)으로 열려면">기본 메일 앱</button>
        <button class="b-ghost" id="emCopy">본문 복사</button>
        <button class="b-ghost" id="emClear">비우기</button>
      </div>
@@ -3596,16 +3649,39 @@ function bindEmail(){
       $("emMsg").textContent="보낼 대상을 선택하세요.";
       return;
     }
+    if(kind==="minutes"){
+      // 회의 일정별(회차별)로 회의록 이메일 선택
+      const groups=groupRecords();
+      if(!groups.length){ sub.innerHTML=""; $("emMsg").textContent="아직 저장된 회의 기록이 없습니다 — 회의 종료 후 이용하세요."; return; }
+      sub.innerHTML='<div class="mail-sub">'+groups.map(g=>
+        g.items.map(r=>`<button class="msb" data-rec="${esc(r.id)}">${esc(g.title.length>22?g.title.slice(0,22)+"…":g.title)} — ${esc(r.dt)}</button>`).join("")
+      ).join("")+'</div>';
+      sub.querySelectorAll("[data-rec]").forEach(x=>x.onclick=()=>{
+        sub.querySelectorAll(".msb").forEach(y=>y.classList.remove("on"));
+        x.classList.add("on");
+        loadEmail(x.dataset.rec);
+        $("emMsg").textContent="선택한 회차의 회의록 이메일을 불러왔습니다.";
+      });
+      $("emMsg").textContent="어느 회차의 회의록을 보낼지 선택하세요.";
+      return;
+    }
     sub.innerHTML="";
     const t=MAIL_TPL[kind] && MAIL_TPL[kind]();
-    if(t){ set(t); $("emMsg").textContent=(kind==="invite"?"초대장":"회의록")+"을(를) 불러왔습니다."; }
+    if(t){ set(t); $("emMsg").textContent="초대장을 불러왔습니다."; }
   });
 
   $("emOpen").onclick=()=>{
     const to=$("emTo").value, su=$("emSubj").value, bo=$("emBody").value;
     if(!bo.trim()){ $("emMsg").textContent="본문이 비어 있습니다. 위에서 종류를 선택하세요."; return; }
+    openGmail(to,su,bo);
+    $("emMsg").textContent="Gmail 작성 창을 엽니다 — 브라우저에 로그인된 Google 계정으로 보내집니다.";
+  };
+  const emApp=$("emOpenApp");
+  if(emApp)emApp.onclick=()=>{
+    const to=$("emTo").value, su=$("emSubj").value, bo=$("emBody").value;
+    if(!bo.trim()){ $("emMsg").textContent="본문이 비어 있습니다."; return; }
     window.location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(su)}&body=${encodeURIComponent(bo)}`;
-    $("emMsg").textContent="메일 앱을 엽니다.";
+    $("emMsg").textContent="기본 메일 앱을 엽니다.";
   };
   $("emCopy").onclick=()=>{
     const bo=$("emBody").value;
