@@ -576,7 +576,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=40, BUILD_DATE="2026-07-22";
+const BUILD=41, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -641,7 +641,7 @@ const state={
   fileMeeting:{},        // 업로드 파일 ↔ 회의 매핑 (일정별 자료 정리용)
   pages:[],              // 커스텀 탭 (HTML 페이지를 탭으로 등록)
   jobs:[],               // {id,title,desc,fromMeetingId,linkedMeetingIds:[],status}
-  meeting:null,          // = 현재 회의 (currentMeetingId로 참조, 하위호환)
+  meeting:{},            // = 현재 회의 (currentMeetingId로 참조, 하위호환) — null이면 로드 시 Object.assign이 깨지므로 항상 객체
   attendees:[],          // 현재 회의 참석자 (meeting.attendees 미러)
   uploads:[],
   tabNotes:{deck:[],app:[],registry:[],console:[]},
@@ -813,7 +813,10 @@ async function loadAll(){
       currentMeetingId:s.currentMeetingId||null,uploads:s.uploads||[],
       tabNotes:s.tabNotes||state.tabNotes,segments:s.segments||[],notes:s.notes||null,research:s.research||[],
       nextActions:s.nextActions||[],topicTags:s.topicTags||[],meetingStart:s.meetingStart||null});
-    if(s.meeting&&typeof s.meeting==="object")Object.assign(state.meeting,s.meeting);
+    if(s.meeting&&typeof s.meeting==="object"){
+      if(!state.meeting||typeof state.meeting!=="object")state.meeting={};   // 새 브라우저 첫 로드 방어
+      Object.assign(state.meeting,s.meeting);
+    }
     if(s.liveDoc&&typeof s.liveDoc==="object")state.liveDoc={paras:Array.isArray(s.liveDoc.paras)?s.liveDoc.paras:[],cursor:Number(s.liveDoc.cursor)||0};
     if(s.schedule&&typeof s.schedule==="object")state.schedule={goals:Array.isArray(s.schedule.goals)?s.schedule.goals:[],done:Array.isArray(s.schedule.done)?s.schedule.done:[]};
     if(s.lit&&typeof s.lit==="object")state.lit={q:s.lit.q||"",items:Array.isArray(s.lit.items)?s.lit.items:[]};
