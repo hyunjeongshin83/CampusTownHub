@@ -510,6 +510,10 @@ body{letter-spacing:-0.015em;}
 
 .chip .x.invite{color:var(--deep);font-weight:800;background:var(--mist);border-radius:8px;padding:2px 7px;margin-right:2px;}
 .chip .x.invite:hover{background:var(--mint);color:#fff;}
+.anno{border-bottom:1.5px dashed var(--mint);cursor:pointer;color:var(--deep);font-weight:600}
+.anno-pop{position:fixed;z-index:10000;max-width:300px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(20,60,55,.18);padding:11px 13px;font-size:12.5px;line-height:1.6;color:var(--ink)}
+.anno-pop .t{font-weight:800;color:var(--deep);margin-bottom:3px}
+.anno-pop .acts{display:flex;gap:6px;margin-top:8px;justify-content:flex-end}
 </style>
 </head>
 <body>
@@ -617,6 +621,7 @@ const state={
   liveDoc:{paras:[],cursor:0},   // 실시간 회의록: 확정 문단 + 다음에 정리할 발언 위치
   schedule:{goals:[],done:[]},   // 일정: 목표(마일스톤)와 수동 '한 일' 카드
   lit:{q:"",items:[]},           // 문헌 리서치 결과 (PubMed 등 — Claude 웹 검색)
+  annos:[],                      // 용어 주석: {id,term,note,url} — 회의록·문단 속 용어에 말풍선
   deckIdx:0, records:[], meetingStart:null,
 };
 // 기본 데이터 시드 (최초 1회)
@@ -756,7 +761,7 @@ async function saveSession(){await store.set("medit:hub1",{
   accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,currentMeetingId:state.currentMeetingId,
   uploads:state.uploads.map(u=>({name:u.name,type:u.type,size:u.size,text:u.text})),
   tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
-  nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit});}
+  nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos});}
 async function saveRecords(){await store.set("medit:records2",state.records);}
 // 로그인 세션은 이 브라우저에만 저장 (클라우드 공유 X — 남의 기기에 로그인이 옮겨가면 안 됨)
 async function saveUser(){
@@ -784,6 +789,7 @@ async function loadAll(){
     if(s.liveDoc&&typeof s.liveDoc==="object")state.liveDoc={paras:Array.isArray(s.liveDoc.paras)?s.liveDoc.paras:[],cursor:Number(s.liveDoc.cursor)||0};
     if(s.schedule&&typeof s.schedule==="object")state.schedule={goals:Array.isArray(s.schedule.goals)?s.schedule.goals:[],done:Array.isArray(s.schedule.done)?s.schedule.done:[]};
     if(s.lit&&typeof s.lit==="object")state.lit={q:s.lit.q||"",items:Array.isArray(s.lit.items)?s.lit.items:[]};
+    if(Array.isArray(s.annos))state.annos=s.annos;
   }
   // 배열이 아닌 값이 들어와도 안전하게 정규화 (데이터가 비었거나 깨진 경우)
   ["accounts","meetings","companies","jobs","projects","pages","uploads","segments","research","nextActions","topicTags","records"].forEach(k=>{
@@ -2798,7 +2804,7 @@ function consoleHTML(){
      <h3 style="display:flex;align-items:center;gap:8px">실시간 회의록 <span class="tag">문장 → 문단 → 전체</span><span style="flex:1"></span><button class="b-ghost" id="redoLive" style="padding:4px 10px;font-size:12px" title="문단이 잘리거나 어색하면 원본 발언으로부터 처음부터 다시 정리합니다">다시 정리</button></h3>
      <div class="mini" style="padding:8px 14px 0;line-height:1.55">발언은 <b>문장 단위</b>로 즉시 기록되고, 분량이 쌓이면 자동으로 <b>문단</b>으로 정리됩니다. [AI 반영]·[종료·정리]가 <b>전체 회의록</b>을 완성합니다.</div>
      <div class="cscroll" id="liveDoc" style="flex:none;max-height:170px;overflow-y:auto"></div>
-     <h3 style="border-top:1px solid var(--line)">회의록 (AI 반영) <span class="tag">Claude</span></h3>
+     <h3 style="border-top:1px solid var(--line);display:flex;align-items:center;gap:8px">회의록 (AI 반영) <span class="tag">Claude</span><span style="flex:1"></span><select id="noteStyle" title="정리 스타일 — 사실형은 감정·인상·추측 표현을 배제하고 사실만 기록합니다" style="padding:4px 8px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:12px;color:var(--ink);background:#fff"><option value="fact">사실형 (Claude)</option><option value="tone">인상 포함</option></select><button class="b-ghost" onclick="newAnnoFlow()" style="padding:4px 10px;font-size:12px" title="회의록 속 용어에 말풍선 설명을 답니다 — 예: 팜 → 대형병원 제약 프로그램(제약명·병명 DB 필드)">+ 용어 주석</button></h3>
      <div class="cscroll" id="notes" style="flex:none;max-height:150px;overflow-y:auto"></div>
      <div class="crow">
        <button class="b-deep" id="syncBtn">AI 반영</button>
@@ -2839,6 +2845,7 @@ function bindConsole(){
   $("micBtn").onclick=()=>listening?stopMic():startMic();
   if($("guessBtn"))$("guessBtn").onclick=guessSpeakers;
   if($("redoLive"))$("redoLive").onclick=redoLiveDoc;
+  const ns=$("noteStyle"); if(ns){ ns.value=noteStyleVal(); ns.onchange=()=>{ localStorage.setItem("medit:notestyle",ns.value); toast(ns.value==="fact"?"사실형(Claude) 정리 — 감정·인상 표현을 배제합니다":"인상 포함 정리"); }; }
   $("clearBtn").onclick=()=>{if(confirm("녹취를 모두 지울까요? (이미 정리된 문단은 실시간 회의록에 남습니다)")){state.segments=[];if(state.liveDoc)state.liveDoc.cursor=0;renderTranscript();renderLiveDoc();refreshBadges();scheduleSave();}};
   $("addBtn").onclick=addTyped;$("typeInput").addEventListener("keydown",e=>{if(e.key==='Enter')addTyped();});
   $("syncBtn").onclick=syncNotes;$("endBtn2").onclick=endMeeting;
@@ -2945,7 +2952,7 @@ function renderLiveDoc(){
     box.innerHTML='<div class="mini" style="font-style:italic;padding:8px 14px">발언이 시작되면 이 자리에 문장 단위로 바로 기록됩니다.</div>';
     return;
   }
-  let html=ld.paras.map(p=>`<div class="rcard" style="margin-bottom:7px"><div style="line-height:1.7">${esc(p)}</div></div>`).join("");
+  let html=ld.paras.map(p=>`<div class="rcard" style="margin-bottom:7px"><div style="line-height:1.7">${annotateHTML(esc(p))}</div></div>`).join("");
   if(pend.length){
     html+=`<div style="background:var(--mist);border:1px dashed var(--line);border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.7;color:var(--gray)">`+
       `<div class="mini" style="margin-bottom:4px">작성 중 — ${pend.length}문장 (분량이 쌓이면 문단으로 정리됩니다)</div>`+
@@ -3138,6 +3145,7 @@ function stopMic(){listening=false;if(recog){try{recog.stop();}catch(_){}}
   micStatus("브라우저 음성인식 · "+micLangLabel(micLangVal()));
   if(!(state.meeting.started&&!state.meeting.ended))setPill("idle","회의 대기");}
 
+function noteStyleVal(){ return localStorage.getItem("medit:notestyle")||"fact"; }
 // TTS — 회의 읽어주기 (마이크 불필요, 스피커만)
 let ttsOn=false;
 function toggleTTS(){
@@ -3159,10 +3167,70 @@ function toggleTTS(){
   window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
   ttsOn=true; const b=$("ttsBtn"); if(b)b.textContent="⏹ 읽기 중지";
 }
+// ==================== 용어 주석 (말풍선) ====================
+// 이스케이프된 HTML 텍스트에서 주석 용어를 찾아 클릭 가능한 span으로 감쌈
+function annotateHTML(escaped){
+  let out=escaped;
+  (state.annos||[]).forEach(a=>{
+    if(!a.term||a.term.length<2) return;
+    const t=esc(a.term);
+    out=out.split(t).join(`<span class="anno" data-anno="${a.id}">${t}</span>`);
+  });
+  return out;
+}
+function hideAnnoPop(){ const p=$("annoPop"); if(p)p.remove(); }
+function showAnnoPop(id,x,y){
+  hideAnnoPop();
+  const a=(state.annos||[]).find(z=>z.id===id); if(!a)return;
+  const canEdit=(typeof canEditMeeting==="function")?canEditMeeting():false;
+  const p=document.createElement("div"); p.id="annoPop"; p.className="anno-pop";
+  p.innerHTML=`<div class="t">${esc(a.term)}</div><div>${esc(a.note||"")}</div>
+    ${a.url?`<div style="margin-top:5px"><a href="${esc(a.url)}" target="_blank" style="color:var(--mint);font-weight:700">원문·출처 열기 ↗</a></div>`:""}
+    <div class="acts">${canEdit?`<button class="b-ghost" style="padding:3px 9px;font-size:11.5px" onclick="editAnno('${a.id}')">수정</button>
+    <button class="b-ghost" style="padding:3px 9px;font-size:11.5px" onclick="delAnno('${a.id}')">삭제</button>`:""}
+    <button class="b-deep" style="padding:3px 9px;font-size:11.5px" onclick="hideAnnoPop()">닫기</button></div>`;
+  document.body.appendChild(p);
+  const W=p.offsetWidth,H=p.offsetHeight;
+  p.style.left=Math.max(8,Math.min(x, window.innerWidth-W-8))+"px";
+  p.style.top=Math.max(8,(y+H+20>window.innerHeight? y-H-10 : y+14))+"px";
+}
+document.addEventListener("click",e=>{
+  const el=e.target.closest&&e.target.closest(".anno");
+  if(el){ e.stopPropagation(); showAnnoPop(el.dataset.anno,e.clientX,e.clientY); return; }
+  if(!(e.target.closest&&e.target.closest(".anno-pop"))) hideAnnoPop();
+});
+function refreshAnnoViews(){ renderNotes&&renderNotes(); renderLiveDoc&&renderLiveDoc(); }
+function addAnno(term,note,url){
+  term=(term||"").trim(); if(!term){toast("용어를 입력하세요");return;}
+  const ex=(state.annos||[]).find(a=>a.term===term);
+  if(ex){ ex.note=note||ex.note; ex.url=url!==undefined?url:ex.url; }
+  else state.annos.push({id:"a_"+Date.now(),term,note:(note||"").trim(),url:(url||"").trim()});
+  scheduleSave(); refreshAnnoViews(); toast(`'${term}' 주석 등록 — 회의록에서 점선 용어를 누르면 말풍선이 뜹니다`);
+}
+function newAnnoFlow(){
+  const term=prompt("주석을 달 용어 (회의록에 나오는 그대로)\n예: 팜"); if(!term)return;
+  const note=prompt("한 줄 설명\n예: 대형병원에서 쓰는 제약 프로그램 — 제약 이름·환자 병명 등을 DB 필드로 보유","")||"";
+  const url=prompt("링크 (선택 — 출처·문서 주소)","")||"";
+  addAnno(term,note,url);
+}
+function editAnno(id){
+  const a=(state.annos||[]).find(z=>z.id===id); if(!a)return; hideAnnoPop();
+  const note=prompt("설명 수정",a.note||""); if(note===null)return;
+  const url=prompt("링크 수정 (비우면 링크 없음)",a.url||""); if(url===null)return;
+  a.note=note.trim(); a.url=url.trim(); scheduleSave(); refreshAnnoViews();
+}
+function delAnno(id){
+  hideAnnoPop();
+  const a=(state.annos||[]).find(z=>z.id===id); if(!a)return;
+  if(!confirm(`'${a.term}' 주석을 삭제할까요?`))return;
+  state.annos=state.annos.filter(z=>z.id!==id); scheduleSave(); refreshAnnoViews();
+}
+window.editAnno=editAnno; window.delAnno=delAnno; window.hideAnnoPop=hideAnnoPop; window.newAnnoFlow=newAnnoFlow;
+
 function renderNotes(){const box=$("notes");if(!box)return;
   if(!state.notes){box.innerHTML='<div class="mini" style="font-style:italic">발언은 위 실시간 회의록에 바로 기록됩니다. [AI 반영]을 누르면 전체가 구조화된 회의록(개요·안건·결정·액션)으로 완성됩니다.</div>';return;}
-  const n=state.notes,sec=(t,a)=>`<div class="nsec"><h4>${t}</h4>`+(a&&a.length?"<ul>"+a.map(x=>`<li>${esc(x)}</li>`).join("")+"</ul>":'<div class="mini">—</div>')+"</div>";
-  box.innerHTML=(n.summary?`<div class="rcard"><div>${esc(n.summary)}</div></div>`:"")+
+  const n=state.notes,sec=(t,a)=>`<div class="nsec"><h4>${t}</h4>`+(a&&a.length?"<ul>"+a.map(x=>`<li>${annotateHTML(esc(x))}</li>`).join("")+"</ul>":'<div class="mini">—</div>')+"</div>";
+  box.innerHTML=(n.summary?`<div class="rcard"><div>${annotateHTML(esc(n.summary))}</div></div>`:"")+
     (state.topicTags.length?`<div style="margin-bottom:8px">${state.topicTags.map(t=>`<span class="chip"><span class="av">#</span>${esc(t)}</span>`).join("")}</div>`:"")+
     sec("안건",n.agenda)+
     (n.ideas&&n.ideas.length?sec("아이디어·제안",n.ideas):"")+
@@ -3183,7 +3251,10 @@ async function syncNotes(silent){
   const upText=state.uploads.filter(u=>u.text).map(u=>`[자료:${u.name}] ${u.text.slice(0,1500)}`).join("\n");
   const ldParas=((state.liveDoc&&state.liveDoc.paras)||[]).join("\n");
   const tr=state.segments.map(s=>`[${s.who}] ${segKo(s)}`).join("\n");
-  const sys="당신은 한국어 회의 서기입니다. 순수 JSON만 출력(설명·코드펜스 없이). "+
+  const factSys=noteStyleVal()==="fact"
+    ?"문체 규칙(사실형): 감정·인상·분위기·추측 표현 금지('~한 인상', '~로 보인다', '열의', '활발' 등 금지). 관찰 가능한 사실과 발언 내용만 단문으로 기록. "
+    :"";
+  const sys="당신은 한국어 회의 서기입니다. 순수 JSON만 출력(설명·코드펜스 없이). "+factSys+
     '스키마:{"title":"회의 제목(간결)","purpose":"목적 한 줄","summary":"1-2문장 개요","tags":["주제태그"],"agenda":[],"ideas":["원문에 나온 아이디어·구상·제안 — 사소해 보여도 모두"],"research":["조사 필요 항목"],"decisions":[],"actions":[],"followups":[],"nextActions":["AI가 추천하는 다음 할 일"]}. '+
     "약학대학 교수와 MedIT(디지털 약료 플랫폼) 대표의 회의입니다. 참석자·자료 맥락을 반영하세요.";
   try{
@@ -3219,7 +3290,16 @@ async function syncNotes(silent){
     setPill(state.meeting.started&&!state.meeting.ended?"live":"idle",state.meeting.started&&!state.meeting.ended?"회의 진행 중":"회의 대기");}
 }
 function renderResearch(){const box=$("research");if(!box)return;
-  box.innerHTML=state.research.length?state.research.map(r=>`<div class="rcard"><div class="q">${esc(r.q)}</div><div>${esc(r.ans)}</div></div>`).join(""):'<div class="mini" style="font-style:italic">용어·수치를 조사합니다.</div>';}
+  const canEdit=(typeof canEditMeeting==="function")?canEditMeeting():false;
+  box.innerHTML=state.research.length?state.research.map((r,i)=>`<div class="rcard"><div class="q" style="display:flex;gap:6px;align-items:baseline"><span style="flex:1">${esc(r.q)}</span>${canEdit&&r.ans&&!/조사 중|조사 실패/.test(r.ans)?`<button class="b-ghost" style="padding:2px 8px;font-size:11.5px;flex:none" onclick="researchToAnno(${i})" title="이 조사 내용을 회의록 용어 주석(말풍선)으로 답니다">주석 달기</button>`:""}</div><div>${esc(r.ans)}</div></div>`).join(""):'<div class="mini" style="font-style:italic">용어·수치를 조사합니다. 조사 결과는 [주석 달기]로 회의록 용어에 말풍선으로 연결됩니다.</div>';}
+function researchToAnno(i){
+  const r=state.research[i]; if(!r)return;
+  const term=prompt("회의록에서 밑줄·말풍선을 달 용어 (회의록 표기 그대로)",r.q.split(/\s/)[0]||r.q); if(!term)return;
+  const note=prompt("말풍선 설명 (수정 가능)",String(r.ans||"").slice(0,200)); if(note===null)return;
+  const url=prompt("링크 (선택)","")||"";
+  addAnno(term,note,url);
+}
+window.researchToAnno=researchToAnno;
 async function doResearch(){const q=$("researchInput").value.trim();if(!q)return;$("researchInput").value="";
   state.research.unshift({q,ans:"조사 중…"});renderResearch();
   const sys="약학·디지털헬스 리서치 보조. 3-4문장 간결한 한국어. 불확실하면 밝히고 수치는 대략치 표시.";
@@ -3246,24 +3326,23 @@ async function endMeeting(){
   if(state.segments.length&&!state.notes){try{await syncNotes(true);}catch(_){}}
   else if(state.segments.length){try{await syncNotes(true);}catch(_){}}
   const stats=computeStats();
-  let mood="(분위기 요약 없음)";
-  if(state.segments.length){try{
-    const tr=state.segments.map(s=>`[${s.who}] ${segKo(s)}`).join("\n");
-    mood=await callClaude("회의 분위기 분석가. 녹취를 읽고 3-4문장 한국어로 분위기·톤·합의 정도를 요약. 순수 텍스트.",tr,400,{noPrompt:true});
-  }catch(e){mood="분위기 요약 실패: "+e.message;}}
-  // email draft
-  let email="";try{ email=await buildEmailDraft(mood,stats); }catch(e){ email="(이메일 생성 실패: "+e.message+")"; }
-  // 정리된 스크립트 생성 (녹취 원문은 저장하지 않음)
-  let script="";
-  if(state.segments.length){
+  // 속도: 회의 성격 요약 → 이메일 초안, 정리 스크립트를 병렬 실행 (순차 대비 대기 시간 절반 이하)
+  const trAll=state.segments.map(s=>`[${s.who}] ${segKo(s)}`).join("\n");
+  const moodPrompt=noteStyleVal()==="fact"
+    ?"회의 기록 담당. 녹취를 읽고 2-3문장 한국어로 사실만 기록: ① 논의된 주제 범위 ② 합의·결정 여부(있으면 무엇, 없으면 '합의된 결정 없음') ③ 다음 단계로 언급된 것. 감정·인상·분위기·추측 표현('열의', '활발', '~인상', '~로 보인다' 등) 금지. 순수 텍스트."
+    :"회의 분위기 분석가. 녹취를 읽고 3-4문장 한국어로 분위기·톤·합의 정도를 요약. 순수 텍스트.";
+  let mood="(요약 없음)", email="", script="";
+  const moodEmailP=(async()=>{
+    if(trAll){ try{ mood=await callClaude(moodPrompt,trAll,400,{noPrompt:true}); }catch(e){ mood="요약 실패: "+e.message; } }
+    try{ email=await buildEmailDraft(mood,stats); }catch(e){ email="(이메일 생성 실패: "+e.message+")"; }
+  })();
+  const scriptP=(async()=>{
+    if(!trAll) return;
     try{
-      const tr=state.segments.map(s=>`[${s.who}] ${segKo(s)}`).join("\n");
-      script=await callClaude("회의 녹취 정리 담당. 녹취를 읽기 쉬운 스크립트로 정리하라. 중복·잡음·군말 제거, 발언 순서 유지, 한국어. 순수 텍스트만 출력.",tr,3000,{noPrompt:true});
-    }catch(e){
-      // AI 정리 실패 시: 원문을 그대로 두지 않고 최소 정리본만 생성 (번역문 우선)
-      script=state.segments.map(s=>`[${s.who}] ${segKo(s)}`).join("\n");
-    }
-  }
+      script=await callClaude("회의 녹취 정리 담당. 녹취를 읽기 쉬운 스크립트로 정리하라. 중복·잡음·군말 제거, 발언 순서 유지, 한국어. 순수 텍스트만 출력.",trAll,3000,{noPrompt:true});
+    }catch(e){ script=trAll; }   // AI 실패 시 최소 정리본(번역문 우선)
+  })();
+  await Promise.all([moodEmailP,scriptP]);
   const purgedAt=new Date().toLocaleString('ko-KR');
   const segCount=state.segments.length;
   const cm=currentMeeting()||{};
@@ -3280,7 +3359,8 @@ async function endMeeting(){
     liveParas:((state.liveDoc&&state.liveDoc.paras)||[]).slice(),   // 실시간 회의록 문단 (보존)
     segments:[],                  // 녹취 원문 — 저장하지 않음 (파기)
     purged:{at:purgedAt,count:segCount},   // 파기 기록
-    research:state.research.slice(),tabNotes:JSON.parse(JSON.stringify(state.tabNotes)),email,final:true};
+    research:state.research.slice(),annos:(state.annos||[]).slice(),
+    place:cm.place||"",tabNotes:JSON.parse(JSON.stringify(state.tabNotes)),email,final:true};
   state.records.unshift(rec);await saveRecords();
   // 이번 회차 내용은 기록에 보존됨 — 회의 객체를 비워 다음 회차를 새로 시작
   if(cm&&cm.id){ cm.rawNote=""; cm.summary=""; cm.tags=[]; cm.actions=[]; }
@@ -3508,6 +3588,35 @@ ${(r.nextActions||[]).map(x=>"· "+x).join("\n")||"—"}
 바쁘신 중, 감사드립니다 — 신현정 드림`;
 }
 // 회차 한 줄 (주제 묶음 내부) — 각 날짜의 회의록이 독립적으로 미리보기·이메일·MD 제공
+// 같은 주제의 여러 회차를 하나의 회의 기록으로 병합 (잘못 두 번 종료된 경우 등)
+function mergeSessions(encKey){
+  const key=decodeURIComponent(encKey);
+  const items=(state.records||[]).filter(r=>(normTitle(r.title)||"untitled")===key);
+  if(items.length<2){ toast("병합할 회차가 2개 이상이어야 합니다"); return; }
+  if(!confirm(`'${items[0].title}'의 ${items.length}개 회차를 하나의 회의 기록으로 병합할까요?\n(각 회차의 스크립트·문단·조사 내용은 모두 보존되어 합쳐집니다)`)) return;
+  const v=prompt("병합된 회의의 실제 일시 (예: 2026-07-21 10:30)","2026-07-21 10:30");
+  if(v===null) return;
+  const t=new Date(v.trim().replace(" ","T"));
+  if(isNaN(t.getTime())){ toast("형식이 올바르지 않습니다 — 예: 2026-07-21 10:30"); return; }
+  const place=prompt("장소 (예: 2층 로비 — 비우면 생략)","")||"";
+  // 최신 기록을 기준으로 나머지를 시간 역순으로 이어붙임 (오래된 것이 앞에 오도록 정렬)
+  const sorted=items.slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));   // 오래된 → 최신
+  const base=JSON.parse(JSON.stringify(sorted[sorted.length-1]));                     // 최신을 본체로
+  base.sd=t.toISOString(); base.dt=t.toLocaleString('ko-KR'); base.place=place.trim();
+  base.stats=base.stats||{}; base.stats.segs=sorted.reduce((n,r)=>n+((r.stats&&r.stats.segs)||0),0);
+  base.script=sorted.map((r,i)=>r.script?`[${i+1}회분]\n${r.script}`:"").filter(Boolean).join("\n\n---\n\n");
+  base.liveParas=[].concat(...sorted.map(r=>r.liveParas||[]));
+  base.research=[].concat(...sorted.map(r=>r.research||[]));
+  base.annos=[].concat(...sorted.map(r=>r.annos||[]));
+  base.rawNote=sorted.map(r=>r.rawNote||"").filter(Boolean).join("\n\n---\n\n");
+  if(noteStyleVal()==="fact") base.mood="";        // 병합본은 사실형 — 인상 서술 제거 (요약은 회의록 개요가 담당)
+  base.mergedFrom=sorted.map(r=>r.dt);
+  state.records=state.records.filter(r=>(normTitle(r.title)||"untitled")!==key);
+  state.records.unshift(base);
+  saveRecords(); renderRecords&&renderRecords(); renderArchive&&renderArchive();
+  toast(items.length+"개 회차를 하나로 병합했습니다 — "+base.dt);
+}
+window.mergeSessions=mergeSessions;
 function sessionRow(r,pvPrefix){
   const canEdit=state.user.role==="operator"||state.user.role==="host";
   return `<div style="border-top:1px dashed var(--line);padding:9px 0 2px">
@@ -3574,7 +3683,7 @@ function renderRecords(){const list=$("reclist");if(!list)return;
     <div class="glass tile" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px">
         <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(g.title)}</div>
-        <span class="mini" style="white-space:nowrap">회의 ${g.items.length}회</span>
+        <span style="display:flex;gap:6px;align-items:baseline;white-space:nowrap"><span class="mini">회의 ${g.items.length}회</span>${(g.items.length>1&&(state.user.role==="operator"||state.user.role==="host"))?`<button class="b-ghost" style="padding:3px 9px;font-size:11.5px" onclick="mergeSessions('${encodeURIComponent(g.key)}')" title="잘못 나뉜 회차를 하나의 회의 기록으로 합칩니다">하나로 병합</button>`:""}</span>
       </div>
       <div style="margin:2px 0 6px">${(g.items[0].tags||[]).map(t=>`<span class="chip"><span class="av">#</span>${esc(t)}</span>`).join("")}</div>
       ${g.items.map(r=>sessionRow(r,"pv2-")).join("")}
