@@ -1196,7 +1196,7 @@ function renderDone(){
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
         ${it.act||""}
-        ${(it.manual&&canEdit)?`<button class="b-ghost" style="padding:4px 10px;font-size:12px" data-drm="${it.id}">삭제</button>`:""}
+        ${(it.manual&&canEdit)?`<button class="b-ghost" style="padding:4px 10px;font-size:12px" data-dedit="${it.id}">수정</button><button class="b-ghost" style="padding:4px 10px;font-size:12px;color:#C24A4A" data-drm="${it.id}">삭제</button>`:""}
       </div>
     </div>`).join("")
     :'<div class="mini">아직 기록이 없습니다. 회의를 종료하거나 프로젝트를 추가하면 자동으로 쌓이고, [+ 한 일 추가]로 직접 적을 수도 있습니다.</div>';
@@ -1204,6 +1204,14 @@ function renderDone(){
     if(!confirm("이 기록을 삭제할까요?"))return;
     state.schedule.done=state.schedule.done.filter(x=>x.id!==b.dataset.drm);
     await saveNow(); renderDone();
+  });
+  box.querySelectorAll("[data-dedit]").forEach(b=>b.onclick=async()=>{
+    const d=state.schedule.done.find(x=>x.id===b.dataset.dedit); if(!d)return;
+    const title=prompt("내용 수정",d.title); if(title===null)return;
+    const memo=prompt("메모 수정",d.memo||""); if(memo===null)return;
+    const url=prompt("링크 수정 (비우면 링크 없음)",d.url||""); if(url===null)return;
+    d.title=title.trim()||d.title; d.memo=memo.trim(); d.url=url.trim();
+    await saveNow(); renderDone(); toast("수정했습니다");
   });
 }
 function openDoneForm(){
@@ -1279,7 +1287,10 @@ function renderLit(){
         ${it.summary?`<div style="font-size:12.5px;color:var(--gray);line-height:1.6;margin-top:3px">${esc(it.summary)}</div>`:""}
         ${it.relevance?`<div class="mini" style="margin-top:4px;color:var(--deep)">병원약학 관련성: ${esc(it.relevance)}</div>`:""}
       </div>
-      ${it.url?`<button class="b-ghost" style="padding:4px 10px;font-size:12px" onclick="window.open('${esc(it.url)}','_blank')">원문 ↗</button>`:""}
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${it.url?`<button class="b-ghost" style="padding:4px 10px;font-size:12px" onclick="window.open('${esc(it.url)}','_blank')">원문 ↗</button>`:""}
+        <button class="b-ghost" style="padding:4px 10px;font-size:12px" onclick="editLitItem(${i})">수정</button>
+      </div>
     </div>`).join("")
     :'<div class="mini">검색 결과가 여기에 표시됩니다.</div>';
   const all=$("litAll"); if(all)all.onchange=()=>document.querySelectorAll("[data-litchk]").forEach(b=>b.checked=all.checked);
@@ -1303,6 +1314,16 @@ async function litSearch(){
     if(msg){msg.textContent="검색 실패: "+(e.message||e)+" — 프록시가 웹 검색을 지원하도록 갱신되었는지(함수 재배포), [사전 준비]→[AI 연결 점검]을 확인하세요."; msg.style.color="#C24A4A";}
   }finally{ litBusy=false; if(b){b.disabled=false;b.textContent="Claude로 검색";} }
 }
+function editLitItem(i){
+  const it=(state.lit.items||[])[i]; if(!it)return;
+  const title=prompt("제목 수정",it.title||""); if(title===null)return;
+  const summary=prompt("요약 수정",it.summary||""); if(summary===null)return;
+  const relevance=prompt("병원약학 관련성 수정",it.relevance||""); if(relevance===null)return;
+  const url=prompt("링크 수정 (비우면 링크 없음)",it.url||""); if(url===null)return;
+  it.title=title.trim()||it.title; it.summary=summary.trim(); it.relevance=relevance.trim(); it.url=url.trim();
+  scheduleSave(); renderLit(); toast("수정했습니다 — 내보내기에도 반영됩니다");
+}
+window.editLitItem=editLitItem;
 function litToMD(items){
   let md="# 문헌 정리 — "+(state.lit.q||"")+"\n생성: "+new Date().toLocaleString('ko-KR')+" · 도구: Claude 웹 검색 (출처는 원문 링크에서 재확인)\n\n";
   items.forEach((it,i)=>{
@@ -2926,7 +2947,7 @@ function bindConsole(){
 }
 function renderTranscript(interim){const box=$("transcript");if(!box)return;
   if(!state.segments.length&&!interim){box.innerHTML='<div class="mini" style="font-style:italic">회의를 시작하면 자동으로 녹취됩니다. 타이핑도 가능합니다.</div>';return;}
-  let h=state.segments.map((s,i)=>`<div class="note ${s.who==='나'?'me':''}"><span class="who" style="cursor:pointer;${s.guessed?'border-bottom:1px dotted var(--gray);':''}" title="${s.guessed?'AI 추정 화자 — 클릭해 확정·수정':'클릭해 발화자 이름 수정'}" onclick="editSegWho(${i})">${esc(s.who)}${s.guessed?'˟':''} · ${s.time}${s.lang&&s.lang!=="ko"?" · "+micLangLabel(SCRIPT2LANG[s.lang]||s.lang):""}</span>${esc(s.text)}${s.needKo?'<div class="mini" style="margin-top:3px;font-style:italic">한국어로 번역 중…</div>':(s.ko?`<div style="margin-top:3px;padding-top:3px;border-top:1px dashed var(--line);color:var(--deep)">→ ${esc(s.ko)}</div>`:"")}</div>`).join("");
+  let h=state.segments.map((s,i)=>`<div class="note ${s.who==='나'?'me':''}"><span class="who" style="cursor:pointer;${s.guessed?'border-bottom:1px dotted var(--gray);':''}" title="${s.guessed?'AI 추정 화자 — 클릭해 확정·수정':'클릭해 발화자 이름 수정'}" onclick="editSegWho(${i})">${esc(s.who)}${s.guessed?'˟':''} · ${s.time}${s.lang&&s.lang!=="ko"?" · "+micLangLabel(SCRIPT2LANG[s.lang]||s.lang):""}</span><span style="cursor:pointer" title="클릭해 발언 내용 수정 (비우면 삭제)" onclick="editSegText(${i})">${esc(s.text)}</span>${s.needKo?'<div class="mini" style="margin-top:3px;font-style:italic">한국어로 번역 중…</div>':(s.ko?`<div style="margin-top:3px;padding-top:3px;border-top:1px dashed var(--line);color:var(--deep)">→ ${esc(s.ko)}</div>`:"")}</div>`).join("");
   if(interim)h+=`<div class="note" style="opacity:.5;font-style:italic"><span class="who">발화 (인식중…)</span>${esc(interim)}</div>`;
   box.innerHTML=h;box.scrollTop=box.scrollHeight;const sc=$("segCount");if(sc)sc.textContent=state.segments.length;
   if(typeof renderLiveWho==="function")renderLiveWho();}
@@ -3016,6 +3037,18 @@ async function redoLiveDoc(){
 window.redoLiveDoc=redoLiveDoc;
 window.liveDocReset=liveDocReset;
 function addTyped(){const v=$("typeInput").value;if(v.trim()){addSegment(v,'나');$("typeInput").value="";}}
+function editSegText(i){
+  const s=state.segments[i]; if(!s)return;
+  const v=prompt("발언 내용 수정 (비우고 확인하면 이 발언 삭제)",s.text||"");
+  if(v===null)return;
+  if(!v.trim()){
+    if(!confirm("이 발언을 삭제할까요?"))return;
+    state.segments.splice(i,1);
+    if(state.liveDoc&&state.liveDoc.cursor>state.segments.length)state.liveDoc.cursor=state.segments.length;
+  } else { s.text=v.trim(); if(s.ko)delete s.ko; if(s.lang&&s.lang!=="ko"){s.needKo=true;translateSegment(s);} }
+  renderTranscript(); renderLiveDoc(); refreshBadges(); scheduleSave();
+}
+window.editSegText=editSegText;
 function editSegWho(i){
   const s=state.segments[i]; if(!s) return;
   const v=prompt("이 발언의 발화자 이름 수정",s.who||"");
@@ -3298,7 +3331,7 @@ async function syncNotes(silent){
 }
 function renderResearch(){const box=$("research");if(!box)return;
   const canEdit=(typeof canEditMeeting==="function")?canEditMeeting():false;
-  box.innerHTML=state.research.length?state.research.map((r,i)=>`<div class="rcard"><div class="q" style="display:flex;gap:6px;align-items:baseline"><span style="flex:1">${esc(r.q)}</span>${canEdit&&r.ans&&!/조사 중|조사 실패/.test(r.ans)?`<button class="b-ghost" style="padding:2px 8px;font-size:11.5px;flex:none" onclick="researchToAnno(${i})" title="이 조사 내용을 회의록 용어 주석(말풍선)으로 답니다">주석 달기</button>`:""}</div><div>${esc(r.ans)}</div></div>`).join(""):'<div class="mini" style="font-style:italic">용어·수치를 조사합니다. 조사 결과는 [주석 달기]로 회의록 용어에 말풍선으로 연결됩니다.</div>';}
+  box.innerHTML=state.research.length?state.research.map((r,i)=>`<div class="rcard"><div class="q" style="display:flex;gap:6px;align-items:baseline"><span style="flex:1">${esc(r.q)}</span>${canEdit&&r.ans&&!/조사 중|조사 실패/.test(r.ans)?`<button class="b-ghost" style="padding:2px 8px;font-size:11.5px;flex:none" onclick="researchToAnno(${i})" title="이 조사 내용을 회의록 용어 주석(말풍선)으로 답니다">주석 달기</button><button class="b-ghost" style="padding:2px 8px;font-size:11.5px;flex:none" onclick="editResearch(${i})">수정</button><button class="b-ghost" style="padding:2px 8px;font-size:11.5px;flex:none;color:#C24A4A" onclick="delResearch(${i})">삭제</button>`:""}</div><div>${esc(r.ans)}</div></div>`).join(""):'<div class="mini" style="font-style:italic">용어·수치를 조사합니다. 조사 결과는 [주석 달기]로 회의록 용어에 말풍선으로 연결됩니다.</div>';}
 function researchToAnno(i){
   const r=state.research[i]; if(!r)return;
   const term=prompt("회의록에서 밑줄·말풍선을 달 용어 (회의록 표기 그대로)",r.q.split(/\s/)[0]||r.q); if(!term)return;
@@ -3307,6 +3340,17 @@ function researchToAnno(i){
   addAnno(term,note,url);
 }
 window.researchToAnno=researchToAnno;
+function editResearch(i){
+  const r=state.research[i]; if(!r)return;
+  const ans=prompt("조사 결과 수정",r.ans||""); if(ans===null)return;
+  r.ans=ans.trim(); scheduleSave(); renderResearch();
+}
+function delResearch(i){
+  const r=state.research[i]; if(!r)return;
+  if(!confirm(`'${r.q}' 조사 항목을 삭제할까요?`))return;
+  state.research.splice(i,1); scheduleSave(); renderResearch();
+}
+window.editResearch=editResearch; window.delResearch=delResearch;
 async function doResearch(){const q=$("researchInput").value.trim();if(!q)return;$("researchInput").value="";
   state.research.unshift({q,ans:"조사 중…"});renderResearch();
   const sys="약학·디지털헬스 리서치 보조. 3-4문장 간결한 한국어. 불확실하면 밝히고 수치는 대략치 표시.";
@@ -3646,6 +3690,68 @@ function deleteRecord(id){
   toast("회차 기록을 삭제했습니다");
 }
 window.deleteRecord=deleteRecord;
+// ==================== 회차 기록 편집기 ====================
+function openRecordEditor(id){
+  const r=(state.records||[]).find(x=>x.id===id); if(!r)return;
+  const n=r.notes||{};
+  const lines=a=>Array.isArray(a)?a.join("\n"):"";
+  let modal=$("recEditModal"); if(modal)modal.remove();
+  modal=document.createElement("div"); modal.id="recEditModal";
+  modal.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:16px";
+  const fld=(label,id2,val,rows)=>`<div style="margin-bottom:9px"><label style="font-size:11.5px;font-weight:800;color:var(--soft)">${label}</label>
+    ${rows?`<textarea id="${id2}" rows="${rows}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px;line-height:1.55">${esc(val||"")}</textarea>`
+          :`<input id="${id2}" value="${esc(val||"")}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px">`}</div>`;
+  modal.innerHTML=`
+  <div style="background:#fff;border-radius:16px;max-width:min(760px,96vw);width:100%;max-height:94vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
+      <div style="flex:1;font-weight:800;color:var(--deep);font-size:15px">회차 기록 수정 — ${esc(r.dt)}</div>
+      <button class="b-ghost" id="reCancel">취소</button>
+      <button class="b-mint" id="reSave">저장</button>
+    </div>
+    <div style="overflow:auto;padding:14px 18px">
+      ${fld("제목 (같은 제목끼리 한 묶음으로 표시됩니다)","re_title",r.title)}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${fld("일시 (예: 2026-07-21 10:30)","re_dt",r.sd?r.sd.slice(0,16).replace("T"," "):"")}
+        ${fld("장소","re_place",r.place)}
+      </div>
+      ${fld("태그 (쉼표 구분)","re_tags",(r.tags||[]).join(", "))}
+      ${fld("회의 성격·요약 (기록 카드에 표시)","re_mood",r.mood==="(분위기 요약 없음)"?"":r.mood,3)}
+      ${fld("개요","re_summary",n.summary,3)}
+      ${fld("안건 (한 줄에 하나)","re_agenda",lines(n.agenda),4)}
+      ${fld("아이디어·제안 (한 줄에 하나)","re_ideas",lines(n.ideas),5)}
+      ${fld("결정 사항 (한 줄에 하나)","re_decisions",lines(n.decisions),3)}
+      ${fld("액션 아이템 (한 줄에 하나)","re_actions",lines(n.actions),4)}
+      ${fld("실시간 회의록 문단 (한 줄에 하나)","re_paras",(r.liveParas||[]).join("\n"),5)}
+      ${fld("정리된 스크립트","re_script",r.script,10)}
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+  $("reCancel").onclick=()=>modal.remove();
+  $("reSave").onclick=()=>{
+    const splitL=id2=>($(id2).value||"").split("\n").map(s=>s.trim()).filter(Boolean);
+    const title=($("re_title").value||"").trim(); if(!title){toast("제목을 입력하세요");return;}
+    const dv=($("re_dt").value||"").trim();
+    if(dv){ const t=new Date(dv.replace(" ","T"));
+      if(isNaN(t.getTime())){toast("일시 형식 오류 — 예: 2026-07-21 10:30");return;}
+      r.sd=t.toISOString(); r.dt=t.toLocaleString('ko-KR'); }
+    r.title=title;
+    r.place=($("re_place").value||"").trim();
+    r.tags=($("re_tags").value||"").split(",").map(s=>s.trim()).filter(Boolean);
+    r.mood=($("re_mood").value||"").trim();
+    r.notes=Object.assign({},r.notes||{},{
+      summary:($("re_summary").value||"").trim(),
+      agenda:splitL("re_agenda"), ideas:splitL("re_ideas"),
+      decisions:splitL("re_decisions"), actions:splitL("re_actions")});
+    r.liveParas=splitL("re_paras");
+    r.script=($("re_script").value||"");
+    r.final=true;                       // 사람이 확정한 기록 — 자동 동기화가 건드리지 않음
+    saveRecords(); modal.remove();
+    renderRecords&&renderRecords(); renderArchive&&renderArchive();
+    toast("회차 기록을 수정했습니다");
+  };
+}
+window.openRecordEditor=openRecordEditor;
 function sessionRow(r,pvPrefix){
   const canEdit=state.user.role==="operator"||state.user.role==="host";
   return `<div style="border-top:1px dashed var(--line);padding:9px 0 2px">
@@ -3658,7 +3764,8 @@ function sessionRow(r,pvPrefix){
         <button class="b-mint" onclick="previewRecord('${r.id}','${pvPrefix}${r.id}')">미리보기</button>
         <button class="b-ghost" onclick="loadEmail('${r.id}')">이메일</button>
         <button class="b-deep" onclick="exportRecord('${r.id}')">MD</button>
-        ${canEdit?`<button class="b-ghost" style="padding:4px 10px;font-size:12px;color:#C24A4A" onclick="deleteRecord('${r.id}')" title="이 회차 기록을 삭제합니다">삭제</button>`:""}
+        ${canEdit?`<button class="b-ghost" style="padding:4px 10px;font-size:12px" onclick="openRecordEditor('${r.id}')" title="이 회차의 제목·요약·회의록·스크립트를 직접 수정합니다">수정</button>
+        <button class="b-ghost" style="padding:4px 10px;font-size:12px;color:#C24A4A" onclick="deleteRecord('${r.id}')" title="이 회차 기록을 삭제합니다">삭제</button>`:""}
       </div>
     </div>
     <div id="${pvPrefix}${r.id}"></div>
@@ -4010,6 +4117,10 @@ function openAddAppSite(){
           <button class="b-mint" id="aaSave" style="flex:1">추가</button>
         </div>
         <div class="mini" style="margin-top:10px;line-height:1.55">※ 일부 외부 사이트는 보안 정책상 화면 안 표시(iframe)를 막습니다 — 그 경우 [새 탭에서 열기]로 열립니다.</div>
+        <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px">
+          <div style="font-weight:800;color:var(--deep);font-size:13px;margin-bottom:6px">등록된 탭 관리</div>
+          <div id="aaPageList"></div>
+        </div>
       </div>
     </div>`;
     document.body.appendChild(modal);
@@ -4040,8 +4151,37 @@ function openAddAppSite(){
     };
   }
   modal.style.display="flex";
+  renderAAPageList();
   $("aa_name").focus();
 }
+function renderAAPageList(){
+  const box=$("aaPageList"); if(!box)return;
+  const ps=state.pages||[];
+  box.innerHTML=ps.length?ps.map(p=>`
+    <div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--line)">
+      <div style="flex:1;min-width:0"><b style="font-size:12.5px;color:var(--deep)">${esc(p.label)}</b>
+        <span class="mini" style="overflow:hidden;text-overflow:ellipsis"> · ${esc(p.url)}</span></div>
+      <button class="b-ghost" style="padding:3px 9px;font-size:11.5px" onclick="editPageFlow('${esc(p.id)}')">수정</button>
+      <button class="b-ghost" style="padding:3px 9px;font-size:11.5px;color:#C24A4A" onclick="delPageFlow('${esc(p.id)}')">삭제</button>
+    </div>`).join("")
+    :'<div class="mini">등록된 탭이 없습니다.</div>';
+}
+function editPageFlow(id){
+  const p=(state.pages||[]).find(x=>x.id===id); if(!p)return;
+  const label=prompt("탭 이름 수정",p.label); if(label===null)return;
+  const url=prompt("주소 수정 (파일명.html 또는 https://…)",p.url); if(url===null)return;
+  if(label.trim())p.label=label.trim();
+  if(url.trim())p.url=url.trim();
+  scheduleSave(); renderTabs&&renderTabs(); renderAAPageList(); toast("탭을 수정했습니다");
+}
+function delPageFlow(id){
+  const p=(state.pages||[]).find(x=>x.id===id); if(!p)return;
+  if(!confirm(`'${p.label}' 탭을 삭제할까요? (연결된 페이지 파일은 삭제되지 않습니다)`))return;
+  state.pages=state.pages.filter(x=>x.id!==id);
+  if(state.activeTab==="pg_"+id)switchTab("home");
+  scheduleSave(); renderTabs&&renderTabs(); renderAAPageList(); toast("탭을 삭제했습니다");
+}
+window.editPageFlow=editPageFlow; window.delPageFlow=delPageFlow;
 window.openAddAppSite=openAddAppSite;
 function pageHTML(id){
   const p=(state.pages||[]).find(x=>x.id===id);
@@ -4446,14 +4586,68 @@ function renderMeetingCards(list,emptyMsg){
     </div>`;
     return;
   }
+  const canManage=state.user.role==="operator"||state.user.role==="host";
   box.innerHTML=list.map(m=>`<div class="mcard2">
     <div class="mc-top"><h4>${esc(m.title)}</h4><span class="mc-badge">${esc(m.company||"")}</span></div>
     <div class="mc-meta">${esc(fmtDate(m.date))} ${esc(m.time)} · ${esc(m.place||"")}</div>
     <div class="mc-meta">개최자 ${esc(m.host)} · 참석 ${(m.attendees||[]).length}명</div>
-    <button class="b-mint mc-enter" data-id="${m.id}">입장</button>
+    <div style="display:flex;gap:6px">
+      <button class="b-mint mc-enter" data-id="${m.id}" style="flex:1">입장</button>
+      ${canManage?`<button class="b-ghost mc-edit" data-id="${m.id}">수정</button><button class="b-ghost mc-del" data-id="${m.id}" style="color:#C24A4A">삭제</button>`:""}
+    </div>
   </div>`).join("");
   box.querySelectorAll(".mc-enter").forEach(b=>b.onclick=()=>{ state.currentMeetingId=b.dataset.id; syncCurrentMeeting(); enterHub(); });
+  box.querySelectorAll(".mc-edit").forEach(b=>b.onclick=()=>openMeetingEditor(b.dataset.id));
+  box.querySelectorAll(".mc-del").forEach(b=>b.onclick=()=>{
+    const m=state.meetings.find(x=>x.id===b.dataset.id); if(!m)return;
+    if(!confirm(`'${m.title}' 회의를 삭제할까요?\n(이미 저장된 회의 기록은 남고, 회의 목록에서만 사라집니다)`))return;
+    state.meetings=state.meetings.filter(x=>x.id!==b.dataset.id);
+    if(state.currentMeetingId===b.dataset.id)state.currentMeetingId=null;
+    scheduleSave(); showMeetingList(); toast("회의를 삭제했습니다");
+  });
 }
+// 회의 편집기 — 제목·날짜·시간·장소·목적·회사(배지)
+function openMeetingEditor(id){
+  const m=state.meetings.find(x=>x.id===id); if(!m)return;
+  let modal=$("mtEditModal"); if(modal)modal.remove();
+  modal=document.createElement("div"); modal.id="mtEditModal";
+  modal.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:16px";
+  const fld=(label,id2,val,ph)=>`<div style="margin-bottom:9px"><label style="font-size:11.5px;font-weight:800;color:var(--soft)">${label}</label>
+    <input id="${id2}" value="${esc(val||"")}" placeholder="${esc(ph||"")}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px"></div>`;
+  modal.innerHTML=`
+  <div style="background:#fff;border-radius:16px;max-width:min(560px,96vw);width:100%;max-height:94vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
+      <div style="flex:1;font-weight:800;color:var(--deep);font-size:15px">회의 수정</div>
+      <button class="b-ghost" id="mtCancel">취소</button>
+      <button class="b-mint" id="mtSave">저장</button>
+    </div>
+    <div style="overflow:auto;padding:14px 18px">
+      ${fld("제목","mt_title",m.title)}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${fld("날짜","mt_date",m.date,"YYYY-MM-DD")}
+        ${fld("시간","mt_time",m.time,"HH:MM")}
+      </div>
+      ${fld("장소","mt_place",m.place)}
+      ${fld("목적","mt_purpose",m.purpose)}
+      ${fld("소속·회사 배지 (선택)","mt_company",m.company)}
+      <div class="mini" style="line-height:1.5">참석자 등록·초대는 회의 입장 후 [사전 준비] 탭에서 관리합니다.</div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+  $("mtCancel").onclick=()=>modal.remove();
+  $("mtSave").onclick=()=>{
+    const title=($("mt_title").value||"").trim(); if(!title){toast("제목을 입력하세요");return;}
+    const date=($("mt_date").value||"").trim();
+    if(date&&!/^\d{4}-\d{2}-\d{2}$/.test(date)){toast("날짜 형식: YYYY-MM-DD");return;}
+    m.title=title; m.date=date; m.time=($("mt_time").value||"").trim();
+    m.place=($("mt_place").value||"").trim(); m.purpose=($("mt_purpose").value||"").trim();
+    m.company=($("mt_company").value||"").trim();
+    if(state.currentMeetingId===m.id)syncCurrentMeeting();
+    scheduleSave(); modal.remove(); showMeetingList(); toast("회의 정보를 수정했습니다");
+  };
+}
+window.openMeetingEditor=openMeetingEditor;
 function fmtDate(d){ if(!d)return""; const p=d.split("-"); return p.length===3?`${p[0]}.${p[1]}.${p[2]}`:d; }
 function createMeetingFlow(){
   const title=prompt("회의 제목",""); if(!title)return;
