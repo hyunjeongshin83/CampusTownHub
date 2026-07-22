@@ -1164,13 +1164,15 @@ window.previewFromSchedule=previewFromSchedule;
 function editRecordDT(id){
   const r=(state.records||[]).find(x=>x.id===id); if(!r) return;
   const cur=r.sd?r.sd.slice(0,16).replace("T"," "):"";
-  const v=prompt("이 회차의 실제 일시를 입력하세요 (예: 2026-07-21 10:00)",cur||"2026-07-21 10:00");
+  const v=prompt("이 회차의 실제 일시를 입력하세요 (예: 2026-07-21 10:30)",cur||"2026-07-21 10:30");
   if(v===null) return;
   const t=new Date(v.trim().replace(" ","T"));
-  if(isNaN(t.getTime())){ toast("형식이 올바르지 않습니다 — 예: 2026-07-21 10:00"); return; }
+  if(isNaN(t.getTime())){ toast("형식이 올바르지 않습니다 — 예: 2026-07-21 10:30"); return; }
+  const place=prompt("이 회차의 장소 (예: 2층 로비 — 비우면 표시 안 함)",r.place||"");
   r.sd=t.toISOString(); r.dt=t.toLocaleString('ko-KR');
+  if(place!==null) r.place=place.trim();
   saveRecords(); renderRecords&&renderRecords(); renderArchive&&renderArchive();
-  toast("회차 일시를 수정했습니다");
+  toast("회차 일시·장소를 수정했습니다");
 }
 window.editRecordDT=editRecordDT;
 function renderDone(){
@@ -2915,7 +2917,8 @@ function renderTranscript(interim){const box=$("transcript");if(!box)return;
   if(!state.segments.length&&!interim){box.innerHTML='<div class="mini" style="font-style:italic">회의를 시작하면 자동으로 녹취됩니다. 타이핑도 가능합니다.</div>';return;}
   let h=state.segments.map((s,i)=>`<div class="note ${s.who==='나'?'me':''}"><span class="who" style="cursor:pointer;${s.guessed?'border-bottom:1px dotted var(--gray);':''}" title="${s.guessed?'AI 추정 화자 — 클릭해 확정·수정':'클릭해 발화자 이름 수정'}" onclick="editSegWho(${i})">${esc(s.who)}${s.guessed?'˟':''} · ${s.time}${s.lang&&s.lang!=="ko"?" · "+micLangLabel(SCRIPT2LANG[s.lang]||s.lang):""}</span>${esc(s.text)}${s.needKo?'<div class="mini" style="margin-top:3px;font-style:italic">한국어로 번역 중…</div>':(s.ko?`<div style="margin-top:3px;padding-top:3px;border-top:1px dashed var(--line);color:var(--deep)">→ ${esc(s.ko)}</div>`:"")}</div>`).join("");
   if(interim)h+=`<div class="note" style="opacity:.5;font-style:italic"><span class="who">발화 (인식중…)</span>${esc(interim)}</div>`;
-  box.innerHTML=h;box.scrollTop=box.scrollHeight;const sc=$("segCount");if(sc)sc.textContent=state.segments.length;}
+  box.innerHTML=h;box.scrollTop=box.scrollHeight;const sc=$("segCount");if(sc)sc.textContent=state.segments.length;
+  if(typeof renderLiveWho==="function")renderLiveWho();}
 function addSegment(text,who,auto){if(!text.trim())return;
   const seg={text:text.trim(),who:who||'교수님',time:new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}),auto:!!auto};
   const d=detectLang(seg.text);
@@ -3283,7 +3286,7 @@ async function endMeeting(){
   if(cm&&cm.id){ cm.rawNote=""; cm.summary=""; cm.tags=[]; cm.actions=[]; }
   // 녹취 원문 파기 (메모리에서도 즉시 제거)
   state.segments=[];state.notes=null;state.research=[];state.nextActions=[];state.topicTags=[];
-  state.liveDoc={paras:[],cursor:0};
+  state.liveDoc={paras:[],cursor:0}; state.annos=[];
   state.tabNotes={deck:[],app:[],registry:[],console:[]};
   state.meeting.started=null;state.meeting.ended=null;state.meetingStart=null;
   await saveSession();
@@ -3510,7 +3513,7 @@ function sessionRow(r,pvPrefix){
   return `<div style="border-top:1px dashed var(--line);padding:9px 0 2px">
     <div style="display:flex;gap:10px;align-items:flex-start">
       <div style="flex:1;cursor:pointer" onclick="previewRecord('${r.id}','${pvPrefix}${r.id}')" title="이 회차 회의록 미리보기">
-        <div style="font-size:13px;font-weight:700;color:var(--deep)"><span ${canEdit?`onclick="event.stopPropagation();editRecordDT('${r.id}')" style="cursor:pointer;border-bottom:1px dotted var(--gray)" title="클릭해 이 회차의 일시 수정"`:""}>${esc(r.dt)}</span> <span class="mini" style="font-weight:500">· ${durLabel(r)}${(r.stats&&r.stats.segs>0)?` · 발언 ${r.stats.segs}건`:""} · 참석 ${(r.attendees||[]).length}명</span></div>
+        <div style="font-size:13px;font-weight:700;color:var(--deep)"><span ${canEdit?`onclick="event.stopPropagation();editRecordDT('${r.id}')" style="cursor:pointer;border-bottom:1px dotted var(--gray)" title="클릭해 이 회차의 일시 수정"`:""}>${esc(r.dt)}</span> <span class="mini" style="font-weight:500">${r.place?` · ${esc(r.place)}`:""} · ${durLabel(r)}${(r.stats&&r.stats.segs>0)?` · 발언 ${r.stats.segs}건`:""} · 참석 ${(r.attendees||[]).length}명</span></div>
         <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(moodLine(r))}</div>
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
@@ -3643,7 +3646,8 @@ function recordToMD(r){
       if((!r.tags||!r.tags.length)&&mm.tags)r.tags=(mm.tags||[]).slice(); }
   }
   let md=`# MedIT 회의록 — ${r.dt}\n\n**${r.title}**\n\n`;
-  md+=`- 목적: ${r.purpose||"—"}\n- 소요: ${durLabel(r)} · 참석: ${(r.attendees||[]).map(a=>a.name+(a.email?`(${a.email})`:"")).join(", ")||"—"}\n${(r.tags&&r.tags.length)?`- 태그: ${r.tags.map(t=>"#"+t).join(" ")}\n`:""}\n`;
+  md+=`- 목적: ${r.purpose||"—"}\n${r.place?`- 장소: ${r.place}\n`:""}- 소요: ${durLabel(r)} · 참석: ${(r.attendees||[]).map(a=>a.name+(a.email?`(${a.email})`:"")).join(", ")||"—"}\n${(r.tags&&r.tags.length)?`- 태그: ${r.tags.map(t=>"#"+t).join(" ")}\n`:""}\n`;
+  if(r.annos&&r.annos.length) md+=`## 용어 주석\n`+r.annos.map(a=>`- **${a.term}**: ${a.note||""}${a.url?` (${a.url})`:""}`).join("\n")+"\n\n";
   if(r.mood&&r.mood!=="(분위기 요약 없음)") md+=`## 회의 분위기\n${r.mood}\n\n`;
   if(r.notes){const n=r.notes,sec=(t,a)=>a&&a.length?`## ${t}\n`+a.map(x=>"- "+x).join("\n")+"\n\n":"";
     if(n.summary)md+=`## 개요\n${n.summary}\n\n`;
