@@ -667,7 +667,7 @@ function canView(m){
   });
 }
 const $=id=>document.getElementById(id);
-const esc=s=>(s||"").replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const esc=s=>(s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));   // 속성 안전 — 따옴표 포함 내용이 입력칸을 깨뜨리지 않게
 function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2400);}
 setInterval(()=>{$("clock").textContent=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});},1000);
 function initials(s){s=(s||"").trim();return s?s.slice(0,2):"?";}
