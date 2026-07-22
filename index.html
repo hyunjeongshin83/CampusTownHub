@@ -822,7 +822,11 @@ function refreshApiKeyStatus(){
 //     로그인한 사용자는 각자 키 없이 사용. (배포 안 되어 있으면 자동으로 ②로 넘어감)
 //  ② 개인 키 — 이 브라우저에 등록한 본인 키
 const AI_PROXY_NAMES=["claude-proxy","super-processor","quick-service","rapid-service"];   // 순서대로 시도
+let proxyDownUntil=0;   // 프록시 전체 실패 시 45초 쿨다운 — 배경 호출(번역·문단)이 실패를 반복 타격하지 않게
 async function callViaProxy(system,user,maxTokens,opts){
+  opts=opts||{};
+  if(opts.silentSkip && Date.now()<proxyDownUntil)
+    throw new Error("프록시 일시 중단 상태 (잠시 후 자동 재시도)");
   if(!authReady) throw new Error("Supabase 인증 초기화 안 됨");
   const {data:{session}}=await sb.auth.getSession();
   if(!session) throw new Error("로그인 필요 — 사이트에 로그인한 뒤 다시 시도");
@@ -830,22 +834,28 @@ async function callViaProxy(system,user,maxTokens,opts){
   const cached=localStorage.getItem("medit:proxyfn");
   const names=cached?[cached,...AI_PROXY_NAMES.filter(n=>n!==cached)]:AI_PROXY_NAMES;
   const fails=[];
+  const timeout=opts.timeout||(opts.search?150000:60000);   // 검색 150초, 일반 60초 — 무한 대기 방지
   for(const fn of names){
+    const ctrl=new AbortController();
+    const tm=setTimeout(()=>ctrl.abort(),timeout);
     try{
-      const res=await fetch(base+fn,{method:"POST",
+      const res=await fetch(base+fn,{method:"POST",signal:ctrl.signal,
         headers:{"Content-Type":"application/json",
           "Authorization":"Bearer "+SUPABASE_ANON_KEY,   // 관문 통과용 (프로젝트 공개키)
           "apikey":SUPABASE_ANON_KEY,
           "x-user-token":session.access_token},          // 로그인 확인용 — 함수 코드가 직접 검증
-        body:JSON.stringify({system,user,maxTokens:maxTokens||1000,search:!!(opts&&opts.search)})});
+        body:JSON.stringify({system,user,maxTokens:maxTokens||1000,search:!!opts.search})});
       if(res.status===404){ fails.push(fn+": 미배포"); continue; }
       const d=await res.json().catch(()=>({}));
       if(!res.ok){ fails.push(fn+": "+res.status+(d.error?"("+d.error+")":"")); continue; }
       if(d.error){ fails.push(fn+": "+d.error); continue; }
       localStorage.setItem("medit:proxyfn",fn);                          // 작동한 이름 기억
+      proxyDownUntil=0;
       return d.text||"";
-    }catch(e){ fails.push(fn+": "+(e.message||"연결 실패")); }
+    }catch(e){ fails.push(fn+": "+(e.name==="AbortError"?"응답 시간 초과("+Math.round(timeout/1000)+"초)":(e.message||"연결 실패"))); }
+    finally{ clearTimeout(tm); }
   }
+  proxyDownUntil=Date.now()+45000;
   throw new Error(fails.join(" · ")||"배포된 프록시 함수 없음");
 }
 // AI 출력 JSON 파서 — 코드펜스 제거, 앞뒤 잡음 제거, 토큰 한도로 잘린 경우 괄호·문자열을 닫아 복구
@@ -873,24 +883,32 @@ function parseLooseJSON(txt){
   r=tryP(fixed); if(r!==undefined) return r;
   throw new Error("응답이 중간에 잘렸습니다 — 다시 시도해 주세요");
 }
-async function callClaude(system,user,maxTokens){
+async function callClaude(system,user,maxTokens,opts){
+  opts=opts||{};
   // ① 공유 프록시
   let proxyWhy="";
-  try{ return await callViaProxy(system,user,maxTokens); }
+  try{ return await callViaProxy(system,user,maxTokens,opts); }
   catch(e){ proxyWhy=e.message||String(e); console.warn("공유 프록시 사용 불가 → 개인 키로 시도:",proxyWhy); }
   // ② 개인 키
   let key=getApiKey();
   if(!key){
+    if(opts.noPrompt) throw new Error(proxyWhy);   // 자동·배경 호출에서는 키 입력창을 절대 띄우지 않음
     key=prompt("[공유 프록시 사용 불가: "+proxyWhy+"]\n\nAI 요약을 쓰려면 Anthropic API 키가 필요합니다.\nconsole.anthropic.com → API Keys에서 발급 (sk-ant-…)\n키는 이 브라우저에만 저장되고 어디에도 전송·게시되지 않습니다.\n\n비워두고 확인하면 AI 없이 진행합니다.");
     if(key){ setApiKey(key); } else { throw new Error("API 키 없음 — AI 기능 건너뜀"); }
   }
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
-    headers:{"Content-Type":"application/json","x-api-key":key,
-      "anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:maxTokens||1000,system,messages:[{role:"user",content:user}]})});
+  const ctrl=new AbortController(); const tm=setTimeout(()=>ctrl.abort(),opts.timeout||90000);
+  let res;
+  try{
+    res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal:ctrl.signal,
+      headers:{"Content-Type":"application/json","x-api-key":key,
+        "anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:maxTokens||1000,system,messages:[{role:"user",content:user}]})});
+  }catch(e){ throw new Error(e.name==="AbortError"?"개인 키 호출 시간 초과":"개인 키 호출 실패: "+(e.message||e)); }
+  finally{ clearTimeout(tm); }
   if(res.status===401){ localStorage.removeItem("medit:apikey"); throw new Error("API 키가 유효하지 않습니다 — 다시 입력해 주세요"); }
-  if(!res.ok)throw new Error("API "+res.status);
-  const d=await res.json();return d.content.filter(b=>b.type==="text").map(b=>b.text).join("\n");
+  if(!res.ok){ const eb=await res.json().catch(()=>({})); throw new Error("API "+res.status+(eb&&eb.error&&eb.error.message?" — "+eb.error.message:"")); }
+  const d=await res.json().catch(()=>({}));
+  return ((d&&d.content)||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
 }
 // AI 연결 점검 — 어느 경로(공유 프록시/개인 키)가 살아있는지 화면에 보여줌
 async function testAI(){
@@ -1142,6 +1160,19 @@ function previewFromSchedule(id){
   setTimeout(()=>{ const el=$("pv2-"+id); if(el){ previewRecord(id,"pv2-"+id); el.scrollIntoView({behavior:"smooth",block:"center"}); } },150);
 }
 window.previewFromSchedule=previewFromSchedule;
+// 회차 일시 수정 — 반복 회의에서 일시가 잘못 기록된 회차를 바로잡음
+function editRecordDT(id){
+  const r=(state.records||[]).find(x=>x.id===id); if(!r) return;
+  const cur=r.sd?r.sd.slice(0,16).replace("T"," "):"";
+  const v=prompt("이 회차의 실제 일시를 입력하세요 (예: 2026-07-21 10:00)",cur||"2026-07-21 10:00");
+  if(v===null) return;
+  const t=new Date(v.trim().replace(" ","T"));
+  if(isNaN(t.getTime())){ toast("형식이 올바르지 않습니다 — 예: 2026-07-21 10:00"); return; }
+  r.sd=t.toISOString(); r.dt=t.toLocaleString('ko-KR');
+  saveRecords(); renderRecords&&renderRecords(); renderArchive&&renderArchive();
+  toast("회차 일시를 수정했습니다");
+}
+window.editRecordDT=editRecordDT;
 function renderDone(){
   const box=$("doneList"); if(!box)return;
   const canEdit=state.user.role==="operator"||state.user.role==="host";
@@ -1502,6 +1533,11 @@ function linkJobToMeeting(jobId){
 }
 function startMeeting(){
   state.meeting.started=Date.now();state.meeting.ended=null;state.meetingStart=Date.now();
+  state.meeting.when=Date.now();                     // 이 회차의 일시 = 실제 시작 시각
+  const cm=currentMeeting();
+  if(cm){ const n=new Date();                        // 반복 회의: 회의 날짜·시간을 실제 회차 기준으로 갱신 (금일 회의 표시에 반영)
+    cm.date=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0");
+    cm.time=String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0"); }
   setPill("live","회의 진행 중");
   scheduleSave();renderStage("home");
   toast("회의를 시작했습니다 · 콘솔에서 녹취가 진행됩니다");
@@ -2757,7 +2793,7 @@ function consoleHTML(){
      </div>
    </div>
    <div class="glass cpanel" style="overflow-y:auto">
-     <h3>실시간 회의록 <span class="tag">문장 → 문단 → 전체</span></h3>
+     <h3 style="display:flex;align-items:center;gap:8px">실시간 회의록 <span class="tag">문장 → 문단 → 전체</span><span style="flex:1"></span><button class="b-ghost" id="redoLive" style="padding:4px 10px;font-size:12px" title="문단이 잘리거나 어색하면 원본 발언으로부터 처음부터 다시 정리합니다">다시 정리</button></h3>
      <div class="mini" style="padding:8px 14px 0;line-height:1.55">발언은 <b>문장 단위</b>로 즉시 기록되고, 분량이 쌓이면 자동으로 <b>문단</b>으로 정리됩니다. [AI 반영]·[종료·정리]가 <b>전체 회의록</b>을 완성합니다.</div>
      <div class="cscroll" id="liveDoc" style="flex:none;max-height:170px;overflow-y:auto"></div>
      <h3 style="border-top:1px solid var(--line)">회의록 (AI 반영) <span class="tag">Claude</span></h3>
@@ -2800,6 +2836,7 @@ function bindConsole(){
   const chip=$("langChip"); if(chip&&autoLang!=="ko-KR")chip.textContent="자동 감지: "+micLangLabel(autoLang);
   $("micBtn").onclick=()=>listening?stopMic():startMic();
   if($("guessBtn"))$("guessBtn").onclick=guessSpeakers;
+  if($("redoLive"))$("redoLive").onclick=redoLiveDoc;
   $("clearBtn").onclick=()=>{if(confirm("녹취를 모두 지울까요? (이미 정리된 문단은 실시간 회의록에 남습니다)")){state.segments=[];if(state.liveDoc)state.liveDoc.cursor=0;renderTranscript();renderLiveDoc();refreshBadges();scheduleSave();}};
   $("addBtn").onclick=addTyped;$("typeInput").addEventListener("keydown",e=>{if(e.key==='Enter')addTyped();});
   $("syncBtn").onclick=syncNotes;$("endBtn2").onclick=endMeeting;
@@ -2871,7 +2908,7 @@ function bindConsole(){
     mn.addEventListener("dragleave",()=>{mn.style.borderColor="";});
     mn.addEventListener("drop",e=>{e.preventDefault();mn.style.borderColor="";readNoteFile(e.dataTransfer.files[0]);});
   }
-  $("autoSync").onchange=e=>{if(e.target.checked){autoTimer=setInterval(()=>{if(state.segments.length)syncNotes();},30000);toast("30초마다 자동 반영");}else clearInterval(autoTimer);};
+  $("autoSync").onchange=e=>{if(e.target.checked){autoTimer=setInterval(()=>{if(state.segments.length)syncNotes(true);},30000);toast("30초마다 자동 반영 (실패 시 조용히 건너뜀)");}else clearInterval(autoTimer);};
   if(listening){$("micBtn").classList.add("on");$("micBtn").textContent="⏹ 녹취 중지";}
 }
 function renderTranscript(interim){const box=$("transcript");if(!box)return;
@@ -2929,26 +2966,40 @@ async function maybeCondense(force){
   const pend=liveDocPending();
   const enough=pend.length>=6 || pend.map(s=>segKo(s)).join(" ").length>=400;
   if(condensing || !pend.length || (!force&&!enough)) return;
-  if(!segsAllReady(pend)){ setTimeout(()=>maybeCondense(force),2500); return; }   // 번역 완료 대기
+  if(!segsAllReady(pend)){ if(!maybeCondense._wait){ maybeCondense._wait=true; setTimeout(()=>{maybeCondense._wait=false;maybeCondense(force);},2500); } return; }   // 번역 완료 대기(타이머 1개만)
   condensing=true;
-  const batch=pend.slice();
+  try{
+  const batch=pend.slice(0,10);                       // 한 번에 최대 10문장 — 문단이 과도하게 길어지지 않게
   const nextCursor=ld.cursor+batch.length;
   let para="";
   try{
     // 공유 프록시만 조용히 시도 — 실패해도 회의 흐름을 끊지 않고 평문 문단으로 대체
     const tr=batch.map(s=>`[${s.who}] ${segKo(s)}`).join("\n");
     para=await callViaProxy(
-      "회의 서기. 아래 발언 묶음을 회의록 문단 1개(2~4문장, 한국어)로 정리하라. 발언자·핵심 내용 유지, 군말 제거, 순수 텍스트만.",
-      tr, 300);
+      "회의 서기. 아래 발언 묶음을 회의록 문단 1개(한국어)로 정리하라. 발언에 나온 내용은 하나도 빠뜨리지 말 것 — 압축하되 누락 금지. 문장은 반드시 끝맺을 것. 순수 텍스트만.",
+      tr, 800, {silentSkip:!force,timeout:45000});
     para=String(para||"").trim();
+    // 끝맺음 검사 — 종결부호 없이 끝나면 잘린 것으로 보고 평문으로 대체 (내용 보존 우선)
+    if(para && !/[.!?다요임됨음)\]"']$/.test(para)) para="";
   }catch(_){ para=""; }
   if(!para) para=plainPara(batch);
   ld.paras.push(para); ld.cursor=nextCursor;
-  condensing=false;
   renderLiveDoc(); scheduleSave();
-  // 남은 분량이 이미 기준을 넘었으면 이어서 정리
-  if(liveDocPending().length>=6) maybeCondense();
+  }finally{ condensing=false; }
+  const rem=liveDocPending();
+  if(rem.length && (force || rem.length>=6)) await maybeCondense(force);   // 남은 분량 이어서 정리
 }
+// 실시간 회의록 전체 재정리 — 잘리거나 어색한 문단을 원본 발언(녹취)으로부터 처음부터 다시 생성
+async function redoLiveDoc(){
+  if(!state.segments.length){ toast("재정리할 발언이 없습니다 — 녹취 원문이 남아 있을 때만 가능합니다(회의 종료 전)"); return; }
+  if(!confirm("실시간 회의록 문단을 처음부터 다시 정리할까요? (발언 원문은 그대로 유지됩니다)")) return;
+  state.liveDoc={paras:[],cursor:0};
+  renderLiveDoc();
+  toast("다시 정리하는 중…");
+  await maybeCondense(true);
+  toast("재정리 완료");
+}
+window.redoLiveDoc=redoLiveDoc;
 window.liveDocReset=liveDocReset;
 function addTyped(){const v=$("typeInput").value;if(v.trim()){addSegment(v,'나');$("typeInput").value="";}}
 function editSegWho(i){
@@ -3018,11 +3069,13 @@ function setAutoLang(code,why){
 }
 // 외국어 발언 → 한국어 번역 (공유 프록시만 조용히 시도 — 실패해도 원문 유지)
 function segKo(s){ return (s&&(s.ko||s.text))||""; }
-async function translateSegment(seg){
+let trChain=Promise.resolve();   // 번역 순차 큐 — 외국어 발언이 몰려도 한 번에 하나씩
+function translateSegment(seg){ trChain=trChain.then(()=>_translateSegment(seg)).catch(()=>{}); return trChain; }
+async function _translateSegment(seg){
   try{
     const out=await callViaProxy(
       "전문 통역사. 아래 발언을 자연스러운 한국어 1~2문장으로 번역하라. 설명 없이 번역문만 출력.",
-      seg.text, 300);
+      seg.text, 300, {silentSkip:true,timeout:30000});
     const t=String(out||"").trim();
     if(t) seg.ko=t;
   }catch(_){/* 번역 실패 — 원문 그대로 회의록에 사용 */}
@@ -3135,8 +3188,12 @@ async function syncNotes(silent){
       +(manual?("회의 노트(수기):\n"+manual.slice(0,12000)+"\n\n"):"")
       +(ldParas?("실시간 회의록(문단 정리):\n"+ldParas.slice(0,8000)+"\n\n"):"")
       +(tr?("녹취:\n"+tr):"");
-    let o=await callClaude(sys,body,3200);
+    let o=await callClaude(sys,body,3200,{noPrompt:!!silent});
     const j=parseLooseJSON(o);
+    // 필드 정규화 — 모델 출력이 일부 비어도 화면·기록이 깨지지 않게
+    j.summary=typeof j.summary==="string"?j.summary:"";
+    ["agenda","ideas","research","decisions","actions","followups","tags","next"].forEach(k=>{
+      if(k in j && !Array.isArray(j[k])) j[k]=j[k]?[String(j[k])]:[]; });
     state.notes={summary:j.summary,agenda:j.agenda||[],ideas:j.ideas||[],research:j.research||[],decisions:j.decisions||[],actions:j.actions||[],followups:j.followups||[]};
     state.topicTags=j.tags||[];state.nextActions=j.nextActions||[];
     // AI auto-edit meeting title/purpose
@@ -3189,7 +3246,7 @@ async function endMeeting(){
   let mood="(분위기 요약 없음)";
   if(state.segments.length){try{
     const tr=state.segments.map(s=>`[${s.who}] ${segKo(s)}`).join("\n");
-    mood=await callClaude("회의 분위기 분석가. 녹취를 읽고 3-4문장 한국어로 분위기·톤·합의 정도를 요약. 순수 텍스트.",tr,400);
+    mood=await callClaude("회의 분위기 분석가. 녹취를 읽고 3-4문장 한국어로 분위기·톤·합의 정도를 요약. 순수 텍스트.",tr,400,{noPrompt:true});
   }catch(e){mood="분위기 요약 실패: "+e.message;}}
   // email draft
   let email="";try{ email=await buildEmailDraft(mood,stats); }catch(e){ email="(이메일 생성 실패: "+e.message+")"; }
@@ -3198,7 +3255,7 @@ async function endMeeting(){
   if(state.segments.length){
     try{
       const tr=state.segments.map(s=>`[${s.who}] ${segKo(s)}`).join("\n");
-      script=await callClaude("회의 녹취 정리 담당. 녹취를 읽기 쉬운 스크립트로 정리하라. 중복·잡음·군말 제거, 발언 순서 유지, 한국어. 순수 텍스트만 출력.",tr,2000);
+      script=await callClaude("회의 녹취 정리 담당. 녹취를 읽기 쉬운 스크립트로 정리하라. 중복·잡음·군말 제거, 발언 순서 유지, 한국어. 순수 텍스트만 출력.",tr,3000,{noPrompt:true});
     }catch(e){
       // AI 정리 실패 시: 원문을 그대로 두지 않고 최소 정리본만 생성 (번역문 우선)
       script=state.segments.map(s=>`[${s.who}] ${segKo(s)}`).join("\n");
@@ -3207,8 +3264,9 @@ async function endMeeting(){
   const purgedAt=new Date().toLocaleString('ko-KR');
   const segCount=state.segments.length;
   const cm=currentMeeting()||{};
-  const recDT=state.meeting.when?new Date(state.meeting.when).toLocaleString('ko-KR'):new Date().toLocaleString('ko-KR');
-  const rec={id:"m"+Date.now(),dt:recDT,
+  const sdMs=state.meeting.when||state.meeting.started||Date.now();
+  const recDT=new Date(sdMs).toLocaleString('ko-KR');
+  const rec={id:"m"+Date.now(),dt:recDT,sd:new Date(sdMs).toISOString(),   // sd: 회차 일시(ISO) — 이후 어떤 보정도 이 값을 기준으로
     title:state.meeting.title,purpose:state.meeting.purpose,mood,stats,
     rawNote:cm.rawNote||"",           // 회의 노트 원문 (AI 정리·직접 입력)
     notes:state.notes||(cm.summary?{summary:cm.summary,actions:(cm.actions||[]).slice()}:null),
@@ -3448,10 +3506,11 @@ ${(r.nextActions||[]).map(x=>"· "+x).join("\n")||"—"}
 }
 // 회차 한 줄 (주제 묶음 내부) — 각 날짜의 회의록이 독립적으로 미리보기·이메일·MD 제공
 function sessionRow(r,pvPrefix){
+  const canEdit=state.user.role==="operator"||state.user.role==="host";
   return `<div style="border-top:1px dashed var(--line);padding:9px 0 2px">
     <div style="display:flex;gap:10px;align-items:flex-start">
       <div style="flex:1;cursor:pointer" onclick="previewRecord('${r.id}','${pvPrefix}${r.id}')" title="이 회차 회의록 미리보기">
-        <div style="font-size:13px;font-weight:700;color:var(--deep)">${esc(r.dt)} <span class="mini" style="font-weight:500">· ${durLabel(r)}${(r.stats&&r.stats.segs>0)?` · 발언 ${r.stats.segs}건`:""} · 참석 ${(r.attendees||[]).length}명</span></div>
+        <div style="font-size:13px;font-weight:700;color:var(--deep)"><span ${canEdit?`onclick="event.stopPropagation();editRecordDT('${r.id}')" style="cursor:pointer;border-bottom:1px dotted var(--gray)" title="클릭해 이 회차의 일시 수정"`:""}>${esc(r.dt)}</span> <span class="mini" style="font-weight:500">· ${durLabel(r)}${(r.stats&&r.stats.segs>0)?` · 발언 ${r.stats.segs}건`:""} · 참석 ${(r.attendees||[]).length}명</span></div>
         <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(moodLine(r))}</div>
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
@@ -3542,13 +3601,10 @@ function repairRecords(){
     if(r.stats && (Number(r.stats.dur)<0 || Number(r.stats.dur)>1440 || isNaN(Number(r.stats.dur)))){ r.stats.dur=0; changed=true; }
     if(!Array.isArray(r.attendees)){ r.attendees=[]; changed=true; }
     const mm=(state.meetings||[]).find(m=>sameTitle(m.title,r.title));
-    // 기록 일시가 회의 일시와 어긋나면(저장 시각으로 찍힌 경우) 회의 일시로 교정
-    if(mm && mm.date){
-      const t=new Date(mm.date+"T"+(/^\d{2}:\d{2}/.test(mm.time||"")?mm.time:"10:00"));
-      if(!isNaN(t.getTime())){
-        const md=(t.getMonth()+1)+". "+t.getDate()+".";
-        if(String(r.dt||"").indexOf(md)<0){ r.dt=t.toLocaleString('ko-KR'); changed=true; }
-      }
+    // 일시 정합: 기록에 sd(회차 일시)가 있으면 그것만이 기준 — 회의 날짜로 덮어쓰지 않음(회차별 날짜 보존)
+    if(r.sd){
+      const t=new Date(r.sd);
+      if(!isNaN(t.getTime())){ const want=t.toLocaleString('ko-KR'); if(r.dt!==want){ r.dt=want; changed=true; } }
     }
     if(mm && !r.final){
       if(!r.rawNote && mm.rawNote){ r.rawNote=mm.rawNote; changed=true; }
