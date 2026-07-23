@@ -576,7 +576,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=41, BUILD_DATE="2026-07-22";
+const BUILD=42, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1893,6 +1893,20 @@ async function aiSummarizeFile(storedName){
   }
 }
 
+function fileRowHTML(f){
+  // 기존 자료 행과 동일한 버튼 구성 (바로보기·AI 정리·다운로드·삭제 — 권한별)
+  const nm=prettyName(f.name);
+  const ext=(f.name.match(/\.[^.]+$/)||[""])[0].toLowerCase();
+  const canAI=isTextFile(nm)&&(typeof canEditMeeting==="function")&&canEditMeeting();
+  return `<div class="filerow">
+    <div class="f-info"><div class="f-name">${esc(nm)}</div><div class="f-meta">${prettySize(FILE_SIZES[f.name])}</div></div>
+    <div class="f-acts">
+      <button class="b-mint" onclick="viewFile('${esc(f.name)}')">바로보기</button>
+      ${canAI?`<button class="b-deep" onclick="aiSummarizeFile('${esc(f.name)}')">AI 정리</button>`:""}
+      <button class="b-ghost" onclick="downloadFile('${esc(f.name)}')">다운로드</button>
+      ${canUpload()?`<button class="b-ghost" style="color:#C24A4A" onclick="deleteFile('${esc(f.name)}')">삭제</button>`:""}
+    </div></div>`;
+}
 async function renderFiles(boxId){
   const box=$(boxId||"fileList"); if(!box) return;
   box.innerHTML='<div class="mini">불러오는 중…</div>';
@@ -1906,6 +1920,21 @@ async function renderFiles(boxId){
     return;
   }
   files.forEach(f=>{ FILE_SIZES[f.name]=(f.metadata&&f.metadata.size)||0; });
+  // 회의별 격리: 이 회의에 연결된 자료만 본 목록에, 소속 없는 과거 자료는 아래 별도 섹션에
+  const mid=state.currentMeetingId;
+  const fm=state.fileMeeting||{};
+  const mine=files.filter(f=>fm[f.name]===mid);
+  const unassigned=files.filter(f=>!fm[f.name]);
+  const rowHTML=f=>fileRowHTML(f);
+  box.innerHTML=(mine.length?mine.map(rowHTML).join(""):'<div class="mini" style="margin-bottom:6px">이 회의에 연결된 자료가 아직 없습니다.'+(canUpload()?" 아래에서 업로드하면 자동으로 이 회의의 자료가 됩니다.":"")+'</div>')
+    +(unassigned.length?`<div style="margin-top:12px;border-top:1px dashed var(--line);padding-top:8px">
+        <div class="mini" style="font-weight:800;color:var(--soft);margin-bottom:4px">회의 미지정 자료 (${unassigned.length}) — 이전에 올린 자료입니다. 이 회의 것이면 [이 회의에 연결]을 눌러 주세요.</div>
+        ${unassigned.map(f=>`<div class="filerow"><div class="f-info"><div class="f-name">${esc(prettyName(f.name))}</div><div class="f-meta">${prettySize(f.metadata&&f.metadata.size)}</div></div>
+          <div class="f-acts"><button class="b-mint" onclick="attachFileToMeeting('${esc(f.name)}');renderFiles();">이 회의에 연결</button>
+          <button class="b-ghost" onclick="viewFile('${esc(f.name)}')">바로보기</button></div></div>`).join("")}
+      </div>`:"");
+  return;
+  /* 기존 전체 목록 렌더 (fileRowHTML로 대체) */
   box.innerHTML=files.map(f=>`<div class="filerow">
     <div class="f-info"><div class="f-name">${esc(prettyName(f.name))}</div><div class="f-meta">${prettySize(f.metadata&&f.metadata.size)}</div></div>
     <div class="f-acts">
@@ -3505,6 +3534,7 @@ async function endMeeting(){
   const sdMs=state.meeting.when||state.meeting.started||Date.now();
   const recDT=new Date(sdMs).toLocaleString('ko-KR');
   const rec={id:"m"+Date.now(),dt:recDT,sd:new Date(sdMs).toISOString(),   // sd: 회차 일시(ISO) — 이후 어떤 보정도 이 값을 기준으로
+    mid:cm.id||null,                                                        // 이 회차가 속한 회의 — 회의별 격리 표시의 기준
     title:state.meeting.title,purpose:state.meeting.purpose,mood,stats,
     rawNote:cm.rawNote||"",           // 회의 노트 원문 (AI 정리·직접 입력)
     notes:state.notes||(cm.summary?{summary:cm.summary,actions:(cm.actions||[]).slice()}:null),
@@ -3691,7 +3721,8 @@ function bindEmail(){
     }
     if(kind==="minutes"){
       // 회의 일정별(회차별)로 회의록 이메일 선택
-      const groups=groupRecords();
+      let groups=groupRecords(true);
+      if(!groups.length) groups=groupRecords();                // 이 회의 회차가 없으면 전체에서 선택
       if(!groups.length){ sub.innerHTML=""; $("emMsg").textContent="아직 저장된 회의 기록이 없습니다 — 회의 종료 후 이용하세요."; return; }
       sub.innerHTML='<div class="mail-sub">'+groups.map(g=>
         g.items.map(r=>`<button class="msb" data-rec="${esc(r.id)}">${esc(g.title.length>22?g.title.slice(0,22)+"…":g.title)} — ${esc(r.dt)}</button>`).join("")
@@ -4014,8 +4045,8 @@ window.loadEmail=loadEmail;
 // ==================== RECORDS (home) ====================
 function renderRecords(){const list=$("reclist");if(!list)return;
   refreshBadges();
-  if(!state.records.length){list.innerHTML='<div class="glass tile"><div class="mini">아직 저장된 회의가 없습니다. 회의를 시작하고 종료하면 여기 쌓입니다.</div></div>';return;}
-  const groups=groupRecords();
+  const groups=groupRecords(true);                             // 이 회의의 회차만 (다른 회의와 섞이지 않음)
+  if(!groups.length){list.innerHTML='<div class="glass tile"><div class="mini">이 회의의 저장된 회차가 아직 없습니다. 회의를 시작하고 종료하면 여기에 쌓입니다. (전체 회의의 기록은 [회의록·이메일] 옆 아카이브에서 볼 수 있습니다)</div></div>';return;}
   list.innerHTML=groups.map(g=>`
     <div class="glass tile" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px">
@@ -4029,9 +4060,14 @@ function renderRecords(){const list=$("reclist");if(!list)return;
 // 기록 보정: 회의 객체의 AI 정리 내용(rawNote·summary·tags)을 기록에 채우고, 비정상 소요시간을 정리
 function normTitle(t){ return String(t||"").replace(/\s+/g,"").toLowerCase(); }
 // 같은 주제(제목)로 기록을 묶는다 — 주제 아래 날짜별 회차 목록
-function groupRecords(){
+function recordBelongsToCurrent(r){
+  const cm=currentMeeting(); if(!cm) return true;              // 회의 미선택 상태(아카이브 등)면 전체
+  if(r.mid) return r.mid===cm.id;                              // 새 기록: 소속 회의로 판별
+  return sameTitle(r.title,cm.title);                          // 과거 기록: 제목으로 귀속 추정
+}
+function groupRecords(scopeCurrent){
   const groups=[], idx={};
-  (state.records||[]).forEach(r=>{
+  (state.records||[]).filter(r=>scopeCurrent?recordBelongsToCurrent(r):true).forEach(r=>{
     const k=normTitle(r.title)||"untitled";
     if(!(k in idx)){ idx[k]=groups.length; groups.push({key:k,title:r.title,items:[]}); }
     groups[idx[k]].items.push(r);   // records는 최신순(unshift)이라 회차도 최신순 유지
