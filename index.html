@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=59, BUILD_DATE="2026-07-22";
+const BUILD=60, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1002,7 +1002,7 @@ const INVITEE_GUIDE_TEXT=[
 "   · 거래처·기관: 초대받은 이메일의 구글 계정으로 로그인",
 "     (개최자가 참석자로 등록한 이메일만 허용됩니다 — 초대 이메일과 로그인 계정이 같아야 합니다)",
 "   · 네이버·다음 등 구글이 아닌 이메일로 초대받은 경우:",
-"     [초대 이메일로 인증코드 로그인]을 누르고 그 주소로 받은 6자리 코드를 입력하면 됩니다.",
+"     [초대 이메일로 로그인]을 누르면 메일이 갑니다 — 메일 안의 [Sign in] 버튼을 누르면 자동 로그인됩니다.",
 "     (원하시면 accounts.google.com에서 그 이메일 그대로 구글 계정을 만들어 Google 버튼을 써도 됩니다)",
 "",
 "3) 약사 참여 등록 (앱·연구 등록)",
@@ -1036,7 +1036,7 @@ function openInviteeGuide(){
       </div>
       <div style="overflow:auto;padding:16px 18px">
         ${row(1,"최신 버전 받기 (사이트 수정사항 반영)","사이트가 예전 화면 그대로라면 강력 새로고침을 해주세요.<br>· PC(Chrome·Edge): <b>Ctrl+Shift+R</b> (Mac: Cmd+Shift+R)<br>· 휴대폰: 브라우저 설정 → 인터넷 사용 기록 → 캐시 삭제 후 재접속")}
-        ${row(2,"로그인 (Google 전용 · 회원가입 없음)","· 숙명 구성원: <b>@sookmyung.ac.kr</b> 구글 계정으로 로그인<br>· 거래처·기관: <b>초대받은 이메일의 구글 계정</b>으로 로그인 (개최자가 참석자로 등록한 이메일만 허용 — 초대 이메일과 로그인 계정이 같아야 합니다)<br>· 네이버·다음 등 구글이 아닌 이메일로 초대받은 경우: <b>[초대 이메일로 인증코드 로그인]</b>을 누르고 그 주소로 받은 6자리 코드를 입력하면 됩니다.")}
+        ${row(2,"로그인 (Google 전용 · 회원가입 없음)","· 숙명 구성원: <b>@sookmyung.ac.kr</b> 구글 계정으로 로그인<br>· 거래처·기관: <b>초대받은 이메일의 구글 계정</b>으로 로그인 (개최자가 참석자로 등록한 이메일만 허용 — 초대 이메일과 로그인 계정이 같아야 합니다)<br>· 네이버·다음 등 구글이 아닌 이메일로 초대받은 경우: <b>[초대 이메일로 로그인]</b>을 누르면 그 주소로 메일이 갑니다 — 메일 안의 <b>[Sign in]</b> 버튼을 누르면 이 사이트로 자동 로그인됩니다. (메일에 6자리 코드가 있으면 코드 입력도 가능)")}
         ${row(3,"약사 참여 등록 (앱·연구 등록)","지역사회·전국 약사·제약사·의사 참여 등록 페이지에서 등록해 주세요. <a href='registry.html' target='_blank' style='color:var(--mint);font-weight:700'>등록 페이지 열기 →</a>")}
         ${row(4,"회의 참여 방법","회의 목록에서 초대된 회의를 선택합니다. [사전 준비] 탭에서 자료를 [바로보기]로 확인하고(PPT는 사이트 안에서, txt·md는 미리보기 창으로), [진행 콘솔] 탭에서 타이핑 메모와 음성 녹취(권한 허용 시)가 가능합니다. 녹취가 안 되는 환경에서는 입력칸에서 휴대폰 키보드의 마이크(받아쓰기)를 쓰거나, 녹음 앱 전사본(txt)을 수기 회의록에 첨부해 [AI 정리]하면 됩니다.")}
         ${row(5,"AI 기능","로그인만 하면 공유 AI(운영자 프록시)를 쓸 수 있습니다. 동작하지 않으면 [사전 준비] 탭의 <b>[AI 연결 점검]</b>으로 상태를 확인해 주세요.")}
@@ -2160,7 +2160,7 @@ function buildInvite(names){
 `   · 숙명 구성원: @sookmyung.ac.kr 구글 계정\n`+
 `   · 거래처·기관(구글 계정): 이 초대를 받으신 이메일의 구글 계정\n`+
 `   · 네이버·다음 등 그 외 이메일: [초대 이메일로 인증코드 로그인] 선택 후\n`+
-`     이 주소로 받은 6자리 코드를 입력\n`+
+`     받은 메일의 [Sign in] 버튼을 누르면 자동 로그인됩니다\n`+
 `   ※ 초대받은 이메일과 로그인 주소가 같아야 합니다\n`+
 `3. 로그인하시면 이 회의가 목록에 표시됩니다\n\n`+
 `■ 부탁드리는 것\n`+
@@ -4658,11 +4658,11 @@ function renderAuth(){
       <button class="social2 s-email" id="otpToggle">${ICON.mail}<span>초대 이메일로 인증코드 로그인</span></button>
     </div>
     <div id="otpForm" style="display:none">
-      <div class="social-or">네이버·다음 등 모든 이메일 — 초대받은 주소로 6자리 코드를 보내드립니다</div>
+      <div class="social-or">네이버·다음 등 모든 이메일 — 초대받은 주소로 로그인 메일을 보내드립니다</div>
       <input class="auth-in" id="otpEmail" placeholder="초대받은 이메일 (예: name@naver.com)" autocomplete="off">
       <button class="b-mint auth-btn" id="otpSend">인증코드 받기</button>
       <div id="otpStep2" style="display:none">
-        <input class="auth-in" id="otpCode" placeholder="메일로 받은 6자리 코드" autocomplete="off" inputmode="numeric" style="margin-top:8px">
+        <input class="auth-in" id="otpCode" placeholder="메일에 6자리 코드가 온 경우 여기 입력 (링크로 로그인했다면 불필요)" autocomplete="off" inputmode="numeric" style="margin-top:8px">
         <button class="b-mint auth-btn" id="otpVerify">확인하고 로그인</button>
         <div class="mini" style="margin-top:6px;opacity:.8;text-align:center">메일이 안 오면 스팸함을 확인하거나 1분 뒤 다시 요청해 주세요.</div>
       </div>
@@ -4689,7 +4689,7 @@ async function otpSend(){
     const {error}=await sb.auth.signInWithOtp({email,options:{shouldCreateUser:true}});
     if(error) throw error;
     $("otpStep2").style.display="block"; $("otpCode").focus();
-    msg.innerHTML='<span style="color:#8FD9D2">'+esc(email)+' 로 6자리 코드를 보냈습니다. 메일함을 확인해 주세요.</span>';
+    msg.innerHTML='<span style="color:#8FD9D2">'+esc(email)+' 로 로그인 메일을 보냈습니다.<br><b>메일 안의 [Sign in] 버튼</b>을 누르면 이 창이 자동 로그인됩니다. (코드가 온 경우 아래 입력도 가능)</span>';
   }catch(e){
     msg.innerHTML='<span class="gate-err">코드 발송 실패: '+esc(e.message)+(/rate/i.test(e.message)?' — 잠시 후 다시 시도해 주세요':'')+'</span>';
   }
