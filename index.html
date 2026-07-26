@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=58, BUILD_DATE="2026-07-22";
+const BUILD=59, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1838,7 +1838,7 @@ async function renderDeckMeetingFiles(boxId){
     return `<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--line)">
       <b style="flex:1;font-size:12.5px;color:var(--deep);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(prettyName(f.name))}</b>
 
-      ${/pptx?/.test(ext)?`<button class="b-mint" style="padding:4px 11px;font-size:12px" onclick="openPptView('${esc(f.name)}')">화면에서 열기</button>`:`<button class="b-mint" style="padding:4px 11px;font-size:12px" onclick="viewFile('${esc(f.name)}')">열기</button>`}
+      ${/pptx?/.test(ext)?`<button class="b-mint" style="padding:4px 11px;font-size:12px" onclick="viewFile('${esc(f.name)}')">화면에서 열기</button>`:`<button class="b-mint" style="padding:4px 11px;font-size:12px" onclick="viewFile('${esc(f.name)}')">열기</button>`}
       <button class="b-ghost" style="padding:4px 11px;font-size:12px" onclick="downloadFile('${esc(f.name)}')">다운로드</button>
     </div>`;
   }).join("");
