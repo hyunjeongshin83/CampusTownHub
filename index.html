@@ -86,7 +86,8 @@
 .ml-search{display:flex;gap:7px;margin-bottom:14px;}
 .ml-search .auth-in{flex:1;}
 .ml-search .b-ghost,.ml-search .b-mint{white-space:nowrap;padding:0 14px;}
-.ml-list{display:flex;flex-direction:column;gap:10px;max-height:58vh;overflow-y:auto;}
+.ml-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:10px;max-height:58vh;overflow-y:auto;padding-right:2px;}
+.mc-ico{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:#fff;flex:none;letter-spacing:.5px;box-shadow:0 4px 14px rgba(0,0,0,.28);}
 .mcard2{background:rgba(255,255,255,.96);border-radius:16px;padding:15px 17px;}
 .mc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
 .mc-top h4{font-size:16px;color:var(--ink);margin:0;line-height:1.3;}
@@ -587,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=50, BUILD_DATE="2026-07-22";
+const BUILD=51, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -3680,9 +3681,11 @@ function emailHTML(){
 async function renderMailFiles(){
   const box=$("mailFiles"); if(!box) return;
   box.innerHTML='<div class="mini">불러오는 중…</div>';
-  const files=await listFiles();
-  if(files===null||!files.length){
-    box.innerHTML='<div class="mini">올린 자료가 없습니다. 사전 준비 탭에서 자료를 올리면 여기에 표시됩니다.</div>';
+  const all=await listFiles();
+  const fm=state.fileMeeting||{};
+  const files=(all||[]).filter(f=>fm[f.name]===state.currentMeetingId);   // 이 회의 자료만
+  if(all===null||!files.length){
+    box.innerHTML='<div class="mini">이 회의에 연결된 자료가 없습니다. 사전 준비 탭에서 업로드하거나 [이 회의에 연결] 해주세요.</div>';
     return;
   }
   box.innerHTML='<div class="mf-list">'+files.map(f=>
@@ -4026,7 +4029,7 @@ function sessionRow(r,pvPrefix){
   </div>`;
 }
 function renderArchive(){const box=$("archive");if(!box)return;
-  const groups=groupRecords();
+  const groups=groupRecords(true);                            // 이 회의의 회차만
   box.innerHTML=groups.length?groups.map(g=>`
     <div class="glass tile" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px">
@@ -4035,7 +4038,7 @@ function renderArchive(){const box=$("archive");if(!box)return;
       </div>
       ${(g.items[0].tags&&g.items[0].tags.length)?`<div class="mini" style="margin-bottom:4px">${g.items[0].tags.map(t=>"#"+t).join(" ")}</div>`:""}
       ${g.items.map(r=>sessionRow(r,"pv-")).join("")}
-    </div>`).join(""):'<div class="mini">아직 아카이브된 회의가 없습니다.</div>';}
+    </div>`).join(""):'<div class="mini">이 회의의 저장된 회차가 아직 없습니다.</div>';}
 
 // 회의록 미리보기 (화면에서 바로 확인)
 function previewRecord(id,boxId){
@@ -4853,8 +4856,16 @@ function renderMeetingCards(list,emptyMsg){
     return;
   }
   const canManage=state.user.role==="operator"||state.user.role==="host";
+  const icoColor=t=>{ let n=0; for(const ch of String(t)) n=(n*31+ch.charCodeAt(0))>>>0;
+    const hues=[["#12BDB0","#0E5A54"],["#5B8DEF","#2C4A9A"],["#B478E8","#6A3AA0"],["#F0A860","#B06A20"],["#E87890","#A03050"]];
+    const [a,b]=hues[n%hues.length]; return `background:linear-gradient(135deg,${a},${b})`; };
+  const icoText=t=>{ const s=String(t).trim(); const m2=s.match(/[A-Za-z]+/); return (m2?m2[0].slice(0,2).toUpperCase():s.slice(0,2)); };
   box.innerHTML=list.map(m=>`<div class="mcard2">
-    <div class="mc-top"><h4>${esc(m.title)}</h4><span style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">${(m.company||"").split(",").map(c=>c.trim()).filter(Boolean).map(c=>`<span class="mc-badge">${esc(c)}</span>`).join("")}</span></div>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
+      <div class="mc-ico" style="${icoColor(m.title)}">${esc(icoText(m.title))}</div>
+      <div style="flex:1;min-width:0"><h4 style="margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.title)}</h4>
+        <span style="display:flex;gap:4px;flex-wrap:wrap">${(m.company||"").split(",").map(c=>c.trim()).filter(Boolean).map(c=>`<span class="mc-badge">${esc(c)}</span>`).join("")}</span></div>
+    </div>
     <div class="mc-meta">${esc(fmtDate(m.date))} ${esc(m.time)} · ${esc(m.place||"")}</div>
     <div class="mc-meta">개최자 ${esc(m.host)} · 참석 ${(m.attendees||[]).length}명</div>
     <div style="display:flex;gap:6px">
