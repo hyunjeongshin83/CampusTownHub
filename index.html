@@ -510,6 +510,15 @@ body{letter-spacing:-0.015em;}
 
 .chip .x.invite{color:var(--deep);font-weight:800;background:var(--mist);border-radius:8px;padding:2px 7px;margin-right:2px;}
 .chip .x.invite:hover{background:var(--mint);color:#fff;}
+/* ===== 블랙 Web3 스크롤바 — 전 스크롤 영역 공통 ===== */
+*{scrollbar-width:thin;scrollbar-color:#12BDB0 #0A1211;}
+::-webkit-scrollbar{width:11px;height:11px;}
+::-webkit-scrollbar-track{background:#0A1211;border-radius:10px;}
+::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#16D9C8 0%,#0E7C72 100%);border-radius:10px;border:2.5px solid #0A1211;}
+::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#3BF0DF 0%,#12BDB0 100%);box-shadow:0 0 10px rgba(22,217,200,.55);}
+::-webkit-scrollbar-thumb:active{background:#3BF0DF;}
+::-webkit-scrollbar-corner{background:#0A1211;}
+.stage::-webkit-scrollbar{width:12px;}
 .anno{border-bottom:1.5px dashed var(--mint);cursor:pointer;color:var(--deep);font-weight:600}
 .anno-pop{position:fixed;z-index:10000;max-width:300px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(20,60,55,.18);padding:11px 13px;font-size:12.5px;line-height:1.6;color:var(--ink)}
 .anno-pop .t{font-weight:800;color:var(--deep);margin-bottom:3px}
@@ -577,7 +586,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=48, BUILD_DATE="2026-07-22";
+const BUILD=49, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
