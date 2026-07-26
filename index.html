@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=51, BUILD_DATE="2026-07-22";
+const BUILD=52, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1521,28 +1521,58 @@ function bindHome(){
   renderCompanies();
   renderRecords();
 }
+// 숙명 창업보육센터 입주기업 현황 — 기업 등록 자동 채움과 회의 배지 자동 카드에 사용
+const INCUBATOR_DIR=[
+ {bld:"창업보육센터 1관",room:"B102",name:"애니머스큐어",item:"근감소증 및 희귀 근육질환 치료제"},
+ {bld:"창업보육센터 1관",room:"B103",name:"파워투팜스",item:"에너지 기반 지속가능 스마트팜 냉난방 공급 솔루션"},
+ {bld:"창업보육센터 1관",room:"B104",name:"소노럭스헬스테크",item:"공기 기반 바이러스 감지 시스템 솔루션"},
+ {bld:"창업보육센터 2관",room:"202",name:"메디아이티",alias:["MedIT","메디잇"],item:"AI 기반 스마트 복약 관리 및 약국 편의 구매 플랫폼"},
+ {bld:"창업보육센터 2관",room:"203",name:"에듀체인지",item:"AI 기반 핵심역량 진단 솔루션 COMPASS"},
+ {bld:"창업보육센터 2관",room:"205",name:"츄구미",alias:["ChewGumi"],item:"이동상황 기반 컨디션 케어 푸드테크 젤리"},
+ {bld:"창업보육센터 2관",room:"207",name:"모임바이오",item:"면역항암제 바이오마커 및 병용치료제"},
+ {bld:"창업보육센터 2관",room:"301",name:"농업회사법인(주)시그널케어",item:"대체원료 소재화 기술 기반 그린바이오 플랫폼"},
+ {bld:"창업보육센터 2관",room:"302",name:"에이스인벤터",item:"친환경 에너지 기반 농업용 태양전지 모듈"},
+ {bld:"창업보육센터 2관",room:"303",name:"(주)아레스사이버전략연구소",item:"ARES-Guard (Cyber Resilience CX Platform)"},
+ {bld:"창업보육센터 2관",room:"304",name:"독도",item:"AI 기반 개인맞춤형 독서토론 교육 플랫폼"},
+ {bld:"창업보육센터 2관",room:"401",name:"AXN Partners",alias:["AXN"],item:"AX Navigator AI 솔루션"},
+ {bld:"창업보육센터 2관",room:"403",name:"(주)더드림랩",alias:["더드림랩"],item:"AI 기반 TV 리모컨 활용 맞춤형 건강정보 제공 플랫폼"},
+];
+function dirNames(d){ return [d.name].concat(d.alias||[]); }
+function dirMatch(text){ const t=String(text||"").trim().toLowerCase(); if(!t)return null;
+  return INCUBATOR_DIR.find(d=>dirNames(d).some(n=>{const nn=n.toLowerCase();return nn.includes(t)||t.includes(nn);}))||null; }
 function renderCompanies(){
   const box=$("companyList"); if(!box)return;
   const canManage=state.user.role==="operator";
   // 회의별 격리: 이 회의의 소속·회사 배지에 해당하는 기업만 (배지 이름과 기업명 부분일치)
   const cm=currentMeeting();
   const badges=((cm&&cm.company)||"").split(",").map(s=>s.trim().toLowerCase()).filter(Boolean);
-  const list=badges.length?state.companies.filter(c=>{
-    const n=(c.name||"").toLowerCase();
-    return badges.some(b=>n.includes(b)||b.includes(n));
-  }):state.companies;
+  const nameHit=(n,b)=>{const nn=(n||"").toLowerCase();return nn.includes(b)||b.includes(nn);};
+  const regList=badges.length?state.companies.filter(c=>badges.some(b=>nameHit(c.name,b))):state.companies.slice();
+  // 배지에 해당하지만 아직 등록 안 된 입주기업은 현황 디렉터리에서 자동 카드로 보충
+  const autoList=badges.length?INCUBATOR_DIR.filter(d=>
+      badges.some(b=>dirNames(d).some(n=>nameHit(n,b)))
+      && !regList.some(c=>dirNames(d).some(n=>nameHit(c.name,(n||"").toLowerCase())))
+    ).map(d=>({name:d.name+(d.alias?` (${d.alias[0]})`:""),role:"입주 기업",desc:d.item,room:d.bld+" "+d.room+"호",auto:true})):[];
+  const list=regList.concat(autoList);
   if(!list.length){ box.innerHTML='<div class="mini">이 회의의 소속 기업이 등록되어 있지 않습니다.'+(canManage?' 아래 [+ 기업 등록]에서 추가하고, 회의 [수정]의 회사 배지와 이름을 맞춰 주세요.':'')+'</div>'; }
   else {
     box.innerHTML=`<div class="cgrid">`+list.map(c=>`<div class="ccard">
       <div class="c-name">${esc(c.name)}</div>
-      <div class="c-role">${esc(c.role||"입점 기업")}</div>
+      <div class="c-role">${esc(c.role||"입점 기업")}${c.auto?' · 현황 자동':''}</div>
       <div class="c-desc">${esc(c.desc||"")}</div>
+      ${c.room?`<div class="mini" style="margin-top:4px">${esc(c.room)}</div>`:""}
     </div>`).join("")+`</div>`;
   }
   if(canManage){
     box.innerHTML+=`<button class="b-ghost" id="addCompany" style="margin-top:9px">+ 기업 등록</button>`;
     const ac=$("addCompany"); if(ac)ac.onclick=()=>{
-      const name=prompt("기업명"); if(!name)return;
+      const name=prompt("기업명 (입주기업 현황에서 자동 채움 — 예: 츄구미, 메디아이티, ChewGumi)"); if(!name)return;
+      const d=dirMatch(name);
+      if(d){
+        if(state.companies.some(c=>dirNames(d).some(n=>c.name.toLowerCase().includes(n.toLowerCase())))){ toast("이미 등록된 기업입니다"); return; }
+        state.companies.push({id:"c_"+Date.now(),name:d.name+(d.alias?` (${d.alias[0]})`:""),role:"입주 기업",desc:d.item,room:d.bld+" "+d.room+"호"});
+        scheduleSave(); renderCompanies(); toast("'"+d.name+"' 정보를 입주기업 현황에서 자동으로 채웠습니다"); return;
+      }
       const desc=prompt("한 줄 소개","")||"";
       state.companies.push({id:"c_"+Date.now(),name,role:"입점 기업",desc});
       scheduleSave(); renderCompanies();
