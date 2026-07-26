@@ -86,7 +86,7 @@
 .ml-search{display:flex;gap:7px;margin-bottom:14px;}
 .ml-search .auth-in{flex:1;}
 .ml-search .b-ghost,.ml-search .b-mint{white-space:nowrap;padding:0 14px;}
-.ml-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:10px;max-height:58vh;overflow-y:auto;padding-right:2px;}
+.ml-list{display:flex;flex-direction:column;gap:10px;max-height:58vh;overflow-y:auto;padding-right:2px;}
 .mc-ico{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:#fff;flex:none;letter-spacing:.5px;box-shadow:0 4px 14px rgba(0,0,0,.28);}
 .mcard2{background:rgba(255,255,255,.96);border-radius:16px;padding:15px 17px;}
 .mc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=52, BUILD_DATE="2026-07-22";
+const BUILD=53, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -4833,6 +4833,60 @@ function loginAs(acc){
 
 // ==================== 회의 목록 (역할별 열람) ====================
 function roleLabel(r){return {operator:"운영자(사업자)",host:"개최자",guest:"초대자"}[r]||r;}
+// ==================== 회의 아이콘 — 이름 유추 + AI 보정 ====================
+const MICONS={
+ pill:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><rect x="3.2" y="9.2" width="17.6" height="7.6" rx="3.8" transform="rotate(-32 12 13)"/><line x1="8.6" y1="15.6" x2="14.2" y2="12.1"/></svg>',
+ vaccine:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M17 4l3 3M15 6l3 3M6 18l-3 3M7.5 9.5l7-7M6 11l7 7 6-6-7-7z"/><path d="M9.5 12.5l2-2M11.5 14.5l2-2"/></svg>',
+ platform:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round"><path d="M12 3l9 4.5-9 4.5-9-4.5z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5L12 21l9-4.5"/></svg>',
+ target:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="1.9"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.8"/><circle cx="12" cy="12" r="1.4" fill="#fff"/></svg>',
+ food:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M7 8c0-2.8 2.2-5 5-5s5 2.2 5 5c1.7.6 3 2.2 3 4.1 0 2.4-2 4.4-4.4 4.4H8.4C6 16.5 4 14.5 4 12.1 4 10.2 5.3 8.6 7 8z"/><path d="M9 20h6"/></svg>',
+ ai:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2.5"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M19 5l-2.5 2.5M5 19l2.5-2.5M19 19l-2.5-2.5"/></svg>',
+ flask:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3h4M11 3v6l-5.5 8.5A2.5 2.5 0 007.6 21h8.8a2.5 2.5 0 002.1-3.5L13 9V3"/><path d="M8.5 15h7"/></svg>',
+ doc:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>',
+ people:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><circle cx="17" cy="9.5" r="2.6"/><path d="M15.5 14.6c2.8.2 5 2.1 5 4.9"/></svg>',
+ health:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-9.3-9C1.4 7.6 3.6 4.5 6.9 4.5c2 0 3.6 1.1 4.4 2.7.8-1.6 2.4-2.7 4.4-2.7 3.3 0 5.5 3.1 4.2 6.5-1.8 4.4-9.3 9-9.3 9z"/><path d="M4 12h4l1.5-3 2.5 6 1.5-3H20"/></svg>',
+ building:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M4 21V5l8-2.5V21M12 21h8V9l-8-2"/><path d="M7 8.5h2M7 12h2M7 15.5h2M15 12h2M15 15.5h2"/></svg>',
+ robot:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><rect x="5" y="8" width="14" height="10" rx="2.5"/><path d="M12 8V4M12 4h3"/><circle cx="9.2" cy="12.5" r="1.1" fill="#fff"/><circle cx="14.8" cy="12.5" r="1.1" fill="#fff"/><path d="M9.5 15.8h5"/></svg>',
+};
+const ICON_KEYS=Object.keys(MICONS);
+function guessIconKey(title){
+  const t=String(title||"").toLowerCase();
+  const rules=[
+    [/백신|접종|vaccine/,"vaccine"],
+    [/약료|복약|약국|pharm|메디|medi|약사/,"pill"],
+    [/젤리|푸드|음식|간식|구미|gumi|food|츄/,"food"],
+    [/플랫폼|platform|허브|hub/,"platform"],
+    [/전략|기획|목표|로드맵|strategy/,"target"],
+    [/ai|인공지능|챗봇|데이터|모델/,"ai"],
+    [/연구|리서치|실험|research|학술/,"flask"],
+    [/로봇|robot|자동화|iot/,"robot"],
+    [/건강|헬스|health|케어|care/,"health"],
+    [/문서|보고|계약|제안/,"doc"],
+    [/입주|기업|센터|캠퍼스/,"building"],
+  ];
+  for(const [re,k] of rules) if(re.test(t)) return k;
+  return null;
+}
+function meetingIconSVG(m){
+  const key=(m.icon&&MICONS[m.icon])?m.icon:(guessIconKey(m.title)||"people");
+  return MICONS[key];
+}
+// AI 보정: 규칙으로 못 잡은 회의는 Claude가 아이콘 키를 골라 저장 (배경·조용히, 세션당 1회)
+let iconAIRan=false;
+async function refineIconsAI(){
+  if(iconAIRan) return; iconAIRan=true;
+  const targets=(state.meetings||[]).filter(m=>!m.icon&&!guessIconKey(m.title));
+  if(!targets.length) return;
+  try{
+    const sys="회의 제목에 어울리는 아이콘을 고른다. 가능한 키: "+ICON_KEYS.join(", ")+". 순수 JSON만: [{\"id\":\"회의id\",\"icon\":\"키\"}]";
+    const user=targets.map(m=>m.id+" :: "+m.title).join("\n");
+    const o=await callViaProxy(sys,user,300,{silentSkip:true,timeout:25000});
+    const arr=parseLooseJSON(o); let ch=false;
+    (Array.isArray(arr)?arr:[]).forEach(g=>{ const m=state.meetings.find(x=>x.id===g.id);
+      if(m&&ICON_KEYS.includes(g.icon)){ m.icon=g.icon; ch=true; } });
+    if(ch){ scheduleSave(); if($("mlList")) showMeetingList(); }
+  }catch(_){}
+}
 function showMeetingList(){
   const box=$("authArea"); if(!box)return;
   const list=state.meetings.filter(canView);
@@ -4843,7 +4897,7 @@ function showMeetingList(){
       <button class="at" id="logoutBtn">로그아웃</button>
     </div>
     <div class="ml-search">
-      <input class="auth-in" id="mlQuery" placeholder="회의 검색 · 예: 오늘 10시 회의, 방준석" autocomplete="off" style="margin:0">
+      <input class="auth-in" id="mlQuery" placeholder="회의 검색 · 예: 오늘 10시 회의" autocomplete="off" style="margin:0">
       <button class="b-ghost" id="mlVoice" title="음성 검색">음성</button>
       <button class="b-mint" id="mlSearch">검색</button>
     </div>
@@ -4889,10 +4943,9 @@ function renderMeetingCards(list,emptyMsg){
   const icoColor=t=>{ let n=0; for(const ch of String(t)) n=(n*31+ch.charCodeAt(0))>>>0;
     const hues=[["#12BDB0","#0E5A54"],["#5B8DEF","#2C4A9A"],["#B478E8","#6A3AA0"],["#F0A860","#B06A20"],["#E87890","#A03050"]];
     const [a,b]=hues[n%hues.length]; return `background:linear-gradient(135deg,${a},${b})`; };
-  const icoText=t=>{ const s=String(t).trim(); const m2=s.match(/[A-Za-z]+/); return (m2?m2[0].slice(0,2).toUpperCase():s.slice(0,2)); };
   box.innerHTML=list.map(m=>`<div class="mcard2">
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
-      <div class="mc-ico" style="${icoColor(m.title)}">${esc(icoText(m.title))}</div>
+      <div class="mc-ico" style="${icoColor(m.title)}">${meetingIconSVG(m)}</div>
       <div style="flex:1;min-width:0"><h4 style="margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.title)}</h4>
         <span style="display:flex;gap:4px;flex-wrap:wrap">${(m.company||"").split(",").map(c=>c.trim()).filter(Boolean).map(c=>`<span class="mc-badge">${esc(c)}</span>`).join("")}</span></div>
     </div>
@@ -4904,6 +4957,7 @@ function renderMeetingCards(list,emptyMsg){
     </div>
   </div>`).join("");
   box.querySelectorAll(".mc-enter").forEach(b=>b.onclick=()=>{ state.currentMeetingId=b.dataset.id; syncCurrentMeeting(); enterHub(); });
+  setTimeout(refineIconsAI,800);
   box.querySelectorAll(".mc-edit").forEach(b=>b.onclick=()=>openMeetingEditor(b.dataset.id));
   box.querySelectorAll(".mc-del").forEach(b=>b.onclick=()=>{
     const m=state.meetings.find(x=>x.id===b.dataset.id); if(!m)return;
