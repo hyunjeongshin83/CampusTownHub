@@ -533,6 +533,7 @@ body{letter-spacing:-0.015em;}
     <div class="ct-logo"><span class="ct-mark">CT</span><div><div class="name">캠퍼스타운 허브</div><div class="sub">CampusTown Hub · 회의 협업 플랫폼</div></div></div>
   </div>
   <div class="hspace"></div>
+  <button class="at" id="hdrHome" title="첫 화면(회의 목록)으로 돌아갑니다" style="white-space:nowrap" onclick="goMeetingList()">회의 목록</button>
   <span class="mini" id="hdrBuild" style="color:#9FD9D2;opacity:.75;white-space:nowrap"></span>
   <button id="guideBtn" onclick="openInviteeGuide()" style="background:rgba(255,255,255,.12);color:#DFF7F4;border:1px solid rgba(255,255,255,.25);border-radius:9px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">초대자 가이드</button>
   <div class="pill idle" id="pill"><span class="led"></span><span id="pillText">회의 대기</span></div>
@@ -576,7 +577,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=44, BUILD_DATE="2026-07-22";
+const BUILD=45, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -4969,6 +4970,13 @@ function renderHdrUser(){
   };
 }
 
+function goMeetingList(){
+  try{ if(typeof listening!=="undefined"&&listening&&typeof stopMic==="function")stopMic(); }catch(_){}
+  const app=$("appMain"); if(app)app.style.display="none";
+  const gate=$("gate"); if(gate)gate.style.display="";
+  showMeetingList();
+}
+window.goMeetingList=goMeetingList;
 function enterHub(){
   $("gate").style.display="none";
   renderTabs();
