@@ -577,7 +577,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=45, BUILD_DATE="2026-07-22";
+const BUILD=46, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1438,20 +1438,10 @@ function homeHTML(){
 
    <div class="glass tile" style="margin-bottom:14px">
      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-       <h4 style="margin:0">발표 슬라이드</h4>
-       <div style="display:flex;gap:7px">
-         <button class="b-mint" id="homePlay">${playing?'정지':'자동 발표'}</button>
-         <button class="b-ghost" id="homeToDeck">슬라이드 탭 열기</button>
-       </div>
+       <h4 style="margin:0">이 회의의 발표 자료</h4>
+       <button class="b-ghost" id="homeToDeck">슬라이드 탭 열기</button>
      </div>
-     <div class="home-slide ${SLIDES[state.deckIdx].cls}">${SLIDES[state.deckIdx].html}</div>
-     <div class="home-cap">${SLIDES[state.deckIdx].caption||""}${SLIDES[state.deckIdx].terms?`<div class="home-terms">용어: ${SLIDES[state.deckIdx].terms}</div>`:""}</div>
-     <div class="home-nav">
-       <button class="b-ghost" id="homePrev">이전</button>
-       <span class="home-num">${state.deckIdx+1} / ${SLIDES.length}</span>
-       <button class="b-ghost" id="homeNext">다음</button>
-       <span class="mini" style="margin-left:auto">음성(TTS)으로 스크립트를 읽고 자막·용어와 함께 자동으로 넘어갑니다 · 약 3분</span>
-     </div>
+     <div id="homeMeetingFiles" class="mini">발표 자료를 불러오는 중…</div>
    </div>
 
    <div class="grid g2" style="margin-bottom:14px">
@@ -1513,10 +1503,8 @@ function bindHome(){
   const sb=$("startMeetingBtn");if(sb)sb.onclick=startMeeting;
   const eb=$("endMeetingBtn");if(eb)eb.onclick=endMeeting;
   // 첫 페이지 슬라이드 컨트롤
-  const hp=$("homePlay");if(hp)hp.onclick=()=>playing?stopPlay():startPlay();
-  const hpr=$("homePrev");if(hpr)hpr.onclick=()=>{stopPlay();state.deckIdx=(state.deckIdx-1+SLIDES.length)%SLIDES.length;renderStage("home");};
-  const hnx=$("homeNext");if(hnx)hnx.onclick=()=>{stopPlay();state.deckIdx=(state.deckIdx+1)%SLIDES.length;renderStage("home");};
   const htd=$("homeToDeck");if(htd)htd.onclick=()=>switchTab("deck");
+  if(typeof renderDeckMeetingFiles==="function")renderDeckMeetingFiles("homeMeetingFiles");
   renderJobs();
   renderFiles("homeFileList");
   renderCompanies();
@@ -1726,8 +1714,8 @@ async function openTextViewer(storedName){
   }catch(e){ toast("미리보기 실패: "+e.message); }
 }
 // 슬라이드 탭 — 현재 회의에 연결된 발표 자료(PPT·PDF) 목록
-async function renderDeckMeetingFiles(){
-  const box=$("deckMeetingFiles"); if(!box)return;
+async function renderDeckMeetingFiles(boxId){
+  const box=$(boxId||"deckMeetingFiles"); if(!box)return;
   const files=await listFiles();
   if(files===null){ box.textContent="클라우드에 연결되지 않았습니다."; return; }
   const mid=state.currentMeetingId;
@@ -2230,7 +2218,8 @@ function deckHTML(){
   setTimeout(renderDeckMeetingFiles,0);
   return `<div class="slidewrap">
     ${head}
-    <div class="section-title" style="margin-top:2px">허브 소개 슬라이드</div>
+    <div class="section-title" style="margin-top:2px;cursor:pointer;user-select:none" id="introDeckHead"><span id="introDeckArrow">▸</span> 허브 소개 슬라이드 <span class="mini" style="font-weight:500">(공통 자료 — 회의와 무관, 펼쳐서 보기)</span></div>
+    <div id="introDeckWrap" style="display:none">
     <div class="slide ${sl.cls}">${sl.html}</div>
     <div class="progress"><div class="bar" id="progBar" style="width:${(state.deckIdx+1)/SLIDES.length*100}%"></div></div>
     <div class="caption-box" id="captionBox">
@@ -2246,9 +2235,12 @@ function deckHTML(){
     </div>
     <div class="mini" style="text-align:center">자동 발표: 음성(TTS)으로 스크립트를 읽고 자막·용어 설명과 함께 슬라이드가 넘어갑니다 · 약 3분</div>
     <div id="scriptEditor"></div>
+    </div>
   </div>`;
 }
 function bindDeck(){
+  const ih=$("introDeckHead");
+  if(ih)ih.onclick=()=>{const w=$("introDeckWrap"),a=$("introDeckArrow");const open=w.style.display==="none";w.style.display=open?"":"none";a.textContent=open?"▾":"▸";};
   $("prevS").onclick=()=>{stopPlay();state.deckIdx=(state.deckIdx-1+SLIDES.length)%SLIDES.length;renderStage("deck");};
   $("nextS").onclick=()=>{stopPlay();state.deckIdx=(state.deckIdx+1)%SLIDES.length;renderStage("deck");};
   $("playS").onclick=()=>playing?stopPlay():startPlay();
