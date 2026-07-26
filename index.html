@@ -577,7 +577,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=47, BUILD_DATE="2026-07-22";
+const BUILD=48, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -589,8 +589,8 @@ function checkForUpdate(){
         const remote=Number(m[1]);
         if(remote>BUILD && !document.getElementById("updBanner")){
           const d=document.createElement("div"); d.id="updBanner";
-          d.style.cssText="position:fixed;top:0;left:0;right:0;z-index:10001;background:#0E7C72;color:#fff;padding:10px 14px;display:flex;gap:10px;align-items:center;justify-content:center;font-size:13px;font-weight:700;box-shadow:0 2px 12px rgba(0,0,0,.25)";
-          d.innerHTML=`새 버전이 배포되었습니다 (v${BUILD} → v${remote}) <button style="background:#fff;color:#0E7C72;border:0;border-radius:8px;padding:6px 14px;font-weight:800;cursor:pointer;font-family:inherit" onclick="location.replace(location.pathname+'?v='+Date.now())">지금 업데이트</button>`;
+          d.style.cssText="position:fixed;top:0;left:0;right:0;z-index:10001;background:#0E7C72;color:#fff;padding:4px 12px;display:flex;gap:8px;align-items:center;justify-content:center;font-size:12px;font-weight:700;box-shadow:0 1px 8px rgba(0,0,0,.22)";
+          d.innerHTML=`새 버전 v${remote} <button style="background:#fff;color:#0E7C72;border:0;border-radius:7px;padding:3px 10px;font-weight:800;cursor:pointer;font-family:inherit;font-size:12px" onclick="location.replace(location.pathname+'?v='+Date.now())">업데이트</button>`;
           document.body.appendChild(d);
         }
       }).catch(()=>{});
