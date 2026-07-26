@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=55, BUILD_DATE="2026-07-22";
+const BUILD=56, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -3031,7 +3031,7 @@ function consoleHTML(){
   return `<div class="console">
    <div class="glass cpanel">
      <div class="mini" style="padding:10px 14px 0;color:var(--deep);font-weight:700">${esc((currentMeeting()||{}).title||"회의를 먼저 선택하세요")} <span style="font-weight:500;color:var(--gray)">· ${esc(fmtDate((currentMeeting()||{}).date))} ${esc((currentMeeting()||{}).time||"")}</span></div>
-     <h3 style="display:flex;align-items:center;gap:8px">실시간 녹취 <span class="tag" id="segCount">${state.segments.length}</span><span style="flex:1"></span><button class="b-mint" id="guessBtn" style="padding:4px 10px;font-size:12px" title="발언 내용으로 화자를 추정합니다 (목소리 구분이 아닌 내용 기반 — 추정 결과는 점선 표시, 클릭해 수정)">AI 화자 추정</button><button class="b-ghost" id="clearBtn" style="padding:4px 10px;font-size:12px">지우기</button></h3>
+     <h3 style="display:flex;align-items:center;gap:8px">실시간 녹취 <span class="tag" id="segCount">${state.segments.length}</span><span style="flex:1"></span><button class="b-ghost" id="kakaoBtn" style="padding:4px 10px;font-size:12px" title="카카오톡 채팅방의 '대화 내보내기(.txt)' 파일이나 복사한 대화를 이 회의의 발언으로 가져옵니다">카카오톡 가져오기</button><button class="b-mint" id="guessBtn" style="padding:4px 10px;font-size:12px" title="발언 내용으로 화자를 추정합니다 (목소리 구분이 아닌 내용 기반 — 추정 결과는 점선 표시, 클릭해 수정)">AI 화자 추정</button><button class="b-ghost" id="clearBtn" style="padding:4px 10px;font-size:12px">지우기</button></h3>
      <div class="privacy-note">음성은 저장되지 않고 텍스트로만 변환됩니다. 회의 종료 시 녹취 원문은 자동 파기되고, 회의록과 정리된 스크립트만 남습니다.</div>
      <div class="mini" style="padding:6px 14px 0;line-height:1.5" title="크롬 브라우저 로그인은 필요 없습니다">녹취가 안 될 때: 휴대폰 키보드 마이크(받아쓰기) · 타이핑 · 전사본(txt·md) 첨부 후 [AI 정리]</div>
      <div class="cscroll" id="transcript"></div>
@@ -3091,6 +3091,7 @@ function bindConsole(){
   const chip=$("langChip"); if(chip&&autoLang!=="ko-KR")chip.textContent="자동 감지: "+micLangLabel(autoLang);
   $("micBtn").onclick=()=>listening?stopMic():startMic();
   if($("guessBtn"))$("guessBtn").onclick=guessSpeakers;
+  if($("kakaoBtn"))$("kakaoBtn").onclick=openKakaoImport;
   if($("redoLive"))$("redoLive").onclick=redoLiveDoc;
   const ns=$("noteStyle"); if(ns){ ns.value=noteStyleVal(); ns.onchange=()=>{ localStorage.setItem("medit:notestyle",ns.value); toast(ns.value==="fact"?"사실형(Claude) 정리 — 감정·인상 표현을 배제합니다":"인상 포함 정리"); }; }
   $("clearBtn").onclick=()=>{if(confirm("녹취를 모두 지울까요? (이미 정리된 문단은 실시간 회의록에 남습니다)")){state.segments=[];if(state.liveDoc)state.liveDoc.cursor=0;renderTranscript();renderLiveDoc();refreshBadges();scheduleSave();}};
@@ -3271,6 +3272,84 @@ function editSegText(i){
   renderTranscript(); renderLiveDoc(); refreshBadges(); scheduleSave();
 }
 window.editSegText=editSegText;
+// ==================== 카카오톡 대화 가져오기 ====================
+// 공식 API로는 대화방 읽기가 불가(카카오 정책) — '대화 내보내기(.txt)' 형식을 파싱해 발언으로 등록
+function parseKakao(text){
+  const out=[]; let curDate="";
+  const lines=String(text||"").replace(/\r/g,"").split("\n");
+  const dateHdr=/^-*\s*(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/;                       // 날짜 구분선
+  const pc=/^\[(.+?)\]\s*\[(오전|오후)\s*(\d{1,2}):(\d{2})\]\s*(.+)$/;             // PC: [이름] [오전 10:31] 내용
+  const mob=/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(오전|오후)\s*(\d{1,2}):(\d{2}),\s*(.+?)\s*:\s*(.+)$/; // 모바일
+  const sysHint=/(님이 들어왔습니다|님이 나갔습니다|삭제된 메시지입니다|사진$|동영상$|이모티콘$|파일:)/;
+  const to24=(ap,hh)=>{ let x=Number(hh)%12; if(ap==="오후")x+=12; return String(x).padStart(2,"0"); };
+  for(const ln of lines){
+    const d=ln.match(dateHdr);
+    if(d){ curDate=`${d[1]}-${String(d[2]).padStart(2,"0")}-${String(d[3]).padStart(2,"0")}`; continue; }
+    let m=ln.match(pc);
+    if(m){ if(sysHint.test(m[5]))continue;
+      out.push({date:curDate,who:m[1].trim(),time:to24(m[2],m[3])+":"+m[4],text:m[5].trim()}); continue; }
+    m=ln.match(mob);
+    if(m){ if(sysHint.test(m[8]))continue;
+      out.push({date:`${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`,
+        who:m[7].trim(),time:to24(m[4],m[5])+":"+m[6],text:m[8].trim()}); continue; }
+    if(out.length&&ln.trim()&&!/^\d{4}년/.test(ln)) out[out.length-1].text+=" "+ln.trim();   // 줄바꿈 이어붙임
+  }
+  return out;
+}
+function openKakaoImport(){
+  let modal=$("kkModal"); if(modal)modal.remove();
+  modal=document.createElement("div"); modal.id="kkModal";
+  modal.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:16px";
+  const cm=currentMeeting()||{};
+  modal.innerHTML=`
+  <div style="background:#fff;border-radius:16px;max-width:min(620px,96vw);width:100%;max-height:94vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
+      <div style="flex:1;font-weight:800;color:var(--deep);font-size:15px">카카오톡 대화 가져오기</div>
+      <button class="b-ghost" id="kkCancel">취소</button>
+      <button class="b-mint" id="kkGo">가져오기</button>
+    </div>
+    <div style="overflow:auto;padding:14px 18px">
+      <div class="mini" style="line-height:1.6;margin-bottom:10px">카카오톡 채팅방 → 메뉴(≡) → <b>대화 내보내기</b>(.txt) 파일을 올리거나, 대화를 복사해 붙여넣으세요.<br>카카오 정책상 대화방을 API로 직접 읽는 것은 불가하여, 내보내기 파일을 읽는 방식입니다.</div>
+      <input type="file" id="kkFile" accept=".txt" style="margin-bottom:8px">
+      <textarea id="kkText" rows="8" placeholder="또는 여기에 대화를 붙여넣기" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px;line-height:1.5"></textarea>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:9px">
+        <label class="mini" style="display:flex;gap:5px;align-items:center"><input type="checkbox" id="kkDateOnly" ${cm.date?"checked":""}> 이 회의 날짜(${esc(fmtDate(cm.date))})의 대화만</label>
+        <label class="mini" style="display:flex;gap:5px;align-items:center"><input type="radio" name="kkTo" value="seg" checked> 발언으로 등록 (화자·시각 유지 → AI 반영 가능)</label>
+        <label class="mini" style="display:flex;gap:5px;align-items:center"><input type="radio" name="kkTo" value="note"> 수기 회의록에 붙이기</label>
+      </div>
+      <div class="mini" id="kkMsg" style="margin-top:8px;color:var(--deep)"></div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+  $("kkCancel").onclick=()=>modal.remove();
+  $("kkFile").onchange=async e=>{
+    const f=e.target.files&&e.target.files[0]; if(!f)return;
+    $("kkText").value=await f.text();
+    $("kkMsg").textContent="파일을 읽었습니다 — [가져오기]를 누르세요.";
+  };
+  $("kkGo").onclick=()=>{
+    const raw=$("kkText").value;
+    let msgs=parseKakao(raw);
+    if(!msgs.length){ $("kkMsg").textContent="대화를 인식하지 못했습니다 — 카카오톡 내보내기(.txt) 원본 형식인지 확인해 주세요."; $("kkMsg").style.color="#C24A4A"; return; }
+    const cm2=currentMeeting()||{};
+    if($("kkDateOnly").checked&&cm2.date) msgs=msgs.filter(x=>!x.date||x.date===cm2.date);
+    if(!msgs.length){ $("kkMsg").textContent="이 회의 날짜의 대화가 없습니다 — 날짜 필터를 해제해 보세요."; $("kkMsg").style.color="#C24A4A"; return; }
+    const mode=(document.querySelector('input[name="kkTo"]:checked')||{}).value||"seg";
+    if(mode==="seg"){
+      msgs.forEach(x=>{ state.segments.push({text:x.text,who:x.who,time:x.time,auto:false,src:"kakao"}); });
+      renderTranscript(); refreshBadges(); scheduleSave(); renderLiveDoc();
+      toast(msgs.length+"건의 카카오톡 발언을 등록했습니다 — [AI 반영]으로 회의록에 정리할 수 있습니다");
+    } else {
+      const ta=$("manualNote");
+      const block="\n[카카오톡 대화"+(cm2.date?" · "+cm2.date:"")+"]\n"+msgs.map(x=>`(${x.time}) ${x.who}: ${x.text}`).join("\n")+"\n";
+      if(ta){ ta.value=(ta.value||"")+block; ta.dispatchEvent(new Event("input")); const mw=$("manualWrap"); if(mw&&mw.style.display==="none"&&$("manualHead"))$("manualHead").click(); }
+      toast(msgs.length+"건을 수기 회의록에 붙였습니다");
+    }
+    modal.remove();
+  };
+}
+window.openKakaoImport=openKakaoImport;
 function editSegWho(i){
   const s=state.segments[i]; if(!s) return;
   const v=prompt("이 발언의 발화자 이름 수정",s.who||"");
