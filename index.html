@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=56, BUILD_DATE="2026-07-22";
+const BUILD=57, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -615,6 +615,8 @@ setTimeout(()=>{ try{
 setInterval(checkForUpdate,5*60*1000);
 // ==================== 부트 가드 (스크립트 최상단 — 어떤 지점에서 죽어도 화면에 원인 표시) ====================
 (function(){
+  try{ const mm=new URLSearchParams(location.search).get("m");
+    if(mm) localStorage.setItem("medit:pendingM",mm); }catch(_){}
   function box(){ return document.getElementById("authArea"); }
   function show(msg){
     try{ var a=box(); if(!a) return;
@@ -798,7 +800,7 @@ function refreshAll(){
   if(state.activeTab) renderStage(state.activeTab);
 }
 async function saveSession(){await store.set("medit:hub1",{
-  accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,fileMeeting:state.fileMeeting,currentMeetingId:state.currentMeetingId,
+  accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,fileMeeting:state.fileMeeting,connections:state.connections||[],currentMeetingId:state.currentMeetingId,
   uploads:state.uploads.map(u=>({name:u.name,type:u.type,size:u.size,text:u.text})),
   tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
   nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos});}
@@ -821,7 +823,7 @@ async function loadAll(){
   try{repairRecords();}catch(_){}
   const s=await store.get("medit:hub1");
   if(s && typeof s==="object"){
-    Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],projects:s.projects||[],pages:s.pages||[],fileNames:s.fileNames||{},fileMeeting:s.fileMeeting||{},
+    Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],projects:s.projects||[],pages:s.pages||[],fileNames:s.fileNames||{},fileMeeting:s.fileMeeting||{},connections:s.connections||[],
       currentMeetingId:s.currentMeetingId||null,uploads:s.uploads||[],
       tabNotes:s.tabNotes||state.tabNotes,segments:s.segments||[],notes:s.notes||null,research:s.research||[],
       nextActions:s.nextActions||[],topicTags:s.topicTags||[],meetingStart:s.meetingStart||null});
@@ -2162,6 +2164,7 @@ function buildInvite(names){
 `   ※ 초대받은 이메일과 로그인 주소가 같아야 합니다\n`+
 `3. 로그인하시면 이 회의가 목록에 표시됩니다\n\n`+
 `■ 부탁드리는 것\n`+
+`회의 바로가기(로그인 후 자동 입장): ${meetingLink(m.id||state.currentMeetingId||"")}\n\n`+
 `회의 전에 사이트에 올린 자료를 한 번 읽어봐 주시면 감사하겠습니다.\n\n`+
 `감사합니다.\n\n신현정 드림`;
 }
@@ -5014,10 +5017,43 @@ async function refineIconsAI(){
     if(ch){ scheduleSave(); if($("mlList")) showMeetingList(); }
   }catch(_){}
 }
+// ==================== 커넥션(회사 협업) 계층 ====================
+let CURRENT_CONN=null;   // null=커넥션 목록, 문자열=선택된 커넥션 키
+function connKey(companyStr){
+  return String(companyStr||"").split(",").map(s=>s.trim().toLowerCase().replace(/\s*\(.*?\)\s*/g,"")).filter(Boolean).sort().join("+")||"_none";
+}
+function connLabel(companyStr){
+  const parts=String(companyStr||"").split(",").map(s=>s.trim()).filter(Boolean);
+  return parts.length?parts.join(" × "):"회사 미지정";
+}
+function connGroups(list){
+  const g=[],idx={};
+  list.forEach(m=>{ const k=connKey(m.company);
+    if(!(k in idx)){ idx[k]=g.length; g.push({key:k,company:m.company||"",label:connLabel(m.company),items:[]}); }
+    g[idx[k]].items.push(m); });
+  (state.connections||[]).forEach(c=>{ const k=connKey(c.company);
+    if(!(k in idx)){ idx[k]=g.length; g.push({key:k,company:c.company,label:connLabel(c.company),items:[],custom:true}); } });
+  return g;
+}
+function meetingLink(id){ return location.origin+location.pathname+"?m="+encodeURIComponent(id); }
+function copyMeetingLink(id){
+  const url=meetingLink(id);
+  if(navigator.clipboard){ navigator.clipboard.writeText(url); toast("회의 입장 링크를 복사했습니다 — 초대 메일·카톡에 붙여넣으세요"); }
+  else prompt("회의 입장 링크",url);
+}
+window.copyMeetingLink=copyMeetingLink;
 function showMeetingList(){
   const box=$("authArea"); if(!box)return;
   const list=state.meetings.filter(canView);
   const canCreate=state.user.role==="operator"||state.user.role==="host";
+  // 초대 링크로 접속한 경우 — 해당 회의로 바로 입장
+  try{
+    const pm=localStorage.getItem("medit:pendingM");
+    if(pm){ localStorage.removeItem("medit:pendingM");
+      const m=list.find(x=>x.id===pm);
+      if(m){ state.currentMeetingId=m.id; syncCurrentMeeting(); enterHub(); toast("초대 링크의 회의로 입장했습니다"); return; }
+    }
+  }catch(_){}
   box.innerHTML=`
     <div class="ml-head">
       <div><b>${esc(state.user.name)}</b> · ${roleLabel(state.user.role)}</div>
@@ -5028,20 +5064,44 @@ function showMeetingList(){
       <button class="b-ghost" id="mlVoice" title="음성 검색">음성</button>
       <button class="b-mint" id="mlSearch">검색</button>
     </div>
+    <div id="connHead" style="display:${CURRENT_CONN?'flex':'none'};align-items:center;gap:8px;margin-bottom:8px">
+      <button class="b-ghost" id="connBack" style="padding:5px 11px">← 커넥션 목록</button>
+      <b id="connTitle" style="color:#fff;font-size:14px"></b>
+    </div>
     <div class="ml-list" id="mlList"></div>
-    ${canCreate?'<button class="b-deep auth-btn" id="mlCreate">+ 새 회의 만들기</button>':''}
+    ${canCreate?`<button class="b-deep auth-btn" id="mlCreate" style="display:${CURRENT_CONN?'':'none'}">+ 이 커넥션에 새 회의 만들기</button>
+    <button class="b-ghost auth-btn" id="mlNewConn" style="display:${CURRENT_CONN?'none':''}">+ 새 커넥션(회사 협업) 만들기</button>`:''}
     <div class="backup-row">
       <button class="b-ghost" id="mlExport">백업 내보내기</button>
       <button class="b-ghost" id="mlImport">백업 가져오기</button>
       ${state.user.role==="operator"?'<button class="b-ghost" id="mlReset">초기화</button>':''}
     </div>
     <div class="backup-hint" id="storeHint"></div>`;
-  renderMeetingCards(list);
+  if(CURRENT_CONN){
+    const g=connGroups(list).find(x=>x.key===CURRENT_CONN);
+    const ct=$("connTitle"); if(ct)ct.textContent=g?g.label:"";
+    renderMeetingCards(g?g.items:[], g&&g.items.length?"":"이 커넥션의 회의가 아직 없습니다 — 아래에서 만들어 주세요.");
+  } else {
+    renderConnCards(connGroups(list));
+  }
+  const cb=$("connBack"); if(cb)cb.onclick=()=>{ CURRENT_CONN=null; showMeetingList(); };
+  const nc=$("mlNewConn"); if(nc)nc.onclick=()=>{
+    const company=prompt("커넥션의 회사들 (쉼표로 여러 개 — 예: MedIT, 츄구미)"); if(!company)return;
+    state.connections=state.connections||[];
+    if(connGroups(list).some(x=>x.key===connKey(company))&&false){}
+    state.connections.push({id:"cn_"+Date.now(),company:company.trim()});
+    saveNow&&saveNow(); CURRENT_CONN=connKey(company); showMeetingList();
+    toast("커넥션을 만들었습니다 — 이 안에서 회의를 만들면 회사 배지가 자동으로 채워집니다");
+  };
   $("logoutBtn").onclick=async()=>{await authSignOut();state.user={role:null,name:"",email:"",id:null};clearUser();authMode="login";renderAuth();};
   $("mlSearch").onclick=async()=>{ const r=await searchMeetings($("mlQuery").value); renderMeetingCards(r.length?r:[], r.length?"":"검색 결과가 없습니다."); };
   $("mlQuery").addEventListener("keydown",async e=>{if(e.key==='Enter'){const r=await searchMeetings($("mlQuery").value);renderMeetingCards(r.length?r:[],r.length?"":"검색 결과가 없습니다.");}});
   $("mlVoice").onclick=()=>voiceSearch(async t=>{$("mlQuery").value=t;const r=await searchMeetings(t);renderMeetingCards(r.length?r:[],r.length?"":"검색 결과가 없습니다.");});
-  if(canCreate&&$("mlCreate"))$("mlCreate").onclick=createMeetingFlow;
+  if(canCreate&&$("mlCreate"))$("mlCreate").onclick=()=>{
+    let preset="";
+    if(CURRENT_CONN){ const g=connGroups(state.meetings.filter(canView)).find(x=>x.key===CURRENT_CONN); preset=(g&&g.company)||""; }
+    openMeetingCreator(preset);
+  };
   const sh=$("storeHint");
   if(sh){
     const mode=storageMode();
@@ -5067,6 +5127,26 @@ function renderMeetingCards(list,emptyMsg){
     return;
   }
   const canManage=state.user.role==="operator"||state.user.role==="host";
+function renderConnCards(groups){
+  const box=$("mlList"); if(!box)return;
+  const icoColor2=t=>{ let n=0; for(const ch of String(t)) n=(n*31+ch.charCodeAt(0))>>>0;
+    const hues=[["#12BDB0","#0E5A54"],["#5B8DEF","#2C4A9A"],["#B478E8","#6A3AA0"],["#F0A860","#B06A20"],["#E87890","#A03050"]];
+    const [a,b]=hues[n%hues.length]; return `background:linear-gradient(135deg,${a},${b})`; };
+  if(!groups.length){ box.innerHTML='<div class="mini" style="color:#BFD9D5">아직 커넥션이 없습니다. 회의를 만들면 회사 배지 기준으로 자동 생성됩니다.</div>'; return; }
+  box.innerHTML=groups.map(g=>{
+    const cos=String(g.company||"").split(",").map(s=>s.trim()).filter(Boolean);
+    const icons=cos.slice(0,3).map(c=>`<div class="mc-ico" style="width:36px;height:36px;font-size:13px;border-radius:11px;${icoColor2(c)}">${esc(c.replace(/\s*\(.*?\)\s*/,"").slice(0,2).toUpperCase())}</div>`).join("");
+    return `<div class="mcard2" style="cursor:pointer" data-conn="${esc(g.key)}">
+      <div style="display:flex;gap:9px;align-items:center;margin-bottom:6px">
+        <div style="display:flex;gap:4px">${icons||'<div class="mc-ico" style="width:36px;height:36px;border-radius:11px;background:#4A5A58">—</div>'}</div>
+        <div style="flex:1;min-width:0"><h4 style="margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(g.label)}</h4>
+          <span class="mc-meta">회의 ${g.items.length}건${g.custom&&!g.items.length?" · 새 커넥션":""}</span></div>
+        <button class="b-mint" style="flex:none">입장</button>
+      </div>
+    </div>`;
+  }).join("");
+  box.querySelectorAll("[data-conn]").forEach(el=>el.onclick=()=>{ CURRENT_CONN=el.dataset.conn; showMeetingList(); });
+}
   const icoColor=t=>{ let n=0; for(const ch of String(t)) n=(n*31+ch.charCodeAt(0))>>>0;
     const hues=[["#12BDB0","#0E5A54"],["#5B8DEF","#2C4A9A"],["#B478E8","#6A3AA0"],["#F0A860","#B06A20"],["#E87890","#A03050"]];
     const [a,b]=hues[n%hues.length]; return `background:linear-gradient(135deg,${a},${b})`; };
@@ -5080,6 +5160,7 @@ function renderMeetingCards(list,emptyMsg){
     <div class="mc-meta">개최자 ${esc(m.host)} · 참석 ${(m.attendees||[]).length}명</div>
     <div style="display:flex;gap:6px">
       <button class="b-mint mc-enter" data-id="${m.id}" style="flex:1">입장</button>
+      <button class="b-ghost" onclick="event.stopPropagation();copyMeetingLink('${m.id}')" title="이 회의로 바로 들어오는 초대 링크를 복사합니다">링크</button>
       ${canManage?`<button class="b-ghost mc-edit" data-id="${m.id}">수정</button><button class="b-ghost mc-del" data-id="${m.id}" style="color:#C24A4A">삭제</button>`:""}
     </div>
   </div>`).join("");
@@ -5142,7 +5223,7 @@ function openMeetingEditor(id){
 window.openMeetingEditor=openMeetingEditor;
 function fmtDate(d){ if(!d)return""; const p=d.split("-"); return p.length===3?`${p[0]}.${p[1]}.${p[2]}`:d; }
 function createMeetingFlow(){ openMeetingCreator(); }
-function openMeetingCreator(){
+function openMeetingCreator(presetCompany){
   let modal=$("mtNewModal"); if(modal)modal.remove();
   modal=document.createElement("div"); modal.id="mtNewModal";
   modal.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:16px";
@@ -5166,7 +5247,7 @@ function openMeetingCreator(){
       ${fld("장소 (누르면 자주 쓰는 장소가 나옵니다)","mn_place","")}
       <div id="mn_place_sug" style="display:flex;gap:5px;flex-wrap:wrap;margin:-3px 0 9px"></div>
       ${fld("목적 (선택)","mn_purpose","")}
-      ${fld("소속·회사 배지 (쉼표로 여러 개 — 입주기업은 이름 일부만 쳐도 자동 완성)","mn_company","","예: 메디, 츄구미, ChewGumi …")}
+      ${fld("소속·회사 배지 (쉼표로 여러 개 — 입주기업은 이름 일부만 쳐도 자동 완성)","mn_company",presetCompany||"","예: 메디, 츄구미, ChewGumi …")}
       <div id="mn_company_sug" style="display:flex;gap:5px;flex-wrap:wrap;margin:-3px 0 9px"></div>
       <div class="mini" style="line-height:1.5">참석자 등록·초대는 만들고 입장 후 [사전 준비] 탭에서 합니다. 만든 회의는 즉시 클라우드에 저장됩니다.</div>
     </div>
