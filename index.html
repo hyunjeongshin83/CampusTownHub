@@ -576,7 +576,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=42, BUILD_DATE="2026-07-22";
+const BUILD=44, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1730,19 +1730,19 @@ async function renderDeckMeetingFiles(){
   const files=await listFiles();
   if(files===null){ box.textContent="클라우드에 연결되지 않았습니다."; return; }
   const mid=state.currentMeetingId;
-  const mine=files.filter(f=>{
-    const ext=(f.name.match(/\.[^.]+$/)||[""])[0].toLowerCase();
-    if(!/^\.(pptx?|pdf)$/.test(ext)) return false;
-    const owner=(state.fileMeeting||{})[f.name];
-    return owner?owner===mid:true;                       // 과거(연결 정보 없는) 자료는 모든 회의에서 보이도록
-  });
-  if(!mine.length){ box.innerHTML='이 회의에 연결된 발표 자료가 없습니다 — <b>[사전 준비]</b> 탭에서 PPT·PDF를 업로드하면 여기에 표시됩니다.'; return; }
+  const isSlide=f=>{ const ext=(f.name.match(/\.[^.]+$/)||[""])[0].toLowerCase(); return /^\.(pptx?|pdf)$/.test(ext); };
+  const fm2=state.fileMeeting||{};
+  const mine=files.filter(f=>isSlide(f)&&fm2[f.name]===mid);          // 이 회의 소속만
+  const legacyN=files.filter(f=>isSlide(f)&&!fm2[f.name]).length;
+  if(!mine.length){
+    box.innerHTML='이 회의에 연결된 발표 자료가 없습니다 — <b>[사전 준비]</b> 탭에서 PPT·PDF를 업로드하면 여기에 표시됩니다.'
+      +(legacyN&&(typeof canEditMeeting==="function"&&canEditMeeting())?` <span class="mini">(미지정 자료 ${legacyN}개는 사전 준비 탭 하단에서 연결할 수 있습니다)</span>`:"");
+    return; }
   box.innerHTML=mine.map(f=>{
     const ext=(f.name.match(/\.[^.]+$/)||[""])[0].toLowerCase();
-    const legacy=!(state.fileMeeting||{})[f.name];
     return `<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--line)">
       <b style="flex:1;font-size:12.5px;color:var(--deep);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(prettyName(f.name))}</b>
-      ${legacy?`<button class="b-ghost" style="padding:4px 9px;font-size:11.5px;flex:none" onclick="attachFileToMeeting('${esc(f.name)}')" title="이 자료를 현재 회의의 발표 자료로 연결합니다">이 회의에 연결</button>`:""}
+
       ${/pptx?/.test(ext)?`<button class="b-mint" style="padding:4px 11px;font-size:12px" onclick="openPptView('${esc(f.name)}')">화면에서 열기</button>`:`<button class="b-mint" style="padding:4px 11px;font-size:12px" onclick="viewFile('${esc(f.name)}')">열기</button>`}
       <button class="b-ghost" style="padding:4px 11px;font-size:12px" onclick="downloadFile('${esc(f.name)}')">다운로드</button>
     </div>`;
@@ -1926,13 +1926,18 @@ async function renderFiles(boxId){
   const mine=files.filter(f=>fm[f.name]===mid);
   const unassigned=files.filter(f=>!fm[f.name]);
   const rowHTML=f=>fileRowHTML(f);
+  const showUn=canUpload()&&unassigned.length;                 // 미지정 자료는 개최자에게만, 기본 접힘 — 화면에는 이 회의 자료만 보이도록
   box.innerHTML=(mine.length?mine.map(rowHTML).join(""):'<div class="mini" style="margin-bottom:6px">이 회의에 연결된 자료가 아직 없습니다.'+(canUpload()?" 아래에서 업로드하면 자동으로 이 회의의 자료가 됩니다.":"")+'</div>')
-    +(unassigned.length?`<div style="margin-top:12px;border-top:1px dashed var(--line);padding-top:8px">
-        <div class="mini" style="font-weight:800;color:var(--soft);margin-bottom:4px">회의 미지정 자료 (${unassigned.length}) — 이전에 올린 자료입니다. 이 회의 것이면 [이 회의에 연결]을 눌러 주세요.</div>
+    +(showUn?`<div style="margin-top:12px;border-top:1px dashed var(--line);padding-top:6px">
+        <div class="mini" id="unToggle" style="font-weight:800;color:var(--soft);cursor:pointer;user-select:none"><span id="unArrow">▸</span> 다른·이전 자료 ${unassigned.length}개 (이 회의 화면에는 표시되지 않음 — 연결하려면 펼치기)</div>
+        <div id="unWrap" style="display:none;margin-top:4px">
         ${unassigned.map(f=>`<div class="filerow"><div class="f-info"><div class="f-name">${esc(prettyName(f.name))}</div><div class="f-meta">${prettySize(f.metadata&&f.metadata.size)}</div></div>
           <div class="f-acts"><button class="b-mint" onclick="attachFileToMeeting('${esc(f.name)}');renderFiles();">이 회의에 연결</button>
           <button class="b-ghost" onclick="viewFile('${esc(f.name)}')">바로보기</button></div></div>`).join("")}
+        </div>
       </div>`:"");
+  const ut=$("unToggle");
+  if(ut)ut.onclick=()=>{const w2=$("unWrap"),a=$("unArrow");const open=w2.style.display==="none";w2.style.display=open?"":"none";a.textContent=open?"▾":"▸";};
   return;
   /* 기존 전체 목록 렌더 (fileRowHTML로 대체) */
   box.innerHTML=files.map(f=>`<div class="filerow">
@@ -4046,8 +4051,10 @@ window.loadEmail=loadEmail;
 function renderRecords(){const list=$("reclist");if(!list)return;
   refreshBadges();
   const groups=groupRecords(true);                             // 이 회의의 회차만 (다른 회의와 섞이지 않음)
-  if(!groups.length){list.innerHTML='<div class="glass tile"><div class="mini">이 회의의 저장된 회차가 아직 없습니다. 회의를 시작하고 종료하면 여기에 쌓입니다. (전체 회의의 기록은 [회의록·이메일] 옆 아카이브에서 볼 수 있습니다)</div></div>';return;}
-  list.innerHTML=groups.map(g=>`
+  const cmName=(currentMeeting()||{}).title||"";
+  const scopeLabel=`<div class="mini" style="margin-bottom:6px;color:var(--deep);font-weight:700">'${esc(cmName)}'의 회차만 표시 중 <span style="font-weight:500;color:var(--gray)">(전체 기록은 아카이브)</span></div>`;
+  if(!groups.length){list.innerHTML=scopeLabel+'<div class="glass tile"><div class="mini">이 회의의 저장된 회차가 아직 없습니다. 회의를 시작하고 종료하면 여기에 쌓입니다.</div></div>';return;}
+  list.innerHTML=scopeLabel+groups.map(g=>`
     <div class="glass tile" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px">
         <div style="font-size:14px;font-weight:800;color:var(--deep)">${esc(g.title)}</div>
@@ -4098,6 +4105,11 @@ function repairRecords(){
     }
     // 한 번 채워진 기존 기록은 확정 — 이후 같은 제목 회의(다음 회차)가 덮어쓰지 못함
     if(r.final===undefined){ r.final=true; changed=true; }
+    // 소속 회의 영구 각인 (제목이 정확히 한 회의와 일치할 때만)
+    if(!r.mid){
+      const ms=(state.meetings||[]).filter(m=>sameTitle(m.title,r.title));
+      if(ms.length===1){ r.mid=ms[0].id; changed=true; }
+    }
   });
   if(changed) saveRecords();
 }
