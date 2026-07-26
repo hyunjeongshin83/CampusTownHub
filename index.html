@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=54, BUILD_DATE="2026-07-22";
+const BUILD=55, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1538,6 +1538,34 @@ const INCUBATOR_DIR=[
  {bld:"창업보육센터 2관",room:"403",name:"(주)더드림랩",alias:["더드림랩"],item:"AI 기반 TV 리모컨 활용 맞춤형 건강정보 제공 플랫폼"},
 ];
 function dirNames(d){ return [d.name].concat(d.alias||[]); }
+// 장소 자동 완성 — 자주 쓰는 장소 프리셋 + 기존 회의·기록에서 실제 사용한 장소
+const PLACE_PRESETS=[
+  "숙명캠퍼스타운 209호 미팅룸 1호",
+  "숙명캠퍼스타운 206호 미팅룸",
+  "숙명캠퍼스타운 2층 로비",
+  "창업보육센터 2관 202호 (MedIT)",
+  "온라인 (화상회의)",
+];
+function knownPlaces(){
+  const set=[];
+  const add=p=>{ p=String(p||"").trim(); if(p&&!set.some(x=>x.toLowerCase()===p.toLowerCase())) set.push(p); };
+  (state.meetings||[]).forEach(m=>add(m.place));
+  (state.records||[]).forEach(r=>add(r.place));
+  PLACE_PRESETS.forEach(add);
+  return set;
+}
+function attachPlaceSuggest(inp,box){
+  if(!inp||!box) return;
+  const render=()=>{
+    const q=inp.value.trim().toLowerCase();
+    const hits=knownPlaces().filter(p=>!q||p.toLowerCase().includes(q)).slice(0,6);
+    box.innerHTML=hits.map((p,i)=>`<button type="button" class="b-ghost" data-psug="${i}" style="padding:3px 10px;font-size:11.5px">${esc(p)}</button>`).join("");
+    box.querySelectorAll("[data-psug]").forEach(b=>b.onclick=()=>{ inp.value=hits[Number(b.dataset.psug)]; box.innerHTML=""; });
+  };
+  inp.addEventListener("input",render);
+  inp.addEventListener("focus",render);
+  inp.addEventListener("blur",()=>setTimeout(()=>{box.innerHTML="";},250));
+}
 // 회사 배지 입력 자동 완성 — 마지막 쉼표 항목을 입주기업 현황과 대조해 추천 칩 표시
 function attachCompanySuggest(inp,box){
   if(!inp||!box) return;
@@ -5008,7 +5036,8 @@ function openMeetingEditor(id){
         ${fld("날짜","mt_date",m.date,"YYYY-MM-DD")}
         ${fld("시간","mt_time",m.time,"HH:MM")}
       </div>
-      ${fld("장소","mt_place",m.place)}
+      ${fld("장소 (누르면 자주 쓰는 장소가 나옵니다)","mt_place",m.place)}
+      <div id="mt_place_sug" style="display:flex;gap:5px;flex-wrap:wrap;margin:-3px 0 9px"></div>
       ${fld("목적","mt_purpose",m.purpose)}
       ${fld("소속·회사 배지 (쉼표로 여러 개 — 입주기업은 이름 일부만 쳐도 자동 완성)","mt_company",m.company)}
       <div id="mt_company_sug" style="display:flex;gap:5px;flex-wrap:wrap;margin:-3px 0 9px"></div>
@@ -5018,6 +5047,7 @@ function openMeetingEditor(id){
   document.body.appendChild(modal);
   modal.onclick=e=>{if(e.target===modal)modal.remove();};
   attachCompanySuggest($("mt_company"),$("mt_company_sug"));
+  attachPlaceSuggest($("mt_place"),$("mt_place_sug"));
   $("mtCancel").onclick=()=>modal.remove();
   $("mtSave").onclick=()=>{
     const title=($("mt_title").value||"").trim(); if(!title){toast("제목을 입력하세요");return;}
@@ -5054,7 +5084,8 @@ function openMeetingCreator(){
         ${fld("날짜","mn_date",today,"YYYY-MM-DD")}
         ${fld("시간","mn_time","10:00","HH:MM")}
       </div>
-      ${fld("장소","mn_place","숙명캠퍼스타운 209호 미팅룸 1호")}
+      ${fld("장소 (누르면 자주 쓰는 장소가 나옵니다)","mn_place","")}
+      <div id="mn_place_sug" style="display:flex;gap:5px;flex-wrap:wrap;margin:-3px 0 9px"></div>
       ${fld("목적 (선택)","mn_purpose","")}
       ${fld("소속·회사 배지 (쉼표로 여러 개 — 입주기업은 이름 일부만 쳐도 자동 완성)","mn_company","","예: 메디, 츄구미, ChewGumi …")}
       <div id="mn_company_sug" style="display:flex;gap:5px;flex-wrap:wrap;margin:-3px 0 9px"></div>
@@ -5079,6 +5110,7 @@ function openMeetingCreator(){
     else { showMeetingList(); toast("회의를 만들었습니다"); }
   };
   attachCompanySuggest($("mn_company"),$("mn_company_sug"));
+  attachPlaceSuggest($("mn_place"),$("mn_place_sug"));
   $("mnSave").onclick=()=>build(false);
   $("mnEnter").onclick=()=>build(true);
   $("mn_title").focus();
