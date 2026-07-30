@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=63, BUILD_DATE="2026-07-22";
+const BUILD=64, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1411,11 +1411,16 @@ async function litSearch(){
   if(msg){msg.textContent="Claude가 "+LIT_SRC[litSrc()].label+"에서 문헌을 검색·정리하는 중입니다…"; msg.style.color="";}
   try{
     const srcRule=LIT_SRC[litSrc()].prompt;
-    const persp=litSrc()==="scholar"?"연구·실무":"병원약학·약사 실무";
+    // 이 회의의 맥락 — 문헌 요약·관련성을 회의 기준으로 정리하게 함
+    const cm=currentMeeting()||{};
+    const agenda=((state.notes&&state.notes.agenda)||[]).slice(0,3).join(" / ");
+    const mctx=[cm.title&&("회의: "+cm.title),cm.purpose&&("목적: "+cm.purpose),cm.company&&("소속: "+cm.company),agenda&&("안건: "+agenda)].filter(Boolean).join(" | ")||"(회의 정보 없음)";
     const sys="문헌 리서치 담당. "+srcRule+" "+
-      "실존 문헌만, URL은 실제 접근 가능한 주소만(불확실하면 url 생략). 순수 JSON 배열만 출력(설명·코드펜스 금지), 최대 8건: "+
-      '[{"title":"원제","authors":"제1저자 등","year":"연도","source":"학술지/출처(예: PubMed, JMIR)","url":"","summary":"한국어 3~4문장 요약","relevance":"'+persp+' 관점 한 줄"}]';
-    let o=await callViaProxy(sys,"검색 주제: "+q,3200,{search:true});
+      "실존 문헌만, URL은 실제 접근 가능한 주소만(불확실하면 url 생략). "+
+      "summary는 한국어 2~3문장으로 짧게(논문의 핵심 발견 위주). relevance는 아래 회의 맥락에서 이 논문이 왜 유용한지 한 줄. "+
+      "순수 JSON 배열만 출력(설명·코드펜스 금지), 최대 8건: "+
+      '[{"title":"원제","authors":"제1저자 등","year":"연도","source":"학술지/출처(예: PubMed, JMIR)","url":"","summary":"한국어 2~3문장 핵심 요약","relevance":"이 회의 맥락에서의 의미 한 줄"}]';
+    let o=await callViaProxy(sys,"회의 맥락: "+mctx+"\n검색 주제: "+q,3200,{search:true});
     const arr=parseLooseJSON(o);
     state.lit={q,items:Array.isArray(arr)?arr.slice(0,10):[]};
     scheduleSave(); renderLit();
