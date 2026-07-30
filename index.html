@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=65, BUILD_DATE="2026-07-22";
+const BUILD=66, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1229,10 +1229,7 @@ function doneItems(){
   (state.records||[]).filter(r=>recordBelongsToCurrent(r)).forEach(r=>{               // 이 회의의 회차만
     items.push({kind:"회의",dt:r.dt||"",sort:r.id,title:r.title,desc:(r.notes&&r.notes.summary)||moodLine(r)||"",act:`<button class="b-ghost" style="padding:4px 10px;font-size:12px" onclick="previewFromSchedule('${r.id}')">회의록 보기</button>`});
   });
-  (state.projects||[]).filter(p=>{
-    const ids=p.linkedMeetingIds||[];
-    return cm?ids.includes(cm.id):true;                                               // 이 회의에 연결된 프로젝트만
-  }).forEach(p=>{
+  (state.projects||[]).filter(p=>cm?(p.meeting===cm.id):true).forEach(p=>{           // 이 회의에서 만든 프로젝트만
     items.push({kind:"프로젝트",dt:"",sort:p.id,title:p.title+" ("+(p.status||"제안")+")",desc:p.desc||"",act:(p.url?linkBtn(p.url,shortName(p.url)):"")+(p.url2?linkBtn(p.url2,shortName(p.url2)):"")});
   });
   (state.schedule.done||[]).forEach(d=>{
