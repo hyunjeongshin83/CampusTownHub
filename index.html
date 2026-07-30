@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=62, BUILD_DATE="2026-07-22";
+const BUILD=63, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1323,7 +1323,12 @@ function litHTML(){
   return `<div class="hero">
    <div class="section-title">Literature · 문헌</div>
    <h2 style="font-size:23px;color:var(--ink);margin-bottom:4px">문헌 리서치 — 병원약학 데이터 정리</h2>
-   <div class="mini" style="margin-bottom:14px">PubMed 등에서 Claude가 웹 검색으로 문헌을 찾아 병원약학 관점으로 한국어 정리합니다. 필요한 항목만 선택해 MD·CSV로 내보내 약사 사이트·연구 자료에 사용하세요.</div>
+   <div class="mini" style="margin-bottom:8px">Claude가 웹 검색으로 문헌을 찾아 한국어로 정리합니다. 검색 소스는 회의별로 저장됩니다.</div>
+   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="litSrcRow">
+     <button class="b-ghost lit-src" data-src="pubmed" style="padding:5px 13px;font-size:12.5px">PubMed — 의약학</button>
+     <button class="b-ghost lit-src" data-src="scholar" style="padding:5px 13px;font-size:12.5px">Google Scholar — 일반 논문</button>
+     <button class="b-ghost lit-src" data-src="both" style="padding:5px 13px;font-size:12.5px">둘 다</button>
+   </div>
    <div class="glass tile" style="margin-bottom:12px">
      <div style="display:flex;gap:8px;flex-wrap:wrap">
        <input id="litQ" placeholder="검색 주제 (예: elderly medication adherence QR code / 노인 복약순응)" value="${esc(state.lit.q||"")}" style="flex:1;min-width:240px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
@@ -1349,6 +1354,29 @@ function litSelected(){
   const idx=boxes.filter(b=>b.checked).map(b=>Number(b.dataset.litchk));
   return (state.lit.items||[]).filter((_,i)=>idx.indexOf(i)>=0);
 }
+// 회의별 문헌 소스 (세션 봉투에 저장) — 기본값은 회의 성격에서 추론
+const LIT_SRC={
+  pubmed:{label:"PubMed — 의약학",
+    prompt:"PubMed(pubmed.ncbi.nlm.nih.gov) 중심의 의·약학 문헌을 검색하라. source에는 학술지명과 'PubMed'를 표기."},
+  scholar:{label:"Google Scholar — 일반 논문",
+    prompt:"Google Scholar 등 일반 학술 문헌(공학·경영·사회과학 포함)을 검색하라. source에는 학술지/학회명을 표기."},
+  both:{label:"PubMed + Scholar",
+    prompt:"PubMed(의약학)와 Google Scholar(일반 학술)를 모두 검색해 관련성 높은 순으로 섞어라. source에 출처 구분을 표기."},
+};
+function litDefaultSrc(){
+  const cm=currentMeeting()||{};
+  const t=((cm.title||"")+" "+(cm.company||"")).toLowerCase();
+  return /약|메디|medi|pharm|백신|복약|병원|치료/.test(t)?"pubmed":"scholar";
+}
+function litSrc(){ return state.lit&&LIT_SRC[state.lit.src]?state.lit.src:litDefaultSrc(); }
+function setLitSrc(s){ state.lit=state.lit||{q:"",items:[]}; state.lit.src=s; scheduleSave(); paintLitSrc(); }
+function paintLitSrc(){
+  document.querySelectorAll(".lit-src").forEach(b=>{
+    const on=b.dataset.src===litSrc();
+    b.classList.toggle("b-mint",on); b.classList.toggle("b-ghost",!on);
+  });
+}
+window.setLitSrc=setLitSrc;
 function renderLit(){
   const box=$("litList"); if(!box)return;
   const items=state.lit.items||[];
@@ -1370,16 +1398,23 @@ function renderLit(){
     :'<div class="mini">검색 결과가 여기에 표시됩니다.</div>';
   const all=$("litAll"); if(all)all.onchange=()=>document.querySelectorAll("[data-litchk]").forEach(b=>b.checked=all.checked);
 }
+document.addEventListener("click",e=>{
+  const b=e.target.closest&&e.target.closest(".lit-src");
+  if(b){ setLitSrc(b.dataset.src); }
+});
+setInterval(()=>{ if($("litSrcRow")) paintLitSrc(); },800);
 async function litSearch(){
   if(litBusy)return;
   const q=($("litQ").value||"").trim(); const msg=$("litMsg");
   if(!q){ if(msg)msg.textContent="검색 주제를 입력하세요."; return; }
   litBusy=true; const b=$("litGo"); if(b){b.disabled=true;b.textContent="검색 중… (10~40초)";}
-  if(msg){msg.textContent="Claude가 PubMed 등에서 문헌을 검색·정리하는 중입니다…"; msg.style.color="";}
+  if(msg){msg.textContent="Claude가 "+LIT_SRC[litSrc()].label+"에서 문헌을 검색·정리하는 중입니다…"; msg.style.color="";}
   try{
-    const sys="병원약학(hospital pharmacy) 문헌 리서치 담당. 웹 검색으로 PubMed·학술 출처의 실제 문헌을 찾아라. "+
+    const srcRule=LIT_SRC[litSrc()].prompt;
+    const persp=litSrc()==="scholar"?"연구·실무":"병원약학·약사 실무";
+    const sys="문헌 리서치 담당. "+srcRule+" "+
       "실존 문헌만, URL은 실제 접근 가능한 주소만(불확실하면 url 생략). 순수 JSON 배열만 출력(설명·코드펜스 금지), 최대 8건: "+
-      '[{"title":"원제","authors":"제1저자 등","year":"연도","source":"학술지/출처(예: PubMed, JMIR)","url":"","summary":"한국어 3~4문장 요약","relevance":"병원약학·약사 실무 관점 한 줄"}]';
+      '[{"title":"원제","authors":"제1저자 등","year":"연도","source":"학술지/출처(예: PubMed, JMIR)","url":"","summary":"한국어 3~4문장 요약","relevance":"'+persp+' 관점 한 줄"}]';
     let o=await callViaProxy(sys,"검색 주제: "+q,3200,{search:true});
     const arr=parseLooseJSON(o);
     state.lit={q,items:Array.isArray(arr)?arr.slice(0,10):[]};
