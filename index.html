@@ -2800,7 +2800,9 @@ function renderProjects(){
         ${canEdit?`<button class="b-ghost" data-edit="${p.id}">수정</button>`:""}
         ${canEdit?`<button class="b-ghost" data-rm="${p.id}">삭제</button>`:""}
       </div>
-    </div>`).join("")+'</div><div id="projView"></div>';
+    </div>`).join("")+'</div>'+othersHTML+'<div id="projView"></div>';
+  const pot=$("projOtherToggle");
+  if(pot)pot.onclick=()=>{const w=$("projOtherWrap"),a=$("projOtherArrow");const open=w.style.display==="none";w.style.display=open?"":"none";a.textContent=open?"▾":"▸";};
 
   box.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openProject(b.dataset.open));
   box.querySelectorAll("[data-open2]").forEach(b=>b.onclick=()=>openProject(b.dataset.open2,2));
