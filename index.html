@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=66, BUILD_DATE="2026-07-22";
+const BUILD=67, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -2749,11 +2749,20 @@ function autoLinkProjects(){
 // 항상 최신 내용을 불러오도록 캐시 우회 주소 생성 — 파일이 수정되면 카드에서도 그 내용으로 표시됨
 function fresh(url){ return url + (url.indexOf("?")>=0?"&":"?") + "v=" + Date.now(); }
 
+function moveProjectHere(id){
+  const p=(state.projects||[]).find(x=>x.id===id); if(!p)return;
+  p.meeting=state.currentMeetingId; scheduleSave(); renderProjects();
+  toast("'"+p.title+"' 프로젝트를 이 회의로 가져왔습니다");
+}
+window.moveProjectHere=moveProjectHere;
 function renderProjects(){
   autoLinkProjects();
   const box=$("projGrid"); if(!box) return;
   const canEdit=state.user.role==="operator"||state.user.role==="host";
-  const ps=state.projects||[];
+  const cmId=state.currentMeetingId;
+  const all=state.projects||[];
+  const ps=all.filter(p=>p.meeting===cmId);                        // 이 회의의 프로젝트만
+  const others=all.filter(p=>p.meeting!==cmId);                    // 다른 회의·미지정
   if(!ps.length){
     const canEdit=state.user.role==="operator"||state.user.role==="host";
     box.innerHTML='<div class="mini" style="margin-bottom:10px">아직 프로젝트가 없습니다.</div>'+
@@ -2765,6 +2774,14 @@ function renderProjects(){
     box.querySelectorAll("[data-quick]").forEach(b=>b.onclick=()=>quickAddProject(b.dataset.quick));
     return;
   }
+  const othersHTML=(canEdit&&others.length)?`<div style="margin-top:14px;border-top:1px dashed var(--line);padding-top:8px">
+      <div class="mini" id="projOtherToggle" style="font-weight:800;color:var(--soft);cursor:pointer;user-select:none"><span id="projOtherArrow">▸</span> 다른 회의·미지정 프로젝트 ${others.length}개 (펼쳐서 이 회의로 가져오기)</div>
+      <div id="projOtherWrap" style="display:none;margin-top:6px">${others.map(p=>`
+        <div style="display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line)">
+          <b style="flex:1;font-size:12.5px;color:var(--deep)">${esc(p.title)}</b>
+          <button class="b-mint" style="padding:4px 11px;font-size:12px" onclick="moveProjectHere('${p.id}')">이 회의로 가져오기</button>
+        </div>`).join("")}</div>
+    </div>`:"";
   box.innerHTML='<div class="pgrid">'+ps.map(p=>`
     <div class="pcard">
       <div class="p-top">
