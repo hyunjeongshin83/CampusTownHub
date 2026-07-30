@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=60, BUILD_DATE="2026-07-22";
+const BUILD=61, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -799,11 +799,47 @@ function refreshAll(){
   refreshBadges();
   if(state.activeTab) renderStage(state.activeTab);
 }
-async function saveSession(){await store.set("medit:hub1",{
-  accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,fileMeeting:state.fileMeeting,connections:state.connections||[],currentMeetingId:state.currentMeetingId,
-  uploads:state.uploads.map(u=>({name:u.name,type:u.type,size:u.size,text:u.text})),
-  tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
-  nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos});}
+// 회의와 무관한 공용 데이터 → medit:hub1 / 회의 안에서 쌓이는 데이터 → medit:sess:<회의ID> (회의별 완전 분리)
+async function saveSession(){
+  await store.set("medit:hub1",{
+    accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,fileMeeting:state.fileMeeting,connections:state.connections||[],currentMeetingId:state.currentMeetingId});
+  if(state.currentMeetingId){
+    await store.set("medit:sess:"+state.currentMeetingId,{
+      tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
+      nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,
+      meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos});
+  }
+}
+function resetSessionState(){
+  state.segments=[]; state.notes=null; state.research=[]; state.nextActions=[]; state.topicTags=[];
+  state.meetingStart=null; state.liveDoc={paras:[],cursor:0};
+  state.schedule={goals:[],done:[]}; state.lit={q:"",items:[]}; state.annos=[];
+  state.tabNotes={deck:[],app:[],registry:[],console:[]};
+}
+function applySessionData(s){
+  if(!s||typeof s!=="object") return false;
+  Object.assign(state,{tabNotes:s.tabNotes||state.tabNotes,segments:s.segments||[],notes:s.notes||null,
+    research:s.research||[],nextActions:s.nextActions||[],topicTags:s.topicTags||[],meetingStart:s.meetingStart||null});
+  if(s.meeting&&typeof s.meeting==="object"){ if(!state.meeting||typeof state.meeting!=="object")state.meeting={}; Object.assign(state.meeting,s.meeting); }
+  if(s.liveDoc&&typeof s.liveDoc==="object")state.liveDoc={paras:Array.isArray(s.liveDoc.paras)?s.liveDoc.paras:[],cursor:Number(s.liveDoc.cursor)||0};
+  if(s.schedule&&typeof s.schedule==="object")state.schedule={goals:Array.isArray(s.schedule.goals)?s.schedule.goals:[],done:Array.isArray(s.schedule.done)?s.schedule.done:[]};
+  if(s.lit&&typeof s.lit==="object")state.lit={q:s.lit.q||"",items:Array.isArray(s.lit.items)?s.lit.items:[]};
+  if(Array.isArray(s.annos))state.annos=s.annos;
+  return true;
+}
+// 회의 입장·전환 시 그 회의의 세션을 로드 (없으면 legacy hub1 세션 → 1회 이관)
+async function loadMeetingSession(mid){
+  resetSessionState();
+  if(!mid) return;
+  const s=await store.get("medit:sess:"+mid);
+  if(applySessionData(s)) return;
+  const legacy=await store.get("medit:hub1");
+  if(legacy&&legacy.segments&&legacy.segments.length||legacy&&(legacy.lit||legacy.schedule||legacy.research)){
+    applySessionData(legacy);                          // 구버전 공용 세션 → 첫 입장 회의로 1회 이관
+    await store.set("medit:sess:"+mid,{tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos});
+  }
+}
+window.loadMeetingSession=loadMeetingSession;
 async function saveRecords(){await store.set("medit:records2",state.records);}
 // 로그인 세션은 이 브라우저에만 저장 (클라우드 공유 X — 남의 기기에 로그인이 옮겨가면 안 됨)
 async function saveUser(){
@@ -824,18 +860,9 @@ async function loadAll(){
   const s=await store.get("medit:hub1");
   if(s && typeof s==="object"){
     Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],projects:s.projects||[],pages:s.pages||[],fileNames:s.fileNames||{},fileMeeting:s.fileMeeting||{},connections:s.connections||[],
-      currentMeetingId:s.currentMeetingId||null,uploads:s.uploads||[],
-      tabNotes:s.tabNotes||state.tabNotes,segments:s.segments||[],notes:s.notes||null,research:s.research||[],
-      nextActions:s.nextActions||[],topicTags:s.topicTags||[],meetingStart:s.meetingStart||null});
-    if(s.meeting&&typeof s.meeting==="object"){
-      if(!state.meeting||typeof state.meeting!=="object")state.meeting={};   // 새 브라우저 첫 로드 방어
-      Object.assign(state.meeting,s.meeting);
-    }
-    if(s.liveDoc&&typeof s.liveDoc==="object")state.liveDoc={paras:Array.isArray(s.liveDoc.paras)?s.liveDoc.paras:[],cursor:Number(s.liveDoc.cursor)||0};
-    if(s.schedule&&typeof s.schedule==="object")state.schedule={goals:Array.isArray(s.schedule.goals)?s.schedule.goals:[],done:Array.isArray(s.schedule.done)?s.schedule.done:[]};
-    if(s.lit&&typeof s.lit==="object")state.lit={q:s.lit.q||"",items:Array.isArray(s.lit.items)?s.lit.items:[]};
-    if(Array.isArray(s.annos))state.annos=s.annos;
+      currentMeetingId:s.currentMeetingId||null,uploads:s.uploads||[]});
   }
+  await loadMeetingSession(state.currentMeetingId);    // 현재 회의의 세션(발언·일정·문헌·리서치·주석)만 로드
   // 배열이 아닌 값이 들어와도 안전하게 정규화 (데이터가 비었거나 깨진 경우)
   ["accounts","meetings","companies","jobs","projects","pages","uploads","segments","research","nextActions","topicTags","records"].forEach(k=>{
     if(!Array.isArray(state[k]))state[k]=[];
@@ -2408,10 +2435,15 @@ function openScriptEditor(){
 // ==================== 금일 회의 페이지 ====================
 // 아웃리치 — 백지에서 시작합니다. 자료를 올린 뒤 보면서 직접 작성하세요.
 const OUTREACH={
-  lg:{title:"LG U+ · 복약지도 셋톱 협업", to:"", subj:"", body:""},
-  hu:{title:"휴베이스 · 온누리 협업", to:"", subj:"", body:""},
-  etc:{title:"기타 기관·기업", to:"", subj:"", body:""},
+  lg:{title:"LG U+ · 복약지도 셋톱 협업", to:"", subj:"", body:"", conn:"MedIT"},   // MedIT 단독 회의에서만 표시
+  hu:{title:"휴베이스 · 온누리 협업", to:"", subj:"", body:"", conn:"MedIT"},
+  etc:{title:"기타 기관·기업", to:"", subj:"", body:""},                              // 공용
 };
+function outreachKeysForMeeting(){
+  const cm=currentMeeting()||{};
+  const key=connKey(cm.company||"");
+  return Object.keys(OUTREACH).filter(k=>{ const o=OUTREACH[k]; return !o.conn||connKey(o.conn)===key; });
+}
 
 // ==================== 회의 요약 (직접 쓰기 + AI 반영) ====================
 function canEditMeeting(){ return state.user.role==="operator"||state.user.role==="host"; }
@@ -3893,7 +3925,7 @@ function bindEmail(){
     const kind=b.dataset.kind;
     const sub=$("mailSub");
     if(kind==="outreach"){
-      sub.innerHTML='<div class="mail-sub">'+Object.keys(OUTREACH).map(k=>
+      sub.innerHTML='<div class="mail-sub">'+outreachKeysForMeeting().map(k=>
         `<button class="msb" data-o="${k}">${esc(OUTREACH[k].title)}</button>`).join("")+'</div>';
       sub.querySelectorAll("[data-o]").forEach(x=>x.onclick=()=>{
         sub.querySelectorAll(".msb").forEach(y=>y.classList.remove("on"));
@@ -5082,7 +5114,7 @@ function showMeetingList(){
     const pm=localStorage.getItem("medit:pendingM");
     if(pm){ localStorage.removeItem("medit:pendingM");
       const m=list.find(x=>x.id===pm);
-      if(m){ state.currentMeetingId=m.id; syncCurrentMeeting(); enterHub(); toast("초대 링크의 회의로 입장했습니다"); return; }
+      if(m){ state.currentMeetingId=m.id; loadMeetingSession(m.id).then(()=>{ syncCurrentMeeting(); enterHub(); }); toast("초대 링크의 회의로 입장했습니다"); return; }
     }
   }catch(_){}
   box.innerHTML=`
@@ -5176,7 +5208,11 @@ function renderMeetingCards(list,emptyMsg){
       ${canManage?`<button class="b-ghost mc-edit" data-id="${m.id}">수정</button><button class="b-ghost mc-del" data-id="${m.id}" style="color:#C24A4A">삭제</button>`:""}
     </div>
   </div>`).join("");
-  box.querySelectorAll(".mc-enter").forEach(b=>b.onclick=()=>{ state.currentMeetingId=b.dataset.id; syncCurrentMeeting(); enterHub(); });
+  box.querySelectorAll(".mc-enter").forEach(b=>b.onclick=async()=>{
+    await saveNow();                                    // 떠나는 회의 세션 저장
+    state.currentMeetingId=b.dataset.id;
+    await loadMeetingSession(state.currentMeetingId);   // 이 회의의 세션 로드
+    syncCurrentMeeting(); enterHub(); });
   setTimeout(refineIconsAI,800);
   box.querySelectorAll(".mc-edit").forEach(b=>b.onclick=()=>openMeetingEditor(b.dataset.id));
   box.querySelectorAll(".mc-del").forEach(b=>b.onclick=()=>{
@@ -5278,7 +5314,7 @@ function openMeetingCreator(presetCompany){
     state.meetings.push(m);
     await saveNow();                                   // 즉시 클라우드 저장 — 이동·재로그인 시 유실 방지
     modal.remove();
-    if(enter){ state.currentMeetingId=m.id; syncCurrentMeeting(); enterHub(); toast("'"+title+"' 회의로 입장했습니다"); }
+    if(enter){ state.currentMeetingId=m.id; await loadMeetingSession(m.id); syncCurrentMeeting(); enterHub(); toast("'"+title+"' 회의로 입장했습니다"); }
     else { showMeetingList(); toast("회의를 만들었습니다"); }
   };
   attachCompanySuggest($("mn_company"),$("mn_company_sug"));
