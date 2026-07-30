@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=67, BUILD_DATE="2026-07-22";
+const BUILD=68, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -2763,17 +2763,6 @@ function renderProjects(){
   const all=state.projects||[];
   const ps=all.filter(p=>p.meeting===cmId);                        // 이 회의의 프로젝트만
   const others=all.filter(p=>p.meeting!==cmId);                    // 다른 회의·미지정
-  if(!ps.length){
-    const canEdit=state.user.role==="operator"||state.user.role==="host";
-    box.innerHTML='<div class="mini" style="margin-bottom:10px">아직 프로젝트가 없습니다.</div>'+
-      (canEdit?'<div class="quickadd"><div class="qa-h">이미 만들어진 페이지를 바로 추가하실 수 있습니다</div>'+
-        '<div class="qa-list">'+
-        '<button class="qa" data-quick="site">약사 참여 연구 사이트</button>'+
-        '<button class="qa" data-quick="app">복약·접종 앱</button>'+
-        '</div></div>':'');
-    box.querySelectorAll("[data-quick]").forEach(b=>b.onclick=()=>quickAddProject(b.dataset.quick));
-    return;
-  }
   const othersHTML=(canEdit&&others.length)?`<div style="margin-top:14px;border-top:1px dashed var(--line);padding-top:8px">
       <div class="mini" id="projOtherToggle" style="font-weight:800;color:var(--soft);cursor:pointer;user-select:none"><span id="projOtherArrow">▸</span> 다른 회의·미지정 프로젝트 ${others.length}개 (펼쳐서 이 회의로 가져오기)</div>
       <div id="projOtherWrap" style="display:none;margin-top:6px">${others.map(p=>`
@@ -2782,6 +2771,14 @@ function renderProjects(){
           <button class="b-mint" style="padding:4px 11px;font-size:12px" onclick="moveProjectHere('${p.id}')">이 회의로 가져오기</button>
         </div>`).join("")}</div>
     </div>`:"";
+  if(!ps.length){
+    box.innerHTML='<div class="mini" style="margin-bottom:10px">이 회의의 프로젝트가 아직 없습니다.'+(canEdit?' 아래 [+ 프로젝트 추가]에서 만드세요 — 폼 안에 작성 예시가 있습니다.':'')+'</div>'
+      +((canEdit&&others.length)?othersHTML:"");
+    const pot0=$("projOtherToggle");
+    if(pot0)pot0.onclick=()=>{const w=$("projOtherWrap"),a=$("projOtherArrow");const open=w.style.display==="none";w.style.display=open?"":"none";a.textContent=open?"▾":"▸";};
+    return;
+  }
+
   box.innerHTML='<div class="pgrid">'+ps.map(p=>`
     <div class="pcard">
       <div class="p-top">
@@ -2913,7 +2910,8 @@ function openProjectForm(id){
         <button class="b-ghost" id="pfCancel">취소</button>
       </div>
       <div class="pf-row">
-        <div><label>제목</label><input id="pf_title" placeholder="예: 약국 재고 관리" value="${p?esc(p.title):''}"></div>
+        ${p?"":`<div class="mini" style="grid-column:1/-1;background:var(--pale);border-radius:9px;padding:8px 11px;line-height:1.6">작성 예시 — ① <b>약사 참여 연구 사이트</b>: 지역사회·전국의 약사·제약사·의사가 등록해 약 디자인에 참여하는 연구 창구 (상태: 제안) ② <b>복약·접종 앱</b>: MediNote — 5탭 복약·예방접종 관리 앱 (상태: 데모)</div>`}
+        <div><label>제목</label><input id="pf_title" placeholder="예: 약사 참여 연구 사이트" value="${p?esc(p.title):''}"></div>
         <div><label>상태</label>
           <select id="pf_status">
             ${["제안","설계","데모","진행"].map(s=>`<option ${p&&p.status===s?"selected":""}>${s}</option>`).join("")}
