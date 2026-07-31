@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=70, BUILD_DATE="2026-07-22";
+const BUILD=71, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1326,11 +1326,7 @@ function litHTML(){
    <div class="section-title">Literature · 문헌</div>
    <h2 style="font-size:23px;color:var(--ink);margin-bottom:4px">문헌 리서치 — 병원약학 데이터 정리</h2>
    <div class="mini" style="margin-bottom:8px">Claude가 웹 검색으로 문헌을 찾아 한국어로 정리합니다. 검색 소스는 회의별로 저장됩니다.</div>
-   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px" id="litSrcRow">
-     <button class="b-ghost lit-src" data-src="pubmed" style="padding:5px 13px;font-size:12.5px">PubMed — 의약학</button>
-     <button class="b-ghost lit-src" data-src="scholar" style="padding:5px 13px;font-size:12.5px">Google Scholar — 일반 논문</button>
-     <button class="b-ghost lit-src" data-src="both" style="padding:5px 13px;font-size:12.5px">둘 다</button>
-   </div>
+   <div id="litSrcRow" style="margin-bottom:12px"></div>
    <div class="glass tile" style="margin-bottom:12px">
      <div style="display:flex;gap:8px;flex-wrap:wrap">
        <input id="litQ" placeholder="검색 주제 (예: elderly medication adherence QR code / 노인 복약순응)" value="${esc(state.lit.q||"")}" style="flex:1;min-width:240px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
@@ -1356,29 +1352,50 @@ function litSelected(){
   const idx=boxes.filter(b=>b.checked).map(b=>Number(b.dataset.litchk));
   return (state.lit.items||[]).filter((_,i)=>idx.indexOf(i)>=0);
 }
-// 회의별 문헌 소스 (세션 봉투에 저장) — 기본값은 회의 성격에서 추론
-const LIT_SRC={
-  pubmed:{label:"PubMed — 의약학",
-    prompt:"PubMed(pubmed.ncbi.nlm.nih.gov) 중심의 의·약학 문헌을 검색하라. source에는 학술지명과 'PubMed'를 표기."},
-  scholar:{label:"Google Scholar — 일반 논문",
-    prompt:"Google Scholar 등 일반 학술 문헌(공학·경영·사회과학 포함)을 검색하라. source에는 학술지/학회명을 표기."},
-  both:{label:"PubMed + Scholar",
-    prompt:"PubMed(의약학)와 Google Scholar(일반 학술)를 모두 검색해 관련성 높은 순으로 섞어라. source에 출처 구분을 표기."},
+// 회의별 문헌 소스 (세션 봉투에 저장, 다중 선택) — AI 웹 검색이 읽을 수 있는 공개 소스만
+const LIT_SOURCES={
+  pubmed:{cat:"의료·약학",label:"PubMed",desc:"NLM 의생명 서지",prompt:"PubMed(pubmed.ncbi.nlm.nih.gov)의 의·약학 문헌"},
+  pmc:{cat:"의료·약학",label:"PMC",desc:"오픈액세스 전문",prompt:"PubMed Central(pmc.ncbi.nlm.nih.gov)의 오픈액세스 전문 논문"},
+  ct:{cat:"의료·약학",label:"ClinicalTrials.gov",desc:"임상시험 등록",prompt:"ClinicalTrials.gov의 임상시험 등록·결과"},
+  pubchem:{cat:"화학·바이오",label:"PubChem",desc:"화학·분자 DB",prompt:"PubChem(pubchem.ncbi.nlm.nih.gov)의 화합물·생물활성 정보"},
+  biorxiv:{cat:"화학·바이오",label:"bioRxiv",desc:"생명과학 프리프린트",prompt:"bioRxiv(biorxiv.org)의 생명과학 프리프린트"},
+  arxiv:{cat:"통합·AI",label:"arXiv",desc:"IT·AI 프리프린트",prompt:"arXiv(arxiv.org)의 컴퓨터과학·AI 프리프린트"},
+  scholar:{cat:"통합·AI",label:"Google Scholar",desc:"전 분야 학술",prompt:"Google Scholar의 전 분야 학술 문헌"},
+  semantic:{cat:"통합·AI",label:"Semantic Scholar",desc:"AI 요약·인용",prompt:"Semantic Scholar(semanticscholar.org)의 학술 문헌"},
+  kosci:{cat:"한국어",label:"KoreaScience",desc:"국내 이공계",prompt:"KoreaScience(koreascience.kr)의 국내 이공계 논문(한국어 초록)"},
+  riss:{cat:"한국어",label:"RISS",desc:"국내 전 분야·학위논문",prompt:"RISS(riss.kr)의 국내 학술지·학위논문"},
 };
-function litDefaultSrc(){
+function litDefaultSrcs(){
   const cm=currentMeeting()||{};
   const t=((cm.title||"")+" "+(cm.company||"")).toLowerCase();
-  return /약|메디|medi|pharm|백신|복약|병원|치료/.test(t)?"pubmed":"scholar";
+  return /약|메디|medi|pharm|백신|복약|병원|치료/.test(t)?["pubmed","pmc"]:["scholar","semantic"];
 }
-function litSrc(){ return state.lit&&LIT_SRC[state.lit.src]?state.lit.src:litDefaultSrc(); }
-function setLitSrc(s){ state.lit=state.lit||{q:"",items:[]}; state.lit.src=s; scheduleSave(); paintLitSrc(); }
+function litSrcs(){
+  const arr=(state.lit&&Array.isArray(state.lit.srcs))?state.lit.srcs.filter(k=>LIT_SOURCES[k]):[];
+  if(arr.length) return arr;
+  if(state.lit&&LIT_SOURCES[state.lit.src]) return [state.lit.src];
+  return litDefaultSrcs();
+}
+function toggleLitSrc(k){
+  state.lit=state.lit||{q:"",items:[]};
+  let arr=litSrcs().slice();
+  if(arr.includes(k)){ if(arr.length===1){ toast("최소 한 개의 소스는 선택되어야 합니다"); return; } arr=arr.filter(x=>x!==k); }
+  else arr.push(k);
+  state.lit.srcs=arr; scheduleSave(); paintLitSrc();
+}
+window.toggleLitSrc=toggleLitSrc;
 function paintLitSrc(){
-  document.querySelectorAll(".lit-src").forEach(b=>{
-    const on=b.dataset.src===litSrc();
-    b.classList.toggle("b-mint",on); b.classList.toggle("b-ghost",!on);
-  });
+  const row=$("litSrcRow"); if(!row)return;
+  const sel=litSrcs();
+  const cats=[...new Set(Object.values(LIT_SOURCES).map(s=>s.cat))];
+  row.innerHTML=cats.map(cat=>`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+      <span class="mini" style="font-weight:800;color:var(--soft);min-width:64px">${cat}</span>
+      ${Object.entries(LIT_SOURCES).filter(([k,s])=>s.cat===cat).map(([k,s])=>
+        `<button class="${sel.includes(k)?"b-mint":"b-ghost"} lit-src" data-src="${k}" title="${esc(s.desc)}" style="padding:4px 12px;font-size:12px">${esc(s.label)}</button>`).join("")}
+    </div>`).join("")
+    +'<div class="mini" style="margin-top:2px">클릭으로 여러 개 선택·해제 — 선택은 이 회의에 저장됩니다.</div>';
+  row.querySelectorAll(".lit-src").forEach(b=>b.onclick=()=>toggleLitSrc(b.dataset.src));
 }
-window.setLitSrc=setLitSrc;
 function renderLit(){
   const box=$("litList"); if(!box)return;
   const items=state.lit.items||[];
@@ -1400,19 +1417,16 @@ function renderLit(){
     :'<div class="mini">검색 결과가 여기에 표시됩니다.</div>';
   const all=$("litAll"); if(all)all.onchange=()=>document.querySelectorAll("[data-litchk]").forEach(b=>b.checked=all.checked);
 }
-document.addEventListener("click",e=>{
-  const b=e.target.closest&&e.target.closest(".lit-src");
-  if(b){ setLitSrc(b.dataset.src); }
-});
-setInterval(()=>{ if($("litSrcRow")) paintLitSrc(); },800);
+setInterval(()=>{ const r=$("litSrcRow"); if(r&&!r.innerHTML) paintLitSrc(); },800);
 async function litSearch(){
   if(litBusy)return;
   const q=($("litQ").value||"").trim(); const msg=$("litMsg");
   if(!q){ if(msg)msg.textContent="검색 주제를 입력하세요."; return; }
   litBusy=true; const b=$("litGo"); if(b){b.disabled=true;b.textContent="검색 중… (10~40초)";}
-  if(msg){msg.textContent="Claude가 "+LIT_SRC[litSrc()].label+"에서 문헌을 검색·정리하는 중입니다…"; msg.style.color="";}
+  if(msg){msg.textContent="Claude가 "+litSrcs().map(k=>LIT_SOURCES[k].label).join("·")+"에서 문헌을 검색·정리하는 중입니다…"; msg.style.color="";}
   try{
-    const srcRule=LIT_SRC[litSrc()].prompt;
+    const sel=litSrcs();
+    const srcRule="다음 소스에서 검색하라: "+sel.map(k=>LIT_SOURCES[k].prompt).join(" / ")+". 각 결과의 source에 출처 사이트를 표기.";
     // 이 회의의 맥락 — 문헌 요약·관련성을 회의 기준으로 정리하게 함
     const cm=currentMeeting()||{};
     const agenda=((state.notes&&state.notes.agenda)||[]).slice(0,3).join(" / ");
