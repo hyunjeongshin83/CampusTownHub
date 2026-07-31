@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=69, BUILD_DATE="2026-07-22";
+const BUILD=70, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -2534,6 +2534,7 @@ function openOutreachForm(id,sub,set){
   <div style="background:#fff;border-radius:16px;max-width:min(560px,96vw);width:100%;max-height:94vh;display:flex;flex-direction:column;overflow:hidden">
     <div style="display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
       <div style="flex:1;font-weight:800;color:var(--deep);font-size:15px">${o?"아웃리치 수정":"아웃리치 추가"}</div>
+      <button class="b-ghost" id="orAI" title="이 회의의 기록·노트를 요약해 협업 제안 본문을 작성합니다">AI로 본문 작성</button>
       <button class="b-ghost" id="orCancel">취소</button>
       <button class="b-mint" id="orSave">저장</button>
     </div>
@@ -2548,6 +2549,34 @@ function openOutreachForm(id,sub,set){
   document.body.appendChild(modal);
   modal.onclick=e=>{if(e.target===modal)modal.remove();};
   $("orCancel").onclick=()=>modal.remove();
+  const orAI=$("orAI");
+  if(orAI)orAI.onclick=async()=>{
+    const target=($("or_title").value||"").trim()||"협업 대상";
+    // 이 회의의 내용 수집 — 최신 회차 요약·안건·결정·액션 + 수기 노트
+    const cm=currentMeeting()||{};
+    const recs=(state.records||[]).filter(r=>recordBelongsToCurrent(r));
+    const r=recs[recs.length-1];
+    const n=(r&&r.notes)||{};
+    const src=[
+      cm.title&&("회의: "+cm.title), cm.purpose&&("목적: "+cm.purpose),
+      n.summary&&("요약: "+n.summary),
+      (n.agenda||[]).length&&("안건: "+n.agenda.join(" / ")),
+      (n.decisions||[]).length&&("결정: "+n.decisions.join(" / ")),
+      (n.actions||[]).length&&("후속: "+n.actions.join(" / ")),
+      r&&r.rawNote&&("노트: "+String(r.rawNote).slice(0,3000)),
+    ].filter(Boolean).join("\n");
+    if(!src.trim()){ toast("요약할 회의 내용이 아직 없습니다 — 회의 기록이 쌓인 뒤 이용하세요"); return; }
+    orAI.disabled=true; orAI.textContent="작성 중…";
+    try{
+      const sys="협업 제안 이메일 본문 작성 담당. 규칙: ① 아래 회의 내용을 2~3문단으로 요약해 제안 배경으로 포함 ② 사실형·존댓말, 과장·수식어 금지 ③ 대면 미팅·전화 요청 문구 금지 — 협의는 이메일(서면)로 진행한다고 명시 ④ 마무리 인사는 정확히 '바쁘신 중, 감사드립니다\n—신현정 드림' ⑤ 본문 텍스트만 출력(제목·설명 금지)";
+      const user="받는 대상: "+target+"\n\n회의 내용:\n"+src;
+      const body=await callClaude(sys,user,1500);
+      $("or_body").value=String(body||"").trim();
+      if(!($("or_subj").value||"").trim()) $("or_subj").value="[MedIT] "+target.split("·")[0].trim()+" 협업 제안";
+      toast("본문 초안을 작성했습니다 — 확인 후 저장하세요");
+    }catch(e){ toast("작성 실패: "+(e.message||e)); }
+    orAI.disabled=false; orAI.textContent="AI로 본문 작성";
+  };
   $("orSave").onclick=()=>{
     const t=($("or_title").value||"").trim(); if(!t){toast("이름을 입력하세요");return;}
     const rec={title:t,to:($("or_to").value||"").trim(),subj:($("or_subj").value||"").trim(),body:$("or_body").value||""};
@@ -3965,7 +3994,7 @@ function emailHTML(){
        <b>회의록</b><span>회의 요약 · 다음 액션 공유</span>
      </button>
      <button class="mk" data-kind="outreach">
-       <b>아웃리치</b><span>LG U+ · 휴베이스/온누리 협업 제안</span>
+       <b>아웃리치</b><span>기관·기업 협업 제안 (회의별 관리)</span>
      </button>
    </div>
 
