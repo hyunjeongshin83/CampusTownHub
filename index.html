@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=74, BUILD_DATE="2026-07-22";
+const BUILD=75, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -3522,7 +3522,7 @@ function openKakaoImport(){
       <button class="b-mint" id="kkGo">가져오기</button>
     </div>
     <div style="overflow:auto;padding:14px 18px">
-      <div class="mini" style="line-height:1.6;margin-bottom:10px">카카오톡 채팅방 → 메뉴(≡) → <b>대화 내보내기</b>(.txt) 파일을 올리거나, 대화를 복사해 붙여넣으세요.<br>카카오 정책상 대화방을 API로 직접 읽는 것은 불가하여, 내보내기 파일을 읽는 방식입니다.</div>
+      <div class="mini" style="line-height:1.6;margin-bottom:10px">카카오톡 채팅방 → 메뉴(≡) → <b>대화 내보내기</b>(.txt) 파일을 올리거나, 대화를 복사해 붙여넣으세요.<br><b>주기적 사용법</b>: 같은 방을 매번 통째로 내보내 올리셔도 됩니다 — 이미 가져온 발언은 자동으로 건너뛰고 <b>새 발언만 추가</b>됩니다.<br>카카오 정책상 대화방을 API로 직접 읽는 것은 불가하여, 내보내기 파일을 읽는 방식입니다.</div>
       <input type="file" id="kkFile" accept=".txt" style="margin-bottom:8px">
       <textarea id="kkText" rows="8" placeholder="또는 여기에 대화를 붙여넣기" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px;line-height:1.5"></textarea>
       <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:9px">
@@ -3550,9 +3550,17 @@ function openKakaoImport(){
     if(!msgs.length){ $("kkMsg").textContent="이 회의 날짜의 대화가 없습니다 — 날짜 필터를 해제해 보세요."; $("kkMsg").style.color="#C24A4A"; return; }
     const mode=(document.querySelector('input[name="kkTo"]:checked')||{}).value||"seg";
     if(mode==="seg"){
-      msgs.forEach(x=>{ state.segments.push({text:x.text,who:x.who,time:x.time,auto:false,src:"kakao"}); });
+      // 증분 가져오기 — 같은 방을 통째로 다시 내보내 올려도 이미 있는 발언(화자+시각+내용)은 건너뛰고 새 발언만 추가
+      const seen=new Set(state.segments.filter(s=>s.src==="kakao").map(s=>(s.who||"")+"|"+(s.time||"")+"|"+(s.text||"")));
+      let added=0,skipped=0;
+      msgs.forEach(x=>{
+        const key=(x.who||"")+"|"+(x.time||"")+"|"+(x.text||"");
+        if(seen.has(key)){ skipped++; return; }
+        seen.add(key);
+        state.segments.push({text:x.text,who:x.who,time:x.time,auto:false,src:"kakao"}); added++;
+      });
       renderTranscript(); refreshBadges(); scheduleSave(); renderLiveDoc();
-      toast(msgs.length+"건의 카카오톡 발언을 등록했습니다 — [AI 반영]으로 회의록에 정리할 수 있습니다");
+      toast(added+"건 추가"+(skipped?" · 중복 "+skipped+"건 자동 건너뜀":"")+" — 주기적으로 같은 방을 다시 올려도 새 발언만 쌓입니다");
     } else {
       const ta=$("manualNote");
       const block="\n[카카오톡 대화"+(cm2.date?" · "+cm2.date:"")+"]\n"+msgs.map(x=>`(${x.time}) ${x.who}: ${x.text}`).join("\n")+"\n";
