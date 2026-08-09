@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=73, BUILD_DATE="2026-07-22";
+const BUILD=74, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -5402,6 +5402,7 @@ function renderMeetingCards(list,emptyMsg){
       <button class="b-mint mc-enter" data-id="${m.id}" style="flex:1">입장</button>
       <button class="b-ghost" onclick="event.stopPropagation();copyMeetingLink('${m.id}')" title="이 회의로 바로 들어오는 초대 링크를 복사합니다">링크</button>
       <button class="b-ghost" onclick="event.stopPropagation();showMeetingQR('${m.id}')" title="초대 링크를 QR로 만들어 화면·카톡·인쇄물로 공유합니다">QR</button>
+      ${m.kakao?`<button class="b-ghost" style="color:#8a6d00" onclick="event.stopPropagation();window.open('${esc(m.kakao)}','_blank')" title="이 회의의 카카오톡 오픈채팅방을 엽니다">카톡방</button>`:""}
       ${canManage?`<button class="b-ghost mc-edit" data-id="${m.id}">수정</button><button class="b-ghost mc-del" data-id="${m.id}" style="color:#C24A4A">삭제</button>`:""}
     </div>
   </div>`).join("");
@@ -5446,6 +5447,7 @@ function openMeetingEditor(id){
       ${fld("목적","mt_purpose",m.purpose)}
       ${fld("소속·회사 배지 (쉼표로 여러 개 — 입주기업은 이름 일부만 쳐도 자동 완성)","mt_company",m.company)}
       <div id="mt_company_sug" style="display:flex;gap:5px;flex-wrap:wrap;margin:-3px 0 9px"></div>
+      ${fld("카카오톡 오픈채팅 링크 (선택 — 회의 카드에 [카톡방] 버튼이 생깁니다)","mt_kakao",m.kakao,"https://open.kakao.com/o/…")}
       <div class="mini" style="line-height:1.5">참석자 등록·초대는 회의 입장 후 [사전 준비] 탭에서 관리합니다.</div>
     </div>
   </div>`;
@@ -5461,6 +5463,7 @@ function openMeetingEditor(id){
     m.title=title; m.date=date; m.time=($("mt_time").value||"").trim();
     m.place=($("mt_place").value||"").trim(); m.purpose=($("mt_purpose").value||"").trim();
     m.company=($("mt_company").value||"").trim();
+    m.kakao=($("mt_kakao").value||"").trim();
     if(state.currentMeetingId===m.id)syncCurrentMeeting();
     scheduleSave(); modal.remove(); showMeetingList(); toast("회의 정보를 수정했습니다");
   };
@@ -5494,6 +5497,7 @@ function openMeetingCreator(presetCompany){
       ${fld("목적 (선택)","mn_purpose","")}
       ${fld("소속·회사 배지 (쉼표로 여러 개 — 입주기업은 이름 일부만 쳐도 자동 완성)","mn_company",presetCompany||"","예: 메디, 츄구미, ChewGumi …")}
       <div id="mn_company_sug" style="display:flex;gap:5px;flex-wrap:wrap;margin:-3px 0 9px"></div>
+      ${fld("카카오톡 오픈채팅 링크 (선택)","mn_kakao","","https://open.kakao.com/o/…")}
       <div class="mini" style="line-height:1.5">참석자 등록·초대는 만들고 입장 후 [사전 준비] 탭에서 합니다. 만든 회의는 즉시 클라우드에 저장됩니다.</div>
     </div>
   </div>`;
@@ -5506,7 +5510,7 @@ function openMeetingCreator(presetCompany){
     if(date&&!/^\d{4}-\d{2}-\d{2}$/.test(date)){toast("날짜 형식: YYYY-MM-DD");return;}
     const m={id:"m_"+Date.now(),title,purpose:($("mn_purpose").value||"").trim(),
       place:($("mn_place").value||"").trim(),date,time:($("mn_time").value||"").trim(),
-      host:state.user.name,company:($("mn_company").value||"").trim(),zoom:"",
+      host:state.user.name,company:($("mn_company").value||"").trim(),zoom:"",kakao:($("mn_kakao").value||"").trim(),
       attendees:[{name:state.user.name,email:state.user.email}],jobs:[],started:null,ended:null};
     state.meetings.push(m);
     await saveNow();                                   // 즉시 클라우드 저장 — 이동·재로그인 시 유실 방지
