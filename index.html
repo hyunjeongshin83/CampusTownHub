@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=89, BUILD_DATE="2026-07-22";
+const BUILD=90, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -3328,7 +3328,7 @@ function renderProjects(){
         </div>`).join("")}</div>
     </div>`:"";
   if(!ps.length){
-    box.innerHTML='<div class="mini" style="margin-bottom:10px">이 회의의 프로젝트가 아직 없습니다.'+(canEdit?' 아래 [+ 프로젝트 추가]에서 만드세요 — 폼 안에 작성 예시가 있습니다.':'')+'</div>'
+    box.innerHTML='<div class="mini" style="margin-bottom:10px">이 회의의 프로젝트가 아직 없습니다.'+(canEdit?' 아래 [+ 프로젝트 추가]에서 만드세요.':'')+'</div>'
       +((canEdit&&others.length)?othersHTML:"");
     const pot0=$("projOtherToggle");
     if(pot0)pot0.onclick=()=>{const w=$("projOtherWrap"),a=$("projOtherArrow");const open=w.style.display==="none";w.style.display=open?"":"none";a.textContent=open?"▾":"▸";};
@@ -3468,7 +3468,6 @@ function openProjectForm(id){
         <button class="b-ghost" id="pfCancel">취소</button>
       </div>
       <div class="pf-row">
-        ${p?"":`<div class="mini" style="grid-column:1/-1;background:var(--pale);border-radius:9px;padding:8px 11px;line-height:1.6">작성 예시 — ① <b>약사 참여 연구 사이트</b>: 지역사회·전국의 약사·제약사·의사가 등록해 약 디자인에 참여하는 연구 창구 (상태: 제안) ② <b>복약·접종 앱</b>: MediNote — 5탭 복약·예방접종 관리 앱 (상태: 데모)</div>`}
         <div><label>제목</label><input id="pf_title" placeholder="예: 팀 프로젝트 이름" value="${p?esc(p.title):''}"></div>
         <div><label>상태</label>
           <select id="pf_status">
