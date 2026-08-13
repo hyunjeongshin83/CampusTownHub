@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=88, BUILD_DATE="2026-07-22";
+const BUILD=89, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -884,11 +884,42 @@ async function loadAll(){
 // ==================== CLAUDE ====================
 // AI 호출: API 키는 localStorage(이 브라우저)에만 저장 — 소스코드·GitHub에는 절대 넣지 않음
 function getApiKey(){ return localStorage.getItem("medit:apikey")||""; }
+function getAiProv(){ return localStorage.getItem("medit:aiprov")||"claude"; }
+function setAiProv(p){ localStorage.setItem("medit:aiprov",p==="openai"?"openai":"claude"); }
+function getAiPrefer(){ return localStorage.getItem("medit:aiprefer")==="1"; }
+function setAiPrefer(v){ localStorage.setItem("medit:aiprefer",v?"1":"0"); }
+// 개인 키로 직접 호출 — Claude(웹 검색 지원) 또는 OpenAI(GPT, 웹 검색 미지원)
+async function callPersonal(system,user,maxTokens,opts){
+  opts=opts||{}; const key=getApiKey(); if(!key) throw new Error("개인 키 없음");
+  if(getAiProv()==="openai"){
+    const r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
+      body:JSON.stringify({model:"gpt-4o-mini",max_tokens:Math.min(Number(maxTokens)||1000,4000),
+        messages:[{role:"system",content:system||""},{role:"user",content:String(user).slice(0,60000)}]})});
+    const d=await r.json();
+    if(!r.ok) throw new Error((d.error&&d.error.message)||("OpenAI "+r.status));
+    return (d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||"";
+  }
+  const body={model:"claude-sonnet-4-6",max_tokens:Math.min(Number(maxTokens)||1000,4000),system:system||"",
+    messages:[{role:"user",content:String(user).slice(0,60000)}]};
+  if(opts.search) body.tools=[{type:"web_search_20250305",name:"web_search"}];
+  const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+    headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify(body)});
+  const d=await r.json();
+  if(!r.ok) throw new Error((d.error&&d.error.message)||("Anthropic "+r.status));
+  return (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+}
 function setApiKey(k){
   k=(k||"").trim();
   if(k){ localStorage.setItem("medit:apikey",k); toast("API 키를 이 브라우저에 저장했습니다"); }
   else { localStorage.removeItem("medit:apikey"); toast("API 키를 삭제했습니다"); }
 }
+function syncAiKeyUI(){
+  const s=$("aiProvSel"); if(s)s.value=getAiProv();
+  const c=$("aiPreferChk"); if(c)c.checked=getAiPrefer();
+}
+setInterval(syncAiKeyUI,1200);
 function promptApiKey(){
   const cur=getApiKey();
   const k=prompt("Anthropic API 키 (sk-ant-…)\nconsole.anthropic.com → API Keys에서 발급.\n이 브라우저에만 저장됩니다."+(cur?"\n\n(현재 키 등록됨 — 새 키를 넣으면 교체)":""));
@@ -969,6 +1000,11 @@ function parseLooseJSON(txt){
 }
 async function callClaude(system,user,maxTokens,opts){
   opts=opts||{};
+  // ⓪ 내 키 우선 모드 — 등록된 개인 키(Claude/GPT)로 먼저, 실패 시 공유 프록시로
+  if(getAiPrefer()&&getApiKey()&&!(opts.search&&getAiProv()==="openai")){
+    try{ return await callPersonal(system,user,maxTokens,opts); }
+    catch(e){ console.warn("개인 키 호출 실패 → 공유 프록시로:",e.message||e); }
+  }
   // ① 공유 프록시
   let proxyWhy="";
   try{ return await callViaProxy(system,user,maxTokens,opts); }
@@ -2266,10 +2302,17 @@ function prepHTML(){
    <div class="glass tile" style="margin-bottom:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
      <div style="flex:1;min-width:220px">
        <h4 style="margin-bottom:3px">AI 키 (선택)</h4>
-       <div class="mini" id="apiKeyStatus">공유 프록시(운영자 키)가 배포되어 있으면 로그인만으로 AI를 쓸 수 있습니다. 없으면 개인 키를 등록하세요 — 키는 이 브라우저에만 저장됩니다. 키 없이도 노트 저장·미리보기는 작동합니다.</div>
+       <div class="mini" id="apiKeyStatus">로그인만 하면 공유 AI(운영자 키)를 쓸 수 있습니다. <b>자기 키(Claude 또는 GPT)를 등록하고 [내 키 우선]을 켜면</b> 본인 키로 사용되어 운영자 비용이 들지 않습니다 — 키는 이 브라우저에만 저장됩니다. GPT 키는 문헌 웹 검색을 지원하지 않아 그 경우 검색은 공유 프록시로 처리됩니다.</div>
        <div class="mini" id="aiTestMsg" style="margin-top:5px"></div>
      </div>
-     <div style="display:flex;gap:6px;flex-wrap:wrap">
+     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+       <select id="aiProvSel" onchange="setAiProv(this.value);refreshApiKeyStatus()" style="padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px">
+         <option value="claude">Claude 키 (sk-ant-…)</option>
+         <option value="openai">OpenAI·GPT 키 (sk-…)</option>
+       </select>
+       <label class="mini" style="display:flex;align-items:center;gap:4px;cursor:pointer" title="켜면 등록한 내 키로 먼저 호출하고, 실패할 때만 공유 프록시(운영자 키)를 씁니다 — 운영자 비용 절감">
+         <input type="checkbox" id="aiPreferChk" onchange="setAiPrefer(this.checked)" style="accent-color:var(--mint)"> 내 키 우선
+       </label>
        <button class="b-deep" onclick="testAI()">AI 연결 점검</button>
        <button class="b-mint" onclick="promptApiKey()">키 등록·교체</button>
        <button class="b-ghost" onclick="setApiKey('');refreshApiKeyStatus()">삭제</button>
