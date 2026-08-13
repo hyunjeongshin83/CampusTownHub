@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=86, BUILD_DATE="2026-07-22";
+const BUILD=87, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -809,13 +809,13 @@ async function saveSession(){
     await store.set("medit:sess:"+state.currentMeetingId,{
       tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
       nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,
-      meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos,outreach:state.outreach||[],devBoard:state.devBoard||null});
+      meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos,outreach:state.outreach||[],devBoard:state.devBoard||null,notion:state.notion||[]});
   }
 }
 function resetSessionState(){
   state.segments=[]; state.notes=null; state.research=[]; state.nextActions=[]; state.topicTags=[];
   state.meetingStart=null; state.liveDoc={paras:[],cursor:0};
-  state.schedule={goals:[],done:[]}; state.lit={q:"",items:[]}; state.annos=[]; state.outreach=[]; state.devBoard=null;
+  state.schedule={goals:[],done:[]}; state.lit={q:"",items:[]}; state.annos=[]; state.outreach=[]; state.devBoard=null; state.notion=[];
   state.tabNotes={deck:[],app:[],registry:[],console:[]};
 }
 function applySessionData(s){
@@ -829,6 +829,7 @@ function applySessionData(s){
   if(Array.isArray(s.annos))state.annos=s.annos;
   state.outreach=Array.isArray(s.outreach)?s.outreach:[];
   state.devBoard=(s.devBoard&&typeof s.devBoard==="object")?s.devBoard:null;
+  state.notion=Array.isArray(s.notion)?s.notion:[];
   return true;
 }
 // 회의 입장·전환 시 그 회의의 세션을 로드 (없으면 legacy hub1 세션 → 1회 이관)
@@ -2977,6 +2978,107 @@ function autoLinkProjects(){
 // 항상 최신 내용을 불러오도록 캐시 우회 주소 생성 — 파일이 수정되면 카드에서도 그 내용으로 표시됨
 function fresh(url){ return url + (url.indexOf("?")>=0?"&":"?") + "v=" + Date.now(); }
 
+// ==================== 노션 이슈 현황판 — 노션에서 이슈 부분만 복사해 붙여넣기 (회의별 저장) ====================
+const NOTION_ST={todo:{label:"미반영",color:"#C24A4A"},doing:{label:"진행 중",color:"var(--gold)"},done:{label:"반영됨",color:"var(--mint)"}};
+function notionGuessStatus(line){
+  const t=line.toLowerCase();
+  if(/반영됨|반영 완료|완료|done|closed|해결|✅|\[x\]/.test(t)) return "done";
+  if(/진행|doing|in progress|작업 중|🔧/.test(t)) return "doing";
+  return "todo";
+}
+function renderNotionBoard(host){
+  const canEdit=state.user.role==="operator"||state.user.role==="host";
+  let el=$("notionBoard"); if(el)el.remove();
+  el=document.createElement("div"); el.id="notionBoard";
+  el.style.cssText="margin-top:18px;border-top:1px solid var(--line);padding-top:12px";
+  const items=state.notion||[];
+  const cnt=s=>items.filter(x=>x.status===s).length;
+  el.innerHTML=`
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <b style="font-size:14.5px;color:var(--deep)">노션 이슈 현황판</b>
+      <span class="mini">노션 페이지에서 <b>이슈 부분만</b> 복사해 붙여넣으면 현황판이 됩니다 (이 회의에 저장)</span>
+      ${canEdit?'<button class="b-mint" id="ntImport" style="padding:5px 13px;font-size:12.5px">노션에서 가져오기</button>':""}
+      ${(canEdit&&items.length)?'<button class="b-ghost" id="ntClear" style="padding:5px 11px;font-size:12px;color:#C24A4A">전체 비우기</button>':""}
+    </div>
+    ${items.length?`
+    <div class="mini" style="margin-bottom:6px;font-weight:800">
+      <span style="color:#C24A4A">미반영 ${cnt("todo")}</span> · <span style="color:#B8860B">진행 중 ${cnt("doing")}</span> · <span style="color:var(--mint)">반영됨 ${cnt("done")}</span>
+    </div>
+    ${items.map(x=>`
+      <div style="display:flex;gap:8px;align-items:center;padding:7px 2px;border-bottom:1px dashed var(--line);${x.status==="done"?"opacity:.65":""}">
+        <button class="tag" data-ntst="${x.id}" title="클릭해 상태 전환 (미반영→진행 중→반영됨)" style="flex:none;background:${NOTION_ST[x.status].color};color:#fff;border:0;cursor:${canEdit?"pointer":"default"}">${NOTION_ST[x.status].label}</button>
+        <span style="flex:1;font-size:12.5px;font-weight:700;color:var(--deep);${x.status==="done"?"text-decoration:line-through":""}">${esc(x.title)}</span>
+        ${x.memo?`<span class="mini" style="color:var(--gray)">${esc(x.memo)}</span>`:""}
+        ${canEdit?`<button class="b-ghost" data-ntedit="${x.id}" style="padding:3px 8px;font-size:11px">수정</button>
+        <button class="b-ghost" data-ntrm="${x.id}" style="padding:3px 8px;font-size:11px;color:#C24A4A">삭제</button>`:""}
+      </div>`).join("")}`
+    :'<div class="mini">아직 가져온 이슈가 없습니다 — 노션에서 이슈 목록(표·글머리표 어느 형식이든)을 복사해 [노션에서 가져오기]에 붙여넣으세요.</div>'}`;
+  host.appendChild(el);
+  const imp=$("ntImport"); if(imp)imp.onclick=openNotionImport;
+  const clr=$("ntClear"); if(clr)clr.onclick=()=>{ if(!confirm("노션 이슈 현황판을 전부 비울까요?"))return; state.notion=[]; scheduleSave(); renderProjects(); };
+  el.querySelectorAll("[data-ntst]").forEach(b=>b.onclick=()=>{ if(!canEdit)return;
+    const x=items.find(z=>z.id===b.dataset.ntst); if(!x)return;
+    x.status=x.status==="todo"?"doing":(x.status==="doing"?"done":"todo");
+    scheduleSave(); renderProjects();
+  });
+  el.querySelectorAll("[data-ntedit]").forEach(b=>b.onclick=()=>{
+    const x=items.find(z=>z.id===b.dataset.ntedit); if(!x)return;
+    const t=prompt("이슈 내용 수정",x.title); if(t===null)return;
+    const m=prompt("메모 수정 (비우면 없음)",x.memo||""); if(m===null)return;
+    x.title=t.trim()||x.title; x.memo=m.trim(); scheduleSave(); renderProjects();
+  });
+  el.querySelectorAll("[data-ntrm]").forEach(b=>b.onclick=()=>{
+    state.notion=items.filter(z=>z.id!==b.dataset.ntrm); scheduleSave(); renderProjects();
+  });
+}
+function openNotionImport(){
+  let modal=$("ntModal"); if(modal)modal.remove();
+  modal=document.createElement("div"); modal.id="ntModal";
+  modal.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:16px";
+  modal.innerHTML=`
+  <div style="background:#fff;border-radius:16px;max-width:min(600px,96vw);width:100%;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
+      <div style="flex:1;font-weight:800;color:var(--deep);font-size:15px">노션에서 이슈 가져오기</div>
+      <button class="b-ghost" id="ntCancel">취소</button>
+      <button class="b-mint" id="ntGo">가져오기</button>
+    </div>
+    <div style="padding:14px 18px">
+      <div class="mini" style="margin-bottom:9px;line-height:1.7">노션 페이지에서 <b>이슈 부분만</b> 마우스로 드래그해 복사 → 아래에 붙여넣으세요.<br>표·글머리표·체크박스 어느 형식이든 됩니다. 한 줄이 이슈 하나가 되고, "완료·반영·진행" 같은 단어로 상태를 자동 인식합니다.<br>이미 있는 이슈와 같은 내용은 건너뜁니다 (여러 번 붙여넣어도 새 것만 추가).</div>
+      <textarea id="ntText" rows="10" placeholder="예)
+메인 배너 모바일 잘림 — 진행 중
+[x] 로그인 버튼 색 변경
+결제 페이지 오류 수정" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:12.5px;line-height:1.6"></textarea>
+      <div class="mini" id="ntMsg" style="margin-top:7px"></div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+  $("ntCancel").onclick=()=>modal.remove();
+  $("ntGo").onclick=()=>{
+    const raw=($("ntText").value||"").trim();
+    if(!raw){$("ntMsg").textContent="붙여넣은 내용이 없습니다";return;}
+    state.notion=state.notion||[];
+    const seen=new Set(state.notion.map(x=>x.title));
+    let added=0,skipped=0;
+    raw.split("\n").map(s=>s.trim()).filter(Boolean).forEach(line=>{
+      if(/^[-|—\s]+$/.test(line))return;                                   // 표 구분선 제거
+      const status=notionGuessStatus(line);
+      let t=line.replace(/^[-*•·▪︎☐☑✅]\s*/,"").replace(/^\[[ x]\]\s*/i,"");
+      let memo="";
+      if(t.includes("|")){ const cells=t.split("|").map(c=>c.trim()).filter(Boolean); t=cells[0]||t; memo=cells.slice(1).filter(c=>!/미반영|반영|진행|완료|done|todo/i.test(c)).join(" · "); }
+      t=t.replace(/[—-]\s*(반영됨|반영 완료|완료|진행 중|진행|미반영|done|doing|todo)\s*$/i,"").trim();
+      if(!t||t.length<2)return;
+      if(seen.has(t)){skipped++;return;}
+      seen.add(t);
+      state.notion.push({id:"nt_"+Date.now()+"_"+added,title:t,memo,status});
+      added++;
+    });
+    scheduleSave(); modal.remove(); renderProjects();
+    toast(added+"건 가져옴"+(skipped?" · 중복 "+skipped+"건 건너뜀":""));
+  };
+  $("ntText").focus();
+}
+window.renderNotionBoard=renderNotionBoard;
 // ==================== 개발 보드 — 회의별 GitHub 이슈 대시보드 + 배포 화면 미리보기 ====================
 function ghTok(){ try{return localStorage.getItem("medit:ghtok")||"";}catch(e){return "";} }
 function ghHeaders(){ const t=ghTok(); const h={"Accept":"application/vnd.github+json"}; if(t)h["Authorization"]="Bearer "+t; return h; }
@@ -3157,7 +3259,7 @@ function renderProjects(){
       +((canEdit&&others.length)?othersHTML:"");
     const pot0=$("projOtherToggle");
     if(pot0)pot0.onclick=()=>{const w=$("projOtherWrap"),a=$("projOtherArrow");const open=w.style.display==="none";w.style.display=open?"":"none";a.textContent=open?"▾":"▸";};
-    renderDevBoard(box);
+    renderNotionBoard(box); renderDevBoard(box);
     return;
   }
 
@@ -3180,7 +3282,7 @@ function renderProjects(){
         ${canEdit?`<button class="b-ghost" data-rm="${p.id}">삭제</button>`:""}
       </div>
     </div>`).join("")+'</div>'+othersHTML+'<div id="projView"></div>';
-  renderDevBoard(box);
+  renderNotionBoard(box); renderDevBoard(box);
   const pot=$("projOtherToggle");
   if(pot)pot.onclick=()=>{const w=$("projOtherWrap"),a=$("projOtherArrow");const open=w.style.display==="none";w.style.display=open?"":"none";a.textContent=open?"▾":"▸";};
 
