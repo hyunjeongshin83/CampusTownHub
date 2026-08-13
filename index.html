@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=76, BUILD_DATE="2026-07-22";
+const BUILD=77, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -809,13 +809,13 @@ async function saveSession(){
     await store.set("medit:sess:"+state.currentMeetingId,{
       tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
       nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,
-      meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos,outreach:state.outreach||[]});
+      meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos,outreach:state.outreach||[],devBoard:state.devBoard||null});
   }
 }
 function resetSessionState(){
   state.segments=[]; state.notes=null; state.research=[]; state.nextActions=[]; state.topicTags=[];
   state.meetingStart=null; state.liveDoc={paras:[],cursor:0};
-  state.schedule={goals:[],done:[]}; state.lit={q:"",items:[]}; state.annos=[]; state.outreach=[];
+  state.schedule={goals:[],done:[]}; state.lit={q:"",items:[]}; state.annos=[]; state.outreach=[]; state.devBoard=null;
   state.tabNotes={deck:[],app:[],registry:[],console:[]};
 }
 function applySessionData(s){
@@ -828,6 +828,7 @@ function applySessionData(s){
   if(s.lit&&typeof s.lit==="object")state.lit={q:s.lit.q||"",items:Array.isArray(s.lit.items)?s.lit.items:[]};
   if(Array.isArray(s.annos))state.annos=s.annos;
   state.outreach=Array.isArray(s.outreach)?s.outreach:[];
+  state.devBoard=(s.devBoard&&typeof s.devBoard==="object")?s.devBoard:null;
   return true;
 }
 // 회의 입장·전환 시 그 회의의 세션을 로드 (없으면 legacy hub1 세션 → 1회 이관)
@@ -2862,6 +2863,121 @@ function autoLinkProjects(){
 // 항상 최신 내용을 불러오도록 캐시 우회 주소 생성 — 파일이 수정되면 카드에서도 그 내용으로 표시됨
 function fresh(url){ return url + (url.indexOf("?")>=0?"&":"?") + "v=" + Date.now(); }
 
+// ==================== 개발 보드 — 회의별 GitHub 이슈 대시보드 + 배포 화면 미리보기 ====================
+function ghTok(){ try{return localStorage.getItem("medit:ghtok")||"";}catch(e){return "";} }
+function ghHeaders(){ const t=ghTok(); const h={"Accept":"application/vnd.github+json"}; if(t)h["Authorization"]="Bearer "+t; return h; }
+function renderDevBoard(host){
+  const canEdit=state.user.role==="operator"||state.user.role==="host";
+  let el=$("devBoard"); if(el)el.remove();
+  el=document.createElement("div"); el.id="devBoard";
+  el.style.cssText="margin-top:18px;border-top:1px solid var(--line);padding-top:12px";
+  const db=state.devBoard||{};
+  el.innerHTML=`
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <b style="font-size:14.5px;color:var(--deep)">개발 보드 — GitHub 이슈 · 배포 화면</b>
+      <span class="mini">이 회의에 연결된 저장소의 이슈와 현재 사이트를 함께 봅니다 (설정은 회의별 저장)</span>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <input id="dbRepo" placeholder="저장소 (예: hyunjeongshin83/ChewGumiSite)" value="${esc(db.repo||"")}" ${canEdit?"":"disabled"} style="flex:1;min-width:220px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;font-size:12.5px;font-family:inherit">
+      <input id="dbSite" placeholder="배포 사이트 주소 (예: https://….github.io/ChewGumiSite/)" value="${esc(db.site||"")}" ${canEdit?"":"disabled"} style="flex:1;min-width:220px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;font-size:12.5px;font-family:inherit">
+      ${canEdit?'<button class="b-mint" id="dbSave" style="padding:7px 14px">저장</button>':""}
+    </div>
+    <div id="dbBody"></div>`;
+  host.appendChild(el);
+  if(canEdit)$("dbSave").onclick=()=>{
+    state.devBoard={repo:($("dbRepo").value||"").trim().replace(/^https:\/\/github\.com\//,"").replace(/\/$/,""),site:($("dbSite").value||"").trim()};
+    scheduleSave(); toast("개발 보드 설정을 저장했습니다"); renderDevBoard(host);
+  };
+  if(db.repo) loadDevIssues(db);
+  else $("dbBody").innerHTML='<div class="mini">저장소를 입력하고 [저장]하면 이슈 대시보드가 나타납니다.</div>';
+}
+async function loadDevIssues(db){
+  const body=$("dbBody"); if(!body)return;
+  body.innerHTML='<div class="mini">이슈를 불러오는 중…</div>';
+  let issues=[];
+  try{
+    const r=await fetch("https://api.github.com/repos/"+db.repo+"/issues?state=open&per_page=20",{headers:ghHeaders()});
+    if(!r.ok) throw new Error(r.status===404?"저장소를 찾을 수 없습니다 (비공개면 아래 토큰 등록)":"GitHub "+r.status);
+    issues=(await r.json()).filter(x=>!x.pull_request);
+  }catch(e){ body.innerHTML='<div class="mini" style="color:#C24A4A">'+esc(e.message||String(e))+'</div>'+devTokenRow(); return; }
+  const rows=issues.map(i=>`
+    <div style="display:flex;gap:8px;align-items:center;padding:7px 2px;border-bottom:1px dashed var(--line)">
+      <span class="mini" style="color:var(--gray);min-width:34px">#${i.number}</span>
+      <a href="${esc(i.html_url)}" target="_blank" style="flex:1;font-size:12.5px;color:var(--deep);font-weight:700;text-decoration:none">${esc(i.title)}</a>
+      ${(i.labels||[]).slice(0,3).map(l=>`<span class="mini" style="background:#eef4f2;border-radius:7px;padding:1px 7px">${esc(l.name)}</span>`).join("")}
+      <span class="mini" style="color:var(--gray)">${esc((i.user&&i.user.login)||"")}</span>
+    </div>`).join("");
+  body.innerHTML=`
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+      <b style="font-size:13px;color:var(--deep)">열린 이슈 ${issues.length}건</b>
+      <button class="b-ghost" id="dbReload" style="padding:4px 11px;font-size:12px">새로고침</button>
+      <button class="b-mint" id="dbNew" style="padding:4px 11px;font-size:12px">+ 이슈 등록</button>
+      <a class="b-ghost" style="padding:4px 11px;font-size:12px;text-decoration:none" href="https://github.com/${esc(db.repo)}/issues" target="_blank">GitHub에서 열기</a>
+    </div>
+    ${rows||'<div class="mini">열린 이슈가 없습니다.</div>'}
+    ${devTokenRow()}
+    ${db.site?`
+    <div style="display:flex;gap:6px;align-items:center;margin:14px 0 6px">
+      <b style="font-size:13px;color:var(--deep)">현재 배포 화면</b>
+      <button class="b-ghost" id="dbFrameReload" style="padding:4px 11px;font-size:12px">새로고침</button>
+      <a class="b-ghost" style="padding:4px 11px;font-size:12px;text-decoration:none" href="${esc(db.site)}" target="_blank">새 탭에서 열기</a>
+    </div>
+    <iframe id="dbFrame" src="${esc(db.site)}" style="width:100%;height:520px;border:1px solid var(--line);border-radius:12px;background:#fff"></iframe>
+    <div class="mini" style="margin-top:4px">화면이 비어 보이면 해당 사이트가 iframe 표시를 막는 것입니다 — [새 탭에서 열기]를 쓰세요.</div>`:""}`;
+  $("dbReload").onclick=()=>loadDevIssues(db);
+  const fr=$("dbFrameReload"); if(fr)fr.onclick=()=>{ const f=$("dbFrame"); if(f)f.src=f.src; };
+  $("dbNew").onclick=()=>openIssueForm(db);
+  bindDevToken(db);
+}
+function devTokenRow(){
+  const has=!!ghTok();
+  return `<div class="mini" style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+    <span>이슈 등록${has?" 사용 가능 (토큰 등록됨)":"에는 GitHub 토큰이 필요합니다 (이 브라우저에만 저장)"}</span>
+    <input id="dbTok" type="password" placeholder="${has?"토큰 변경…":"github_pat_… 붙여넣기"}" style="min-width:180px;padding:5px 9px;border:1px solid var(--line);border-radius:8px;font-size:12px;font-family:inherit">
+    <button class="b-ghost" id="dbTokSave" style="padding:4px 10px;font-size:12px">${has?"변경":"등록"}</button>
+    ${has?'<button class="b-ghost" id="dbTokDel" style="padding:4px 10px;font-size:12px;color:#C24A4A">삭제</button>':""}
+  </div>`;
+}
+function bindDevToken(db){
+  const s=$("dbTokSave"); if(s)s.onclick=()=>{ const v=($("dbTok").value||"").trim(); if(!v){toast("토큰을 붙여넣으세요");return;}
+    try{localStorage.setItem("medit:ghtok",v);}catch(e){} toast("토큰을 이 브라우저에 저장했습니다"); loadDevIssues(db); };
+  const d=$("dbTokDel"); if(d)d.onclick=()=>{ try{localStorage.removeItem("medit:ghtok");}catch(e){} toast("토큰을 삭제했습니다"); loadDevIssues(db); };
+}
+function openIssueForm(db){
+  if(!ghTok()){ toast("먼저 아래에 GitHub 토큰을 등록하세요 (이슈 쓰기 권한 필요)"); return; }
+  let modal=$("issModal"); if(modal)modal.remove();
+  modal=document.createElement("div"); modal.id="issModal";
+  modal.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:16px";
+  modal.innerHTML=`
+  <div style="background:#fff;border-radius:16px;max-width:min(560px,96vw);width:100%;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
+      <div style="flex:1;font-weight:800;color:var(--deep);font-size:15px">이슈 등록 — ${esc(db.repo)}</div>
+      <button class="b-ghost" id="issCancel">취소</button>
+      <button class="b-mint" id="issGo">등록</button>
+    </div>
+    <div style="padding:14px 18px">
+      <input id="issTitle" placeholder="이슈 제목 (예: 메인 배너 모바일에서 잘림)" style="width:100%;box-sizing:border-box;padding:8px 11px;border:1px solid var(--line);border-radius:9px;font-size:13px;font-family:inherit;margin-bottom:9px">
+      <textarea id="issBody" rows="7" placeholder="상세 내용 · 재현 방법 · 기대 동작 (회의: ${esc((currentMeeting()||{}).title||"")})" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-size:12.5px;font-family:inherit;line-height:1.6"></textarea>
+      <div class="mini" id="issMsg" style="margin-top:7px"></div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+  $("issCancel").onclick=()=>modal.remove();
+  $("issGo").onclick=async()=>{
+    const title=($("issTitle").value||"").trim(); if(!title){$("issMsg").textContent="제목을 입력하세요";return;}
+    $("issGo").disabled=true; $("issMsg").textContent="등록 중…";
+    try{
+      const r=await fetch("https://api.github.com/repos/"+db.repo+"/issues",{method:"POST",headers:{...ghHeaders(),"Content-Type":"application/json"},
+        body:JSON.stringify({title,body:($("issBody").value||"")+"\n\n_등록: 캠퍼스타운 허브 · "+((currentMeeting()||{}).title||"")+"_"})});
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.message||("GitHub "+r.status));
+      toast("#"+d.number+" 이슈를 등록했습니다"); modal.remove(); loadDevIssues(db);
+    }catch(e){ $("issMsg").textContent="실패: "+(e.message||e); $("issMsg").style.color="#C24A4A"; $("issGo").disabled=false; }
+  };
+  $("issTitle").focus();
+}
+window.renderDevBoard=renderDevBoard;
 function moveProjectHere(id){
   const p=(state.projects||[]).find(x=>x.id===id); if(!p)return;
   p.meeting=state.currentMeetingId; scheduleSave(); renderProjects();
@@ -2889,6 +3005,7 @@ function renderProjects(){
       +((canEdit&&others.length)?othersHTML:"");
     const pot0=$("projOtherToggle");
     if(pot0)pot0.onclick=()=>{const w=$("projOtherWrap"),a=$("projOtherArrow");const open=w.style.display==="none";w.style.display=open?"":"none";a.textContent=open?"▾":"▸";};
+    renderDevBoard(box);
     return;
   }
 
@@ -2911,6 +3028,7 @@ function renderProjects(){
         ${canEdit?`<button class="b-ghost" data-rm="${p.id}">삭제</button>`:""}
       </div>
     </div>`).join("")+'</div>'+othersHTML+'<div id="projView"></div>';
+  renderDevBoard(box);
   const pot=$("projOtherToggle");
   if(pot)pot.onclick=()=>{const w=$("projOtherWrap"),a=$("projOtherArrow");const open=w.style.display==="none";w.style.display=open?"":"none";a.textContent=open?"▾":"▸";};
 
