@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=85, BUILD_DATE="2026-07-22";
+const BUILD=86, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -3029,25 +3029,31 @@ async function loadDevIssues(db){
   body.innerHTML='<div class="mini">이슈를 불러오는 중…</div>';
   let issues=[];
   try{
-    const r=await fetch("https://api.github.com/repos/"+db.repo+"/issues?state=open&per_page=20",{headers:ghHeaders()});
+    const r=await fetch("https://api.github.com/repos/"+db.repo+"/issues?state=all&per_page=30&sort=updated",{headers:ghHeaders()});
     if(!r.ok) throw new Error(r.status===404?"저장소를 찾을 수 없습니다 (비공개면 아래 토큰 등록)":"GitHub "+r.status);
     issues=(await r.json()).filter(x=>!x.pull_request);
   }catch(e){ body.innerHTML='<div class="mini" style="color:#C24A4A">'+esc(e.message||String(e))+'</div>'+devTokenRow(); return; }
-  const rows=issues.map(i=>`
-    <div style="display:flex;gap:8px;align-items:center;padding:7px 2px;border-bottom:1px dashed var(--line)">
+  const open=issues.filter(i=>i.state==="open"), closed=issues.filter(i=>i.state==="closed");
+  const row1=i=>`
+    <div style="display:flex;gap:8px;align-items:center;padding:7px 2px;border-bottom:1px dashed var(--line);${i.state==="closed"?"opacity:.72":""}">
+      <span class="tag" style="flex:none;background:${i.state==="closed"?"var(--mint)":"#C24A4A"};color:#fff">${i.state==="closed"?"반영":"미반영"}</span>
       <span class="mini" style="color:var(--gray);min-width:34px">#${i.number}</span>
-      <a href="${esc(i.html_url)}" target="_blank" style="flex:1;font-size:12.5px;color:var(--deep);font-weight:700;text-decoration:none">${esc(i.title)}</a>
+      <a href="${esc(i.html_url)}" target="_blank" style="flex:1;font-size:12.5px;color:var(--deep);font-weight:700;text-decoration:none;${i.state==="closed"?"text-decoration:line-through":""}">${esc(i.title)}</a>
       ${(i.labels||[]).slice(0,3).map(l=>`<span class="mini" style="background:#eef4f2;border-radius:7px;padding:1px 7px">${esc(l.name)}</span>`).join("")}
       <span class="mini" style="color:var(--gray)">${esc((i.user&&i.user.login)||"")}</span>
-    </div>`).join("");
+    </div>`;
+  const rows=open.map(row1).join("")
+    +(closed.length?`
+    <div class="mini" id="dbClosedToggle" style="font-weight:800;color:var(--soft);cursor:pointer;user-select:none;margin-top:8px"><span id="dbClosedArrow">▸</span> 반영 완료 ${closed.length}건 (펼치기)</div>
+    <div id="dbClosedWrap" style="display:none">${closed.map(row1).join("")}</div>`:"");
   body.innerHTML=`
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
-      <b style="font-size:13px;color:var(--deep)">열린 이슈 ${issues.length}건</b>
+      <b style="font-size:13px;color:var(--deep)">피드백 — <span style="color:#C24A4A">미반영 ${open.length}</span> · <span style="color:var(--mint)">반영 ${closed.length}</span></b>
       <button class="b-ghost" id="dbReload" style="padding:4px 11px;font-size:12px">새로고침</button>
       <button class="b-mint" id="dbNew" style="padding:4px 11px;font-size:12px">+ 이슈 등록</button>
       <a class="b-ghost" style="padding:4px 11px;font-size:12px;text-decoration:none" href="https://github.com/${esc(db.repo)}/issues" target="_blank">GitHub에서 열기</a>
     </div>
-    ${rows||'<div class="mini">열린 이슈가 없습니다.</div>'}
+    ${rows||'<div class="mini">등록된 이슈가 없습니다 — [+ 이슈 등록]으로 첫 피드백을 남기세요.</div>'}
     ${devTokenRow()}
     ${db.site?`
     <div style="display:flex;gap:6px;align-items:center;margin:14px 0 6px">
@@ -3069,6 +3075,8 @@ async function loadDevIssues(db){
       .catch(()=>{const el=$("dbReadme");if(el)el.textContent="README가 없거나 읽을 수 없습니다 — [GitHub에서 열기]로 확인하세요.";});
   }
   $("dbReload").onclick=()=>loadDevIssues(db);
+  const ct=$("dbClosedToggle");
+  if(ct)ct.onclick=()=>{const w=$("dbClosedWrap"),a=$("dbClosedArrow");const o=w.style.display==="none";w.style.display=o?"":"none";a.textContent=o?"▾":"▸";};
   const fr=$("dbFrameReload"); if(fr)fr.onclick=()=>{ const f=$("dbFrame"); if(f)f.src=f.src; };
   $("dbNew").onclick=()=>openIssueForm(db);
   bindDevToken(db);
