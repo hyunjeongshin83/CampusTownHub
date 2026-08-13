@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=81, BUILD_DATE="2026-07-22";
+const BUILD=82, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -3498,12 +3498,12 @@ function bindConsole(){
 }
 function renderTranscript(interim){const box=$("transcript");if(!box)return;
   if(!state.segments.length&&!interim){box.innerHTML='<div class="mini" style="font-style:italic">회의를 시작하면 자동으로 녹취됩니다. 타이핑도 가능합니다.</div>';return;}
-  let h=state.segments.map((s,i)=>`<div class="note ${s.who==='나'?'me':''}"><span class="who" style="cursor:pointer;${s.guessed?'border-bottom:1px dotted var(--gray);':''}" title="${s.guessed?'AI 추정 화자 — 클릭해 확정·수정':'클릭해 발화자 이름 수정'}" onclick="editSegWho(${i})">${esc(s.who)}${s.guessed?'˟':''} · ${s.time}${s.lang&&s.lang!=="ko"?" · "+micLangLabel(SCRIPT2LANG[s.lang]||s.lang):""}</span><span style="cursor:pointer" title="클릭해 발언 내용 수정 (비우면 삭제)" onclick="editSegText(${i})">${esc(s.text)}</span>${s.needKo?'<div class="mini" style="margin-top:3px;font-style:italic">한국어로 번역 중…</div>':(s.ko?`<div style="margin-top:3px;padding-top:3px;border-top:1px dashed var(--line);color:var(--deep)">→ ${esc(s.ko)}</div>`:"")}</div>`).join("");
+  let h=state.segments.map((s,i)=>`<div class="note ${(state.user&&s.who===state.user.name)?'me':''}"><span class="who" style="cursor:pointer;${s.guessed?'border-bottom:1px dotted var(--gray);':''}" title="${s.guessed?'AI 추정 화자 — 클릭해 확정·수정':'클릭해 발화자 이름 수정'}" onclick="editSegWho(${i})">${esc(s.who)}${s.guessed?'˟':''} · ${s.time}${s.lang&&s.lang!=="ko"?" · "+micLangLabel(SCRIPT2LANG[s.lang]||s.lang):""}</span><span style="cursor:pointer" title="클릭해 발언 내용 수정 (비우면 삭제)" onclick="editSegText(${i})">${esc(s.text)}</span>${s.needKo?'<div class="mini" style="margin-top:3px;font-style:italic">한국어로 번역 중…</div>':(s.ko?`<div style="margin-top:3px;padding-top:3px;border-top:1px dashed var(--line);color:var(--deep)">→ ${esc(s.ko)}</div>`:"")}</div>`).join("");
   if(interim)h+=`<div class="note" style="opacity:.5;font-style:italic"><span class="who">발화 (인식중…)</span>${esc(interim)}</div>`;
   box.innerHTML=h;box.scrollTop=box.scrollHeight;const sc=$("segCount");if(sc)sc.textContent=state.segments.length;
   if(typeof renderLiveWho==="function")renderLiveWho();}
 function addSegment(text,who,auto){if(!text.trim())return;
-  const seg={text:text.trim(),who:who||'교수님',time:new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}),auto:!!auto};
+  const seg={text:text.trim(),who:who||((state.user&&state.user.name)||"참석자"),time:new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}),auto:!!auto};
   const d=detectLang(seg.text);
   if(d){ seg.lang=d;
     if(SCRIPT2LANG[d]) setAutoLang(SCRIPT2LANG[d]);            // 다음 발언부터 해당 언어로 인식
@@ -3767,17 +3767,16 @@ async function _translateSegment(seg){
   renderTranscript(); renderLiveDoc(); scheduleSave();
   maybeCondense();
 }
-function micWhoVal(){ const s=$("micWho"); return (s&&s.value)||"교수님"; }
+function micWhoVal(){ const s=$("micWho"); return (s&&s.value)||((state.user&&state.user.name)||"참석자"); }
 function fillMicWho(){
   const s=$("micWho"); if(!s) return;
   const prev=s.value;
+  // 이 회의의 참석자 명단만 — 명단이 비어 있으면 로그인 사용자
   const names=[]; (state.attendees||[]).forEach(a=>{ if(a.name&&names.indexOf(a.name)<0) names.push(a.name); });
-  ["교수님","나"].forEach(n=>{ if(names.indexOf(n)<0) names.push(n); });
+  const me=(state.user&&state.user.name)||"";
+  if(!names.length&&me) names.push(me);
   s.innerHTML=names.map(n=>`<option${n===prev?" selected":""}>${esc(n)}</option>`).join("");
-  if(!prev){ // 기본값: 참석자 중 '교수' 포함 이름 우선
-    const def=names.find(n=>/교수/.test(n))||names[0];
-    if(def) s.value=def;
-  }
+  if(!prev||names.indexOf(prev)<0){ s.value=(me&&names.indexOf(me)>=0)?me:(names[0]||""); }   // 기본값: 로그인한 나
 }
 function micStatus(msg,bad){const el=$("micHint");if(el){el.textContent=msg;el.style.color=bad?"#C24A4A":"";}}
 const MIC_BLOCK_HELP="마이크 권한이 차단되어 있습니다 — 주소창 왼쪽 자물쇠(사이트 정보) → 마이크 [허용] 후 새로고침해 주세요";
