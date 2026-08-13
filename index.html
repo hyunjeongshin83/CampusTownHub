@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=83, BUILD_DATE="2026-07-22";
+const BUILD=84, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1163,12 +1163,84 @@ function scheduleHTML(){
    <div id="doneList"></div>
   </div>`;
 }
+// GitHub 주소 → 저장소·Pages 추정 주소
+function ghFromUrl(u){
+  const m=/github\.com\/([\w.-]+)\/([\w.-]+)/.exec(u||""); if(!m)return null;
+  const owner=m[1], repo=m[2].replace(/\.git$/,"");
+  return {repo:owner+"/"+repo, site:"https://"+owner.toLowerCase()+".github.io/"+repo+"/"};
+}
+function ghExtraBtns(url){
+  const g=ghFromUrl(url); if(!g)return "";
+  const canEdit=state.user.role==="operator"||state.user.role==="host";
+  return `<button class="b-ghost" style="padding:4px 10px;font-size:12px" onclick="openGhPreview('${esc(g.repo)}','${esc(g.site)}')">미리보기</button>`
+    +(canEdit?`<button class="b-ghost" style="padding:4px 10px;font-size:12px" onclick="installGhBoard('${esc(g.repo)}','${esc(g.site)}')" title="이 저장소를 프로젝트 탭의 개발 보드에 연결합니다">보드에 연결</button>`:"");
+}
+function openGhPreview(repo,site){
+  let modal=$("ghpvModal"); if(modal)modal.remove();
+  modal=document.createElement("div"); modal.id="ghpvModal";
+  modal.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(20,30,30,.6);display:flex;align-items:center;justify-content:center;padding:14px";
+  modal.innerHTML=`
+  <div style="background:#fff;border-radius:16px;max-width:min(980px,97vw);width:100%;height:min(84vh,760px);display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;gap:8px;align-items:center;padding:11px 15px;border-bottom:1px solid var(--line)">
+      <b style="flex:1;font-size:14px;color:var(--deep)">${esc(repo)} — 배포 화면 미리보기</b>
+      <a class="b-ghost" style="padding:5px 11px;font-size:12px;text-decoration:none" href="${esc(site)}" target="_blank">새 탭</a>
+      <a class="b-ghost" style="padding:5px 11px;font-size:12px;text-decoration:none" href="https://github.com/${esc(repo)}" target="_blank">저장소</a>
+      <button class="b-deep" id="ghpvClose" style="padding:5px 12px">닫기</button>
+    </div>
+    <iframe src="${esc(site)}" style="flex:1;border:0;background:#fff"></iframe>
+    <div class="mini" style="padding:6px 15px">화면이 비어 있으면 이 저장소는 GitHub Pages가 없거나 iframe을 막는 것입니다 — [저장소]로 확인하세요.</div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+  $("ghpvClose").onclick=()=>modal.remove();
+}
+function installGhBoard(repo,site){
+  state.devBoard={repo,site}; scheduleSave();
+  toast("개발 보드에 연결했습니다 — 프로젝트 탭에서 이슈·배포 화면을 확인하세요");
+}
+window.openGhPreview=openGhPreview; window.installGhBoard=installGhBoard;
+// ── 담당자 전달 알림 — 챗봇 스타일 오른쪽 팝업 ──
+function assignKey(){ return "medit:assignSeen:"+(state.user&&state.user.id||"x"); }
+function checkAssignNotify(){
+  try{
+    if(!state.user||!state.user.name)return;
+    const last=Number(localStorage.getItem(assignKey())||0);
+    const items=[...(state.schedule&&state.schedule.goals||[]),...(state.schedule&&state.schedule.done||[])]
+      .filter(x=>x.assignee===state.user.name&&x.oid!==state.user.id)
+      .filter(x=>{ const ts=Number(String(x.id||"").split("_")[1]||0); return ts>last; });
+    if(!items.length)return;
+    let p=$("assignPop"); if(p)p.remove();
+    p=document.createElement("div"); p.id="assignPop";
+    p.style.cssText="position:fixed;right:16px;bottom:16px;z-index:9998;width:min(320px,92vw);background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 34px rgba(20,40,40,.22);overflow:hidden;animation:slideUp .25s ease";
+    p.innerHTML=`
+      <div style="display:flex;gap:8px;align-items:center;background:var(--deep);color:#fff;padding:10px 14px">
+        <b style="flex:1;font-size:13px">📌 나에게 전달된 항목 ${items.length}건</b>
+        <button id="apClose" style="background:none;border:0;color:#fff;font-size:16px;cursor:pointer">×</button>
+      </div>
+      <div style="max-height:250px;overflow:auto;padding:8px 12px">
+        ${items.map(x=>`<div style="padding:7px 2px;border-bottom:1px dashed var(--line)">
+          <div style="font-size:12.5px;font-weight:800;color:var(--deep)">${esc(x.title)}</div>
+          <div class="mini">${esc(x.oname||"")} 님이 전달 ${x.date?"· 기한 "+esc(x.date):""}</div>
+        </div>`).join("")}
+      </div>
+      <div style="display:flex;gap:6px;padding:8px 12px">
+        <button class="b-mint" id="apGo" style="flex:1;padding:7px">일정에서 보기</button>
+        <button class="b-ghost" id="apOk" style="padding:7px 12px">확인</button>
+      </div>`;
+    document.body.appendChild(p);
+    const done=()=>{ localStorage.setItem(assignKey(),String(Date.now())); p.remove(); };
+    $("apClose").onclick=done; $("apOk").onclick=done;
+    $("apGo").onclick=()=>{ done(); switchTab&&switchTab("sched"); };
+  }catch(_){/* 알림 실패는 치명적이지 않음 */}
+}
 function schedCanTouch(x){ return (x.oid?x.oid===state.user.id:false)||state.user.role==="host"||state.user.role==="operator"; }
 function schedVisible(x){ return (x.vis||"shared")!=="private"||x.oid===state.user.id; }
 function visBadge(x){
-  return (x.vis==="private")
+  const own=(x.vis==="private")
     ? '<span class="tag" style="background:#8892a0;color:#fff">나만</span>'
     : (x.oname?`<span class="tag" style="background:#eef4f2;color:var(--deep)">${esc(x.oname)}</span>`:"");
+  const asg=x.assignee?`<span class="tag" style="background:var(--gold);color:#fff">담당 ${esc(x.assignee)}</span>`:"";
+  return own+asg;
 }
 function renderGoals(){
   const box=$("goalList"); if(!box) return;
@@ -1186,7 +1258,7 @@ function renderGoals(){
         ${g.memo?`<div class="mini" style="margin-top:2px">${esc(g.memo)}</div>`:""}
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
-        ${linkBtn(g.url)}
+        ${linkBtn(g.url)}${ghExtraBtns(g.url)}
         ${mine?`<button class="b-ghost" style="padding:4px 10px;font-size:12px" data-gedit="${g.id}">수정</button>
         <button class="b-ghost" style="padding:4px 10px;font-size:12px" data-grm="${g.id}">삭제</button>`:""}
       </div>
@@ -1220,6 +1292,10 @@ function openGoalForm(id){
         <option value="shared" ${!g||g.vis!=="private"?"selected":""}>회의 참석자와 같이 보기 (공유)</option>
         <option value="private" ${g&&g.vis==="private"?"selected":""}>나만 보기</option>
       </select>
+      <select id="gf_assign" title="담당자에게 전달 — 그 사람이 접속하면 오른쪽 알림 팝업으로 안내됩니다" style="margin-top:8px;width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
+        <option value="">담당자 없음</option>
+        ${(state.attendees||[]).map(a=>`<option ${g&&g.assignee===a.name?"selected":""}>${esc(a.name)}</option>`).join("")}
+      </select>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
       <input id="gf_url" placeholder="링크 (선택 — https:// 또는 파일명.html)" value="${g?esc(g.url||""):''}" style="padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
@@ -1233,7 +1309,7 @@ function openGoalForm(id){
   $("gfCancel").onclick=()=>{box.style.display="none";box.innerHTML="";};
   $("gfSave").onclick=async()=>{
     const title=($("gf_title").value||"").trim(); if(!title){toast("목표를 입력하세요");return;}
-    const o={title,date:$("gf_date").value||"",status:$("gf_status").value,url:($("gf_url").value||"").trim(),memo:($("gf_memo").value||"").trim(),vis:$("gf_vis").value};
+    const o={title,date:$("gf_date").value||"",status:$("gf_status").value,url:($("gf_url").value||"").trim(),memo:($("gf_memo").value||"").trim(),vis:$("gf_vis").value,assignee:$("gf_assign").value||""};
     if(g)Object.assign(g,o); else state.schedule.goals.push(Object.assign({id:"g_"+Date.now(),oid:state.user.id,oname:state.user.name},o));
     await saveNow(); box.style.display="none"; box.innerHTML=""; renderGoals();
   };
@@ -1250,7 +1326,7 @@ function doneItems(){
     items.push({kind:"프로젝트",dt:"",sort:p.id,title:p.title+" ("+(p.status||"제안")+")",desc:p.desc||"",act:(p.url?linkBtn(p.url,shortName(p.url)):"")+(p.url2?linkBtn(p.url2,shortName(p.url2)):"")});
   });
   (state.schedule.done||[]).filter(schedVisible).forEach(d=>{
-    items.push({kind:"작업",dt:d.dt||"",sort:d.id,title:d.title,desc:d.memo||"",act:linkBtn(d.url),id:d.id,manual:true,d});
+    items.push({kind:"작업",dt:d.dt||"",sort:d.id,title:d.title,desc:d.memo||"",act:linkBtn(d.url)+ghExtraBtns(d.url),id:d.id,manual:true,d});
   });
   return items.sort((a,b)=>String(b.sort).localeCompare(String(a.sort)));   // 최신순 (id에 타임스탬프 포함)
 }
@@ -1329,6 +1405,10 @@ function openDoneForm(){
         <option value="1">한 일</option>
         <option value="0">안 한 일 (할 일)</option>
       </select>
+      <select id="df_assign" title="담당자에게 전달 — 접속 시 오른쪽 알림 팝업" style="grid-column:1/-1;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
+        <option value="">담당자 없음</option>
+        ${(state.attendees||[]).map(a=>`<option>${esc(a.name)}</option>`).join("")}
+      </select>
     </div>
     <div style="display:flex;gap:7px;justify-content:flex-end">
       <button class="b-ghost" id="dfCancel">취소</button>
@@ -1338,7 +1418,7 @@ function openDoneForm(){
   $("dfCancel").onclick=()=>{box.style.display="none";box.innerHTML="";};
   $("dfSave").onclick=async()=>{
     const title=($("df_title").value||"").trim(); if(!title){toast("내용을 입력하세요");return;}
-    state.schedule.done.push({id:"d_"+Date.now(),dt:new Date().toLocaleDateString('ko-KR'),title,url:($("df_url").value||"").trim(),memo:($("df_memo").value||"").trim(),vis:$("df_vis").value,done:$("df_done").value==="1",oid:state.user.id,oname:state.user.name});
+    state.schedule.done.push({id:"d_"+Date.now(),dt:new Date().toLocaleDateString('ko-KR'),title,url:($("df_url").value||"").trim(),memo:($("df_memo").value||"").trim(),vis:$("df_vis").value,done:$("df_done").value==="1",oid:state.user.id,oname:state.user.name,assignee:$("df_assign").value||""});
     await saveNow(); box.style.display="none"; box.innerHTML=""; renderDone();
   };
   $("df_title").focus();
@@ -5572,7 +5652,7 @@ function renderMeetingCards(list,emptyMsg){
     await saveNow();                                    // 떠나는 회의 세션 저장
     state.currentMeetingId=b.dataset.id;
     await loadMeetingSession(state.currentMeetingId);   // 이 회의의 세션 로드
-    syncCurrentMeeting(); enterHub(); });
+    syncCurrentMeeting(); enterHub(); setTimeout(checkAssignNotify,600); });
   setTimeout(refineIconsAI,800);
   box.querySelectorAll(".mc-edit").forEach(b=>b.onclick=()=>openMeetingEditor(b.dataset.id));
   box.querySelectorAll(".mc-del").forEach(b=>b.onclick=()=>{
