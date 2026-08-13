@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=77, BUILD_DATE="2026-07-22";
+const BUILD=78, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -2165,7 +2165,7 @@ function prepHTML(){
      <h4>참석자 등록 (이메일)</h4>
      <div class="mini" style="margin-bottom:8px;line-height:1.55">여기에 등록된 이메일이 로그인 허용 명단이 됩니다. 거래처·기관 등 외부 참석자는 <b>구글 로그인에 쓰는 이메일과 동일하게</b> 등록해 주세요.</div>
      <div class="grid" style="grid-template-columns:1fr 1.4fr auto;gap:8px;margin-bottom:10px">
-       <input id="atName" placeholder="이름 (예: 방준석 교수님)" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
+       <input id="atName" placeholder="이름 (예: Nick, 김참석)" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
        <input id="atEmail" placeholder="이메일" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
        <button class="b-deep" id="atAdd">추가</button>
      </div>
@@ -2741,7 +2741,7 @@ function openOutreachForm(id){
   box.style.display="block";
   box.innerHTML=`<div class="pform">
     <div class="pf-head"><b>${id?"아웃리치 수정":"새 아웃리치"}</b><button class="b-ghost" id="ofCancel">취소</button></div>
-    <div class="fld"><label>제목 (누구에게 보내는지)</label><input id="of_title" placeholder="예: LG U+ · 복약지도 셋톱 협업" value="${o?esc(o.title):''}"></div>
+    <div class="fld"><label>제목 (누구에게 보내는지)</label><input id="of_title" placeholder="예: ○○사 협업 제안" value="${o?esc(o.title):''}"></div>
     <div class="pf-row">
       <div><label>받는 사람</label><input id="of_to" placeholder="이메일" value="${o?esc(o.to||""):''}"></div>
       <div><label>제목(메일)</label><input id="of_subj" placeholder="메일 제목" value="${o?esc(o.subj||""):''}"></div>
@@ -3142,7 +3142,7 @@ function openProjectForm(id){
       </div>
       <div class="pf-row">
         ${p?"":`<div class="mini" style="grid-column:1/-1;background:var(--pale);border-radius:9px;padding:8px 11px;line-height:1.6">작성 예시 — ① <b>약사 참여 연구 사이트</b>: 지역사회·전국의 약사·제약사·의사가 등록해 약 디자인에 참여하는 연구 창구 (상태: 제안) ② <b>복약·접종 앱</b>: MediNote — 5탭 복약·예방접종 관리 앱 (상태: 데모)</div>`}
-        <div><label>제목</label><input id="pf_title" placeholder="예: 약사 참여 연구 사이트" value="${p?esc(p.title):''}"></div>
+        <div><label>제목</label><input id="pf_title" placeholder="예: 팀 프로젝트 이름" value="${p?esc(p.title):''}"></div>
         <div><label>상태</label>
           <select id="pf_status">
             ${["제안","설계","데모","진행"].map(s=>`<option ${p&&p.status===s?"selected":""}>${s}</option>`).join("")}
@@ -3154,7 +3154,7 @@ function openProjectForm(id){
       </div>
       <div class="pf-row">
         <div><label>연결할 페이지 ① <span style="font-weight:500">(선택)</span></label>
-          <input id="pf_url" list="pf_urls" placeholder="예: MediNote_app.html" value="${p?esc(p.url||""):''}">
+          <input id="pf_url" list="pf_urls" placeholder="예: mypage.html 또는 https://…" value="${p?esc(p.url||""):''}">
           <datalist id="pf_urls">
             <option value="registry.html">약사 참여 등록 사이트</option>
             <option value="MediNote_app.html">복약·접종 앱 (MediNote)</option>
@@ -3163,10 +3163,10 @@ function openProjectForm(id){
           </datalist>
         </div>
         <div><label>연결할 페이지 ② <span style="font-weight:500">(선택 — 2개면 나란히 보기 가능)</span></label>
-          <input id="pf_url2" list="pf_urls" placeholder="예: demo.html" value="${p?esc(p.url2||""):''}"></div>
+          <input id="pf_url2" list="pf_urls" placeholder="예: page2.html (선택)" value="${p?esc(p.url2||""):''}"></div>
       </div>
       <div class="pf-fld"><label>태그 <span style="font-weight:500">(쉼표로 구분)</span></label>
-        <input id="pf_tags" placeholder="예: 모바일, 복약" value="${p&&p.tags?esc(p.tags.join(", ")):''}"></div>
+        <input id="pf_tags" placeholder="예: 웹, 모바일" value="${p&&p.tags?esc(p.tags.join(", ")):''}"></div>
       <div class="pf-acts">
         <button class="b-mint" id="pfSave">${id?"저장":"추가"}</button>
         ${id?`<button class="b-ghost" id="pfDelete">삭제</button>`:""}
@@ -4784,7 +4784,7 @@ function addPage(p){
   const id=p.id||("pg_"+Date.now());
   state.pages=state.pages||[];
   if(state.pages.some(x=>x.id===id)) throw new Error("이미 있는 id입니다: "+id);
-  state.pages.push({id,label:p.label,url:p.url});
+  state.pages.push({id,label:p.label,url:p.url,meeting:state.currentMeetingId});   // 회의별 귀속
   scheduleSave(); renderTabs();
   return id;
 }
@@ -4802,7 +4802,7 @@ function renderTabs(){
   // 기존 커스텀 탭 제거
   bar.querySelectorAll("[data-page]").forEach(el=>el.remove());
   const canEdit=state.user.role==="operator"||state.user.role==="host";
-  (state.pages||[]).forEach(p=>{
+  (state.pages||[]).filter(p=>!p.meeting||p.meeting===state.currentMeetingId).forEach(p=>{
     const el=document.createElement("div");
     el.className="tab"+(state.activeTab===p.id?" active":"");
     el.dataset.tab=p.id; el.dataset.page=p.id;
@@ -4842,14 +4842,14 @@ function openAddAppSite(){
         <button class="b-deep" id="aaClose">닫기</button>
       </div>
       <div style="overflow:auto;padding:16px 18px">
-        <div class="mini" style="margin-bottom:12px;line-height:1.6">같은 저장소의 HTML 파일(예: <b>MediNote_app.html</b>, <b>registry.html</b>, <b>demo.html</b>)이나 외부 주소(<b>https://…</b>)를 등록합니다. 파일이 수정되면 열 때마다 최신 내용으로 표시됩니다.</div>
+        <div class="mini" style="margin-bottom:12px;line-height:1.6">같은 저장소의 HTML 파일(예: <b>mypage.html</b>)이나 외부 주소(<b>https://…</b>)를 등록합니다. 파일이 수정되면 열 때마다 최신 내용으로 표시됩니다.</div>
         <div style="display:grid;gap:10px">
           <div><label style="font-size:12.5px;font-weight:700;color:var(--deep)">종류</label>
             <select id="aa_kind" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"><option value="app">앱</option><option value="site">사이트</option></select></div>
           <div><label style="font-size:12.5px;font-weight:700;color:var(--deep)">이름</label>
-            <input id="aa_name" placeholder="예: 복약·접종 앱" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
+            <input id="aa_name" placeholder="예: 팀 사이트" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
           <div><label style="font-size:12.5px;font-weight:700;color:var(--deep)">주소 (HTML 파일명 또는 https)</label>
-            <input id="aa_url" list="aa_urls" placeholder="예: MediNote_app.html 또는 https://…" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
+            <input id="aa_url" list="aa_urls" placeholder="예: mypage.html 또는 https://…" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
             <datalist id="aa_urls">
               <option value="MediNote_app.html">복약·접종 앱 (MediNote)</option>
               <option value="demo.html">복약·접종 앱 데모</option>
