@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=92, BUILD_DATE="2026-07-22";
+const BUILD=93, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -809,13 +809,13 @@ async function saveSession(){
     await store.set("medit:sess:"+state.currentMeetingId,{
       tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
       nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,
-      meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos,outreach:state.outreach||[],devBoard:state.devBoard||null,notion:state.notion||[]});
+      meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos,outreach:state.outreach||[],devBoard:state.devBoard||null,notion:state.notion||[],notices:state.notices||[]});
   }
 }
 function resetSessionState(){
   state.segments=[]; state.notes=null; state.research=[]; state.nextActions=[]; state.topicTags=[];
   state.meetingStart=null; state.liveDoc={paras:[],cursor:0};
-  state.schedule={goals:[],done:[]}; state.lit={q:"",items:[]}; state.annos=[]; state.outreach=[]; state.devBoard=null; state.notion=[];
+  state.schedule={goals:[],done:[]}; state.lit={q:"",items:[]}; state.annos=[]; state.outreach=[]; state.devBoard=null; state.notion=[]; state.notices=[];
   state.tabNotes={deck:[],app:[],registry:[],console:[]};
 }
 function applySessionData(s){
@@ -830,6 +830,7 @@ function applySessionData(s){
   state.outreach=Array.isArray(s.outreach)?s.outreach:[];
   state.devBoard=(s.devBoard&&typeof s.devBoard==="object")?s.devBoard:null;
   state.notion=Array.isArray(s.notion)?s.notion:[];
+  state.notices=Array.isArray(s.notices)?s.notices:[];
   return true;
 }
 // 회의 입장·전환 시 그 회의의 세션을 로드 (없으면 legacy hub1 세션 → 1회 이관)
@@ -1245,16 +1246,24 @@ function checkAssignNotify(){
     const items=[...(state.schedule&&state.schedule.goals||[]),...(state.schedule&&state.schedule.done||[])]
       .filter(x=>x.assignee===state.user.name&&x.oid!==state.user.id)
       .filter(x=>{ const ts=Number(String(x.id||"").split("_")[1]||0); return ts>last; });
-    if(!items.length)return;
+    const tasks=(state.notices||[]).filter(n=>(n.to||[]).includes(state.user.name)&&!(n.done&&n.done[state.user.name]));
+    if(!items.length&&!tasks.length)return;
     let p=$("assignPop"); if(p)p.remove();
     p=document.createElement("div"); p.id="assignPop";
     p.style.cssText="position:fixed;right:16px;bottom:16px;z-index:9998;width:min(320px,92vw);background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 34px rgba(20,40,40,.22);overflow:hidden;animation:slideUp .25s ease";
     p.innerHTML=`
       <div style="display:flex;gap:8px;align-items:center;background:var(--deep);color:#fff;padding:10px 14px">
-        <b style="flex:1;font-size:13px">📌 나에게 전달된 항목 ${items.length}건</b>
+        <b style="flex:1;font-size:13px">📌 나에게 온 안내·작업 ${items.length+tasks.length}건</b>
         <button id="apClose" style="background:none;border:0;color:#fff;font-size:16px;cursor:pointer">×</button>
       </div>
-      <div style="max-height:250px;overflow:auto;padding:8px 12px">
+      <div style="max-height:280px;overflow:auto;padding:8px 12px">
+        ${tasks.map(n=>`<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 2px;border-bottom:1px dashed var(--line)">
+          <input type="checkbox" data-ncdone="${esc(n.id)}" title="완료 체크 — 보낸 사람에게 확인 표시됩니다" style="flex:none;width:16px;height:16px;margin-top:2px;accent-color:var(--mint);cursor:pointer">
+          <div style="flex:1">
+            <div style="font-size:12.5px;font-weight:800;color:var(--deep)">${esc(n.text)}</div>
+            <div class="mini">${esc(n.from||"")} 님의 안내 ${n.link?'· <a href="'+esc(n.link)+'" target="_blank" style="color:var(--mint)">링크 열기</a>':""}</div>
+          </div>
+        </div>`).join("")}
         ${items.map(x=>`<div style="padding:7px 2px;border-bottom:1px dashed var(--line)">
           <div style="font-size:12.5px;font-weight:800;color:var(--deep)">${esc(x.title)}</div>
           <div class="mini">${esc(x.oname||"")} 님이 전달 ${x.date?"· 기한 "+esc(x.date):""}</div>
@@ -1266,6 +1275,12 @@ function checkAssignNotify(){
       </div>`;
     document.body.appendChild(p);
     const done=()=>{ localStorage.setItem(assignKey(),String(Date.now())); p.remove(); };
+    p.querySelectorAll("[data-ncdone]").forEach(c=>c.onchange=async()=>{
+      const n=(state.notices||[]).find(x=>x.id===c.dataset.ncdone); if(!n)return;
+      n.done=n.done||{}; n.done[state.user.name]=true;
+      await saveNow(); c.closest("div[style]").parentElement.remove();
+      toast("완료로 표시했습니다 — 보낸 분에게 ✓가 보입니다");
+    });
     $("apClose").onclick=done; $("apOk").onclick=done;
     $("apGo").onclick=()=>{ done(); switchTab&&switchTab("sched"); };
   }catch(_){/* 알림 실패는 치명적이지 않음 */}
@@ -2328,6 +2343,14 @@ function prepHTML(){
        <button class="b-deep" id="atAdd">추가</button>
      </div>
      <div id="atList"></div>
+     <div style="margin-top:10px;border-top:1px dashed var(--line);padding-top:9px">
+       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+         <b style="font-size:13px;color:var(--deep)">참석자 안내·작업 보내기</b>
+         <span class="mini">선택한 참석자가 접속하면 화면 오른쪽 아래에 태스크로 표시됩니다</span>
+         <button class="b-mint" id="ntcSend" style="padding:5px 13px;font-size:12.5px">+ 안내 보내기</button>
+       </div>
+       <div id="ntcList"></div>
+     </div>
    </div>
 
    <div class="glass tile" style="margin-bottom:14px">
@@ -2359,6 +2382,8 @@ function bindPrep(){
   renderAtList();renderUpList();
   $("atAdd").onclick=()=>{const n=$("atName").value.trim(),e=$("atEmail").value.trim();
     if(!n&&!e)return;state.attendees.push({name:n||e,email:e});$("atName").value="";$("atEmail").value="";renderAtList();scheduleSave();refreshBadges();};
+  const ns=$("ntcSend"); if(ns)ns.onclick=openNoticeForm;
+  renderNoticeList();
   $("atEmail").addEventListener("keydown",e=>{if(e.key==='Enter')$("atAdd").click();});
   const drop=$("drop"),fi=$("fileInput");
   drop.onclick=()=>fi.click();
@@ -3021,6 +3046,65 @@ function autoLinkProjects(){
 // 항상 최신 내용을 불러오도록 캐시 우회 주소 생성 — 파일이 수정되면 카드에서도 그 내용으로 표시됨
 function fresh(url){ return url + (url.indexOf("?")>=0?"&":"?") + "v=" + Date.now(); }
 
+// ==================== 참석자 안내(태스크) — 선택한 참석자에게 챗봇형 팝업으로 전달 ====================
+function renderNoticeList(){
+  const box=$("ntcList"); if(!box)return;
+  const list=state.notices||[];
+  if(!list.length){ box.innerHTML='<div class="mini">보낸 안내가 없습니다.</div>'; return; }
+  const canEdit=state.user.role==="operator"||state.user.role==="host";
+  box.innerHTML=list.map(n=>`
+    <div style="display:flex;gap:8px;align-items:flex-start;padding:7px 2px;border-bottom:1px dashed var(--line)">
+      <span class="tag" style="flex:none;background:var(--deep);color:#fff;margin-top:2px">안내</span>
+      <div style="flex:1">
+        <div style="font-size:12.5px;font-weight:700;color:var(--deep)">${esc(n.text)}</div>
+        <div class="mini" style="margin-top:2px">받는 사람: ${(n.to||[]).map(t=>{
+          const ok=n.done&&n.done[t];
+          return `<span style="margin-right:7px;${ok?"color:var(--mint);font-weight:800":""}">${esc(t)}${ok?" ✓":""}</span>`;
+        }).join("")} ${n.link?'· <a href="'+esc(n.link)+'" target="_blank" style="color:var(--mint)">링크</a>':""}</div>
+      </div>
+      ${(canEdit||n.fromId===state.user.id)?`<button class="b-ghost" data-ntcrm="${n.id}" style="padding:3px 8px;font-size:11px;color:#C24A4A">삭제</button>`:""}
+    </div>`).join("");
+  box.querySelectorAll("[data-ntcrm]").forEach(b=>b.onclick=async()=>{
+    state.notices=(state.notices||[]).filter(x=>x.id!==b.dataset.ntcrm);
+    await saveNow(); renderNoticeList();
+  });
+}
+function openNoticeForm(){
+  const at=(state.attendees||[]).map(a=>a.name).filter(Boolean);
+  if(!at.length){ toast("먼저 참석자를 등록하세요"); return; }
+  let modal=$("ntcModal"); if(modal)modal.remove();
+  modal=document.createElement("div"); modal.id="ntcModal";
+  modal.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:16px";
+  modal.innerHTML=`
+  <div style="background:#fff;border-radius:16px;max-width:min(520px,96vw);width:100%;overflow:hidden">
+    <div style="display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
+      <div style="flex:1;font-weight:800;color:var(--deep);font-size:15px">참석자에게 안내 보내기</div>
+      <button class="b-ghost" id="ntcCancel">취소</button>
+      <button class="b-mint" id="ntcGo">보내기</button>
+    </div>
+    <div style="padding:14px 18px">
+      <div class="mini" style="font-weight:800;margin-bottom:5px">받을 참석자 선택</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        ${at.map(n=>`<label style="display:flex;gap:4px;align-items:center;border:1px solid var(--line);border-radius:9px;padding:5px 10px;font-size:12.5px;cursor:pointer"><input type="checkbox" class="ntc-to" value="${esc(n)}" style="accent-color:var(--mint)">${esc(n)}</label>`).join("")}
+      </div>
+      <textarea id="ntc_text" rows="3" placeholder="안내·작업 내용 (예: 내일 회의 전까지 시안 B 검토 부탁드립니다)" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px;line-height:1.6;margin-bottom:8px"></textarea>
+      <input id="ntc_link" placeholder="링크 (선택 — 자료·페이지 주소)" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px">
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+  $("ntcCancel").onclick=()=>modal.remove();
+  $("ntcGo").onclick=async()=>{
+    const to=[...modal.querySelectorAll(".ntc-to:checked")].map(c=>c.value);
+    const text=($("ntc_text").value||"").trim();
+    if(!to.length){toast("받을 참석자를 선택하세요");return;}
+    if(!text){toast("안내 내용을 입력하세요");return;}
+    state.notices=state.notices||[];
+    state.notices.push({id:"nc_"+Date.now(),to,text,link:($("ntc_link").value||"").trim(),from:state.user.name,fromId:state.user.id,done:{}});
+    await saveNow(); modal.remove(); renderNoticeList();
+    toast(to.join(", ")+" 님에게 안내를 보냈습니다 — 접속하면 태스크로 표시됩니다");
+  };
+}
 // ==================== 노션 이슈 현황판 — 노션에서 이슈 부분만 복사해 붙여넣기 (회의별 저장) ====================
 const NOTION_ST={todo:{label:"미반영",color:"#C24A4A"},doing:{label:"진행 중",color:"var(--gold)"},done:{label:"반영됨",color:"var(--mint)"}};
 function notionGuessStatus(line){
