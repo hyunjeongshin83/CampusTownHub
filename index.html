@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=94, BUILD_DATE="2026-07-22";
+const BUILD=95, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -5275,6 +5275,10 @@ function openAddAppSite(){
       </div>
       <div style="overflow:auto;padding:16px 18px">
         <div class="mini" style="margin-bottom:12px;line-height:1.6">같은 저장소의 HTML 파일(예: <b>mypage.html</b>)이나 외부 주소(<b>https://…</b>)를 등록합니다. 파일이 수정되면 열 때마다 최신 내용으로 표시됩니다.</div>
+        <div style="display:flex;gap:6px;margin-bottom:12px">
+          <input id="aa_ai" placeholder="한 줄로 입력 — 예: 츄구미 사이트 https://…/chewgumi/ 상단 탭으로" style="flex:1;padding:9px 11px;border:1.5px dashed var(--mint);border-radius:9px;font-family:inherit;font-size:12.5px">
+          <button class="b-mint" id="aaAI" style="padding:8px 14px;flex:none" title="적은 내용을 AI가 해석해 아래 칸을 채웁니다 — 확인 후 [추가]">AI로 채우기</button>
+        </div>
         <div style="display:grid;gap:10px">
           <div><label style="font-size:12.5px;font-weight:700;color:var(--deep)">종류</label>
             <select id="aa_kind" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"><option value="app">앱</option><option value="site">사이트</option></select></div>
@@ -5302,7 +5306,31 @@ function openAddAppSite(){
     document.body.appendChild(modal);
     $("aaClose").onclick=()=>{modal.style.display="none";};
     modal.onclick=e=>{if(e.target===modal)modal.style.display="none";};
-    $("aaSave").onclick=()=>{
+    $("aaAI").onclick=async()=>{
+    const raw=($("aa_ai").value||"").trim();
+    if(!raw){ toast("등록할 내용을 한 줄로 적어주세요"); return; }
+    const btn=$("aaAI"); btn.disabled=true; btn.textContent="해석 중…";
+    // 규칙 폴백 — URL·이름·위치 단서
+    const um=/(https?:\/\/\S+|[\w.-]+\.html)\b/i.exec(raw);
+    let guess={kind:/앱|app/i.test(raw)?"app":"site",
+      name:raw.replace(um?um[1]:"","").replace(/상단 ?탭|프로젝트 ?카드|으?로|등록|추가|해줘|해주세요/g,"").trim().slice(0,30),
+      url:um?um[1]:"",desc:"",tab:!/프로젝트 ?카드만/.test(raw),proj:!/탭만|상단 ?탭만/.test(raw)};
+    try{
+      const sys='앱·사이트 등록 폼 채우기. 사용자의 한 줄 요청에서 값을 추출해 순수 JSON만 출력: {"kind":"app|site","name":"표시 이름","url":"주소 그대로","desc":"한 줄 설명(없으면 빈값)","tab":true|false(상단 탭 등록),"proj":true|false(프로젝트 카드 등록)}. 언급 없으면 tab·proj 모두 true.';
+      const o=await callClaude(sys,raw,300,{noPrompt:true});
+      const j=JSON.parse(String(o).replace(/```json|```/g,"").trim());
+      if(j&&j.url) guess=j;
+    }catch(_){/* AI 불가 시 규칙 폴백 사용 */}
+    $("aa_kind").value=guess.kind==="app"?"app":"site";
+    $("aa_name").value=guess.name||"";
+    $("aa_url").value=guess.url||"";
+    $("aa_desc").value=guess.desc||"";
+    $("aa_tab").checked=guess.tab!==false;
+    $("aa_proj").checked=guess.proj!==false;
+    $("aa_msg").textContent="AI가 채웠습니다 — 내용 확인 후 [추가]를 누르세요.";
+    btn.disabled=false; btn.textContent="AI로 채우기";
+  };
+  $("aaSave").onclick=()=>{
       const name=($("aa_name").value||"").trim();
       const url=($("aa_url").value||"").trim();
       const desc=($("aa_desc").value||"").trim();
