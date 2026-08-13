@@ -569,7 +569,7 @@ body{letter-spacing:-0.015em;}
   <div class="tab" data-tab="projects">프로젝트</div>
   <div class="tab" data-tab="schedule">일정</div>
   <div class="tab" data-tab="lit">문헌</div>
-  <div class="tab" data-tab="console">진행 콘솔 <span class="badge" id="segBadge">0</span></div>
+  <div class="tab" data-tab="console">AI 회의록 <span class="badge" id="segBadge">0</span></div>
   <div class="tab" data-tab="email">회의록·이메일</div>
 </div>
 
@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=91, BUILD_DATE="2026-07-22";
+const BUILD=92, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1078,7 +1078,7 @@ const INVITEE_GUIDE_TEXT=[
 "3) 회의 참여 방법",
 "   · 회의 목록에서 초대된 회의를 선택합니다.",
 "   · [사전 준비] 탭에서 자료를 [바로보기]로 확인합니다 (PPT는 사이트 안에서, txt·md는 미리보기 창으로 열립니다).",
-"   · [진행 콘솔] 탭에서 타이핑 메모와 음성 녹취(권한 허용 시)가 가능합니다.",
+"   · [AI 회의록] 탭에서 타이핑 메모와 음성 녹취(권한 허용 시)가 가능합니다.",
 "",
 "4) AI 기능",
 "   로그인만 하면 공유 AI(운영자 프록시)를 쓸 수 있습니다.",
@@ -1104,7 +1104,7 @@ function openInviteeGuide(){
       <div style="overflow:auto;padding:16px 18px">
         ${row(1,"최신 버전 받기 (사이트 수정사항 반영)","사이트가 예전 화면 그대로라면 강력 새로고침을 해주세요.<br>· PC(Chrome·Edge): <b>Ctrl+Shift+R</b> (Mac: Cmd+Shift+R)<br>· 휴대폰: 브라우저 설정 → 인터넷 사용 기록 → 캐시 삭제 후 재접속")}
         ${row(2,"로그인 (구글 또는 아무 이메일 · 별도 가입 절차 없음)","· 숙명 구성원: <b>@sookmyung.ac.kr</b> 구글 계정으로 로그인<br>· 거래처·기관: <b>초대받은 이메일의 구글 계정</b>으로 로그인 (개최자가 참석자로 등록한 이메일만 허용 — 초대 이메일과 로그인 계정이 같아야 합니다)<br>· <b>구글 계정이 없어도 가입됩니다</b>: 네이버·다음 등 초대받은 어떤 이메일이든 <b>[초대 이메일로 로그인]</b>을 누르면 그 주소로 메일이 가고, 메일 안의 <b>[Sign in]</b> 버튼을 누르면 계정이 자동 생성되며 로그인됩니다. (메일에 6자리 코드가 있으면 코드 입력도 가능)")}
-        ${row(3,"회의 참여 방법","회의 목록에서 초대된 회의를 선택합니다. [사전 준비] 탭에서 자료를 [바로보기]로 확인하고(PPT는 사이트 안에서, txt·md는 미리보기 창으로), [진행 콘솔] 탭에서 타이핑 메모와 음성 녹취(권한 허용 시)가 가능합니다. 녹취가 안 되는 환경에서는 입력칸에서 휴대폰 키보드의 마이크(받아쓰기)를 쓰거나, 녹음 앱 전사본(txt)을 수기 회의록에 첨부해 [AI 정리]하면 됩니다.")}
+        ${row(3,"회의 참여 방법","회의 목록에서 초대된 회의를 선택합니다. [사전 준비] 탭에서 자료를 [바로보기]로 확인하고(PPT는 사이트 안에서, txt·md는 미리보기 창으로), [AI 회의록] 탭에서 타이핑 메모와 음성 녹취(권한 허용 시)가 가능합니다. 녹취가 안 되는 환경에서는 입력칸에서 휴대폰 키보드의 마이크(받아쓰기)를 쓰거나, 녹음 앱 전사본(txt)을 수기 회의록에 첨부해 [AI 정리]하면 됩니다.")}
         ${row(4,"AI 기능","로그인만 하면 공유 AI(운영자 프록시)를 쓸 수 있습니다. 동작하지 않으면 [사전 준비] 탭의 <b>[AI 연결 점검]</b>으로 상태를 확인해 주세요.")}
         ${row(5,"문의","서면(이메일)으로 진행 가능합니다: <b>hyunjeong.shin@sookmyung.ac.kr</b>")}
       </div>
@@ -1708,7 +1708,7 @@ function homeHTML(){
        <div class="grid g2" style="gap:8px">
          <button class="b-ghost" onclick="switchTab('prep')">사전 준비</button>
          <button class="b-ghost" onclick="switchTab('deck')">슬라이드</button>
-         <button class="b-ghost" onclick="switchTab('console')">진행 콘솔</button>
+         <button class="b-ghost" onclick="switchTab('console')">AI 회의록</button>
          <button class="b-ghost" onclick="switchTab('email')">회의록</button>
        </div>
        <div class="mini" style="margin-top:10px">화면을 그대로 공유하면 참석자와 함께 보실 수 있습니다.</div>
@@ -2843,14 +2843,14 @@ function todayHTML(){
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${cur&&cur.id===m.id?"":`<button class="b-deep" data-pick="${m.id}">이 회의로 전환</button>`}
         <button class="b-mint" data-goprep="${m.id}">사전 준비</button>
-        <button class="b-mint" data-gocon="${m.id}">진행 콘솔</button>
+        <button class="b-mint" data-gocon="${m.id}">AI 회의록</button>
         <button class="b-ghost" data-inv="${m.id}">초대문 복사</button>
       </div>
     </div>`;
   return `<div class="today">
    <div class="section-title">Today · 금일 회의</div>
    <h2 style="font-size:23px;color:var(--ink);margin-bottom:4px">${esc(fmtDate(t))} 오늘의 회의</h2>
-   <div class="mini" style="margin-bottom:14px">오늘 예정된 회의를 확인하고, [이 회의로 전환] 후 사전 준비·진행 콘솔로 이동하세요. 녹취와 회의록 작성은 <b>진행 콘솔</b>에서 합니다.</div>
+   <div class="mini" style="margin-bottom:14px">오늘 예정된 회의를 확인하고, [이 회의로 전환] 후 사전 준비·AI 회의록로 이동하세요. 녹취와 회의록 작성은 <b>AI 회의록</b>에서 합니다.</div>
    ${todays.length?todays.map(m=>card(m,"오늘")).join("")
      :`<div class="glass tile" style="margin-bottom:10px"><div class="mini">오늘 예정된 회의가 없습니다.</div></div>`}
    ${(!todays.length&&upcoming.length)?`<div class="section-title" style="margin-top:8px">다가오는 회의</div>`+upcoming.slice(0,3).map(m=>card(m,"")).join(""):""}
