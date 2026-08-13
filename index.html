@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=82, BUILD_DATE="2026-07-22";
+const BUILD=83, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1146,7 +1146,7 @@ function scheduleHTML(){
   return `<div class="hero">
    <div class="section-title">Schedule · 일정</div>
    <h2 style="font-size:23px;color:var(--ink);margin-bottom:4px">목표 일정과 진행 기록</h2>
-   <div class="mini" style="margin-bottom:16px">목표(마일스톤)에 날짜를 정하고, 아래 진행 기록에서 무엇을 했는지 확인합니다. 회의·프로젝트는 자동으로 카드가 만들어지고, 그 외 작업은 직접 추가할 수 있습니다.</div>
+   <div class="mini" style="margin-bottom:16px">각자 자기 목표·작업을 등록하고 <b>나만 보기 / 같이 보기(공유)</b>를 선택합니다. 체크박스로 완료(한 일/안 한 일)를 표시하고, 링크를 붙이면 참석자가 함께 열어볼 수 있습니다. 회의·프로젝트 카드는 자동 생성됩니다.</div>
 
    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
      <h4 style="margin:0">목표 일정</h4>
@@ -1163,27 +1163,39 @@ function scheduleHTML(){
    <div id="doneList"></div>
   </div>`;
 }
+function schedCanTouch(x){ return (x.oid?x.oid===state.user.id:false)||state.user.role==="host"||state.user.role==="operator"; }
+function schedVisible(x){ return (x.vis||"shared")!=="private"||x.oid===state.user.id; }
+function visBadge(x){
+  return (x.vis==="private")
+    ? '<span class="tag" style="background:#8892a0;color:#fff">나만</span>'
+    : (x.oname?`<span class="tag" style="background:#eef4f2;color:var(--deep)">${esc(x.oname)}</span>`:"");
+}
 function renderGoals(){
   const box=$("goalList"); if(!box) return;
   const canEdit=state.user.role==="operator"||state.user.role==="host";
-  const gs=(state.schedule.goals||[]).slice().sort((a,b)=>String(a.date||"9999").localeCompare(String(b.date||"9999")));
-  box.innerHTML=gs.length?gs.map(g=>`
-    <div class="glass tile" style="margin-bottom:8px;display:flex;gap:12px;align-items:center">
+  const gs=(state.schedule.goals||[]).filter(schedVisible).slice().sort((a,b)=>String(a.date||"9999").localeCompare(String(b.date||"9999")));
+  box.innerHTML=gs.length?gs.map(g=>{const mine=schedCanTouch(g);const doneG=g.status==="완료";return `
+    <div class="glass tile" style="margin-bottom:8px;display:flex;gap:12px;align-items:center;${doneG?"opacity:.62":""}">
+      <input type="checkbox" ${doneG?"checked":""} ${mine?"":"disabled"} data-gchk="${g.id}" title="완료 체크" style="flex:none;width:17px;height:17px;accent-color:var(--mint);cursor:${mine?"pointer":"default"}">
       <div style="flex:none;width:64px;text-align:center">
         <div style="font-weight:800;color:${goalColor(g)};font-size:13px">${dday(g.date)||"—"}</div>
         <div class="mini">${esc(fmtDate(g.date))}</div>
       </div>
       <div style="flex:1">
-        <div style="font-weight:800;color:var(--deep);font-size:13.5px">${esc(g.title)} <span class="tag" style="background:${goalColor(g)};color:#fff">${esc(g.status||"예정")}</span></div>
+        <div style="font-weight:800;color:var(--deep);font-size:13.5px;${doneG?"text-decoration:line-through":""}">${esc(g.title)} <span class="tag" style="background:${goalColor(g)};color:#fff">${esc(g.status||"예정")}</span> ${visBadge(g)}</div>
         ${g.memo?`<div class="mini" style="margin-top:2px">${esc(g.memo)}</div>`:""}
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
         ${linkBtn(g.url)}
-        ${canEdit?`<button class="b-ghost" style="padding:4px 10px;font-size:12px" data-gedit="${g.id}">수정</button>
+        ${mine?`<button class="b-ghost" style="padding:4px 10px;font-size:12px" data-gedit="${g.id}">수정</button>
         <button class="b-ghost" style="padding:4px 10px;font-size:12px" data-grm="${g.id}">삭제</button>`:""}
       </div>
-    </div>`).join("")
+    </div>`;}).join("")
     :'<div class="mini" style="margin-bottom:8px">아직 목표가 없습니다. [+ 목표 추가]로 마일스톤과 날짜를 등록하세요.</div>';
+  box.querySelectorAll("[data-gchk]").forEach(c=>c.onchange=async()=>{
+    const g=state.schedule.goals.find(x=>x.id===c.dataset.gchk); if(!g)return;
+    g.status=c.checked?"완료":"진행"; await saveNow(); renderGoals();
+  });
   box.querySelectorAll("[data-gedit]").forEach(b=>b.onclick=()=>openGoalForm(b.dataset.gedit));
   box.querySelectorAll("[data-grm]").forEach(b=>b.onclick=async()=>{
     const g=state.schedule.goals.find(x=>x.id===b.dataset.grm); if(!g)return;
@@ -1203,6 +1215,12 @@ function openGoalForm(id){
         ${["예정","진행","완료"].map(s=>`<option ${g&&g.status===s?"selected":""}>${s}</option>`).join("")}
       </select>
     </div>
+    <div style="margin-bottom:8px">
+      <select id="gf_vis" style="padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
+        <option value="shared" ${!g||g.vis!=="private"?"selected":""}>회의 참석자와 같이 보기 (공유)</option>
+        <option value="private" ${g&&g.vis==="private"?"selected":""}>나만 보기</option>
+      </select>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
       <input id="gf_url" placeholder="링크 (선택 — https:// 또는 파일명.html)" value="${g?esc(g.url||""):''}" style="padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
       <input id="gf_memo" placeholder="메모 (선택)" value="${g?esc(g.memo||""):''}" style="padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
@@ -1215,8 +1233,8 @@ function openGoalForm(id){
   $("gfCancel").onclick=()=>{box.style.display="none";box.innerHTML="";};
   $("gfSave").onclick=async()=>{
     const title=($("gf_title").value||"").trim(); if(!title){toast("목표를 입력하세요");return;}
-    const o={title,date:$("gf_date").value||"",status:$("gf_status").value,url:($("gf_url").value||"").trim(),memo:($("gf_memo").value||"").trim()};
-    if(g)Object.assign(g,o); else state.schedule.goals.push(Object.assign({id:"g_"+Date.now()},o));
+    const o={title,date:$("gf_date").value||"",status:$("gf_status").value,url:($("gf_url").value||"").trim(),memo:($("gf_memo").value||"").trim(),vis:$("gf_vis").value};
+    if(g)Object.assign(g,o); else state.schedule.goals.push(Object.assign({id:"g_"+Date.now(),oid:state.user.id,oname:state.user.name},o));
     await saveNow(); box.style.display="none"; box.innerHTML=""; renderGoals();
   };
   $("gf_title").focus();
@@ -1231,8 +1249,8 @@ function doneItems(){
   (state.projects||[]).filter(p=>cm?(p.meeting===cm.id):true).forEach(p=>{           // 이 회의에서 만든 프로젝트만
     items.push({kind:"프로젝트",dt:"",sort:p.id,title:p.title+" ("+(p.status||"제안")+")",desc:p.desc||"",act:(p.url?linkBtn(p.url,shortName(p.url)):"")+(p.url2?linkBtn(p.url2,shortName(p.url2)):"")});
   });
-  (state.schedule.done||[]).forEach(d=>{
-    items.push({kind:"작업",dt:d.dt||"",sort:d.id,title:d.title,desc:d.memo||"",act:linkBtn(d.url),id:d.id,manual:true});
+  (state.schedule.done||[]).filter(schedVisible).forEach(d=>{
+    items.push({kind:"작업",dt:d.dt||"",sort:d.id,title:d.title,desc:d.memo||"",act:linkBtn(d.url),id:d.id,manual:true,d});
   });
   return items.sort((a,b)=>String(b.sort).localeCompare(String(a.sort)));   // 최신순 (id에 타임스탬프 포함)
 }
@@ -1263,18 +1281,23 @@ function renderDone(){
   const KC={"회의":"var(--deep)","프로젝트":"var(--mint)","작업":"var(--gold)"};
   box.innerHTML=items.length?items.map(it=>`
     <div class="glass tile" style="margin-bottom:8px;display:flex;gap:12px;align-items:flex-start">
+      ${it.manual?`<input type="checkbox" ${it.d&&it.d.done!==false?"checked":""} ${schedCanTouch(it.d||{})?"":"disabled"} data-dchk="${it.id}" title="한 일/안 한 일 체크" style="flex:none;width:17px;height:17px;margin-top:3px;accent-color:var(--gold);cursor:pointer">`:""}
       <span class="tag" style="flex:none;background:${KC[it.kind]};color:#fff;margin-top:2px">${it.kind}</span>
       <div style="flex:1">
-        <div style="font-weight:800;color:var(--deep);font-size:13.5px">${esc(it.title)}</div>
+        <div style="font-weight:800;color:var(--deep);font-size:13.5px;${it.manual&&it.d&&it.d.done===false?"":""}${it.manual&&it.d&&it.d.done!==false?"":""}">${esc(it.title)} ${it.d?visBadge(it.d):""} ${it.manual&&it.d&&it.d.done===false?'<span class="tag" style="background:#C24A4A;color:#fff">안 한 일</span>':""}</div>
         ${it.dt?`<div class="mini">${esc(it.dt)}</div>`:""}
         ${it.desc?`<div class="mini" style="margin-top:2px;line-height:1.5">${esc(String(it.desc).slice(0,160))}</div>`:""}
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
         ${it.act||""}
-        ${(it.manual&&canEdit)?`<button class="b-ghost" style="padding:4px 10px;font-size:12px" data-dedit="${it.id}">수정</button><button class="b-ghost" style="padding:4px 10px;font-size:12px;color:#C24A4A" data-drm="${it.id}">삭제</button>`:""}
+        ${(it.manual&&schedCanTouch(it.d||{}))?`<button class="b-ghost" style="padding:4px 10px;font-size:12px" data-dedit="${it.id}">수정</button><button class="b-ghost" style="padding:4px 10px;font-size:12px;color:#C24A4A" data-drm="${it.id}">삭제</button>`:""}
       </div>
     </div>`).join("")
     :'<div class="mini">아직 기록이 없습니다. 회의를 종료하거나 프로젝트를 추가하면 자동으로 쌓이고, [+ 한 일 추가]로 직접 적을 수도 있습니다.</div>';
+  box.querySelectorAll("[data-dchk]").forEach(c=>c.onchange=async()=>{
+    const d=state.schedule.done.find(x=>x.id===c.dataset.dchk); if(!d)return;
+    d.done=c.checked; await saveNow(); renderDone();
+  });
   box.querySelectorAll("[data-drm]").forEach(b=>b.onclick=async()=>{
     if(!confirm("이 기록을 삭제할까요?"))return;
     state.schedule.done=state.schedule.done.filter(x=>x.id!==b.dataset.drm);
@@ -1297,6 +1320,16 @@ function openDoneForm(){
       <input id="df_url" placeholder="링크 (선택)" style="padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
     </div>
     <input id="df_memo" placeholder="메모 (선택)" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px;margin-bottom:8px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <select id="df_vis" style="padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
+        <option value="shared">회의 참석자와 같이 보기 (공유)</option>
+        <option value="private">나만 보기</option>
+      </select>
+      <select id="df_done" style="padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
+        <option value="1">한 일</option>
+        <option value="0">안 한 일 (할 일)</option>
+      </select>
+    </div>
     <div style="display:flex;gap:7px;justify-content:flex-end">
       <button class="b-ghost" id="dfCancel">취소</button>
       <button class="b-mint" id="dfSave">추가</button>
@@ -1305,7 +1338,7 @@ function openDoneForm(){
   $("dfCancel").onclick=()=>{box.style.display="none";box.innerHTML="";};
   $("dfSave").onclick=async()=>{
     const title=($("df_title").value||"").trim(); if(!title){toast("내용을 입력하세요");return;}
-    state.schedule.done.push({id:"d_"+Date.now(),dt:new Date().toLocaleDateString('ko-KR'),title,url:($("df_url").value||"").trim(),memo:($("df_memo").value||"").trim()});
+    state.schedule.done.push({id:"d_"+Date.now(),dt:new Date().toLocaleDateString('ko-KR'),title,url:($("df_url").value||"").trim(),memo:($("df_memo").value||"").trim(),vis:$("df_vis").value,done:$("df_done").value==="1",oid:state.user.id,oname:state.user.name});
     await saveNow(); box.style.display="none"; box.innerHTML=""; renderDone();
   };
   $("df_title").focus();
