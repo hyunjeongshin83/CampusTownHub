@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=87, BUILD_DATE="2026-07-22";
+const BUILD=88, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -3126,9 +3126,26 @@ function renderDevBoard(host){
   if(db.repo) loadDevIssues(db);
   else $("dbBody").innerHTML='<div class="mini">저장소를 입력하고 [저장]하면 이슈 대시보드가 나타납니다.</div>';
 }
+// 결과 화면 주소 자동 탐색 — GitHub의 homepage 설정 → Pages(index.html) 순
+async function autoDetectSite(db){
+  if(db.site||db.noSite) return db;
+  try{
+    const r=await fetch("https://api.github.com/repos/"+db.repo,{headers:ghHeaders()});
+    if(!r.ok) return db;
+    const d=await r.json();
+    if(d.homepage) db.site=d.homepage;
+    else if(d.has_pages) db.site="https://"+d.owner.login.toLowerCase()+".github.io/"+d.name+"/";
+    else db.noSite=true;
+    db.lang=d.language||"";
+    state.devBoard=db; scheduleSave();
+  }catch(_){/* 감지 실패 — 수동 입력으로 */}
+  return db;
+}
 async function loadDevIssues(db){
   const body=$("dbBody"); if(!body)return;
   body.innerHTML='<div class="mini">이슈를 불러오는 중…</div>';
+  db=await autoDetectSite(db);
+  const siteEl=$("dbSite"); if(siteEl&&db.site&&!siteEl.value) siteEl.value=db.site;
   let issues=[];
   try{
     const r=await fetch("https://api.github.com/repos/"+db.repo+"/issues?state=all&per_page=30&sort=updated",{headers:ghHeaders()});
@@ -3186,13 +3203,26 @@ async function loadDevIssues(db){
 function devTokenRow(){
   const has=!!ghTok();
   return `<div class="mini" style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-    <span>이슈 등록${has?" 사용 가능 (토큰 등록됨)":"에는 GitHub 토큰이 필요합니다 (이 브라우저에만 저장)"}</span>
+    <span>이슈 등록${has?" 사용 가능 (토큰 등록됨)":"에는 GitHub 토큰이 필요합니다"}</span>
+    <span id="tokGuideT" style="font-weight:800;color:var(--soft);cursor:pointer;user-select:none">▸ 토큰이 뭔가요? 발급 방법 (1분)</span>
     <input id="dbTok" type="password" placeholder="${has?"토큰 변경…":"github_pat_… 붙여넣기"}" style="min-width:180px;padding:5px 9px;border:1px solid var(--line);border-radius:8px;font-size:12px;font-family:inherit">
     <button class="b-ghost" id="dbTokSave" style="padding:4px 10px;font-size:12px">${has?"변경":"등록"}</button>
     ${has?'<button class="b-ghost" id="dbTokDel" style="padding:4px 10px;font-size:12px;color:#C24A4A">삭제</button>':""}
+  </div>
+  <div id="tokGuideW" style="display:none;margin-top:6px;background:var(--pale);border-radius:11px;padding:11px 14px;line-height:1.8;font-size:12px;color:var(--ink)">
+    <b>토큰 = 내 GitHub 계정 대신 서명해 주는 열쇠</b>입니다. <b>각자 자기 계정의 토큰</b>을 넣으세요 — 그래야 이슈가 자기 이름으로 등록됩니다.<br>
+    토큰은 <b>이 브라우저에만</b> 저장되며, 사이트 서버나 다른 사람에게 전송되지 않습니다.<br><br>
+    <b>발급 (1분):</b><br>
+    ① <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" style="color:var(--mint);font-weight:700">github.com/settings/personal-access-tokens/new</a> 접속 (GitHub 로그인)<br>
+    ② Token name: 아무 이름 / Expiration: <b>90 days</b><br>
+    ③ Repository access: <b>Only select repositories</b> → 이슈를 쓸 저장소 선택<br>
+    ④ Permissions → Repository permissions → <b>Issues: Read and write</b><br>
+    ⑤ [Generate token] → 나온 <b>github_pat_…</b> 복사 → 위 칸에 붙여넣고 [등록]
   </div>`;
 }
 function bindDevToken(db){
+  const gt=$("tokGuideT");
+  if(gt)gt.onclick=()=>{const w=$("tokGuideW");const o=w.style.display==="none";w.style.display=o?"":"none";gt.textContent=(o?"▾":"▸")+" 토큰이 뭔가요? 발급 방법 (1분)";};
   const s=$("dbTokSave"); if(s)s.onclick=()=>{ const v=($("dbTok").value||"").trim(); if(!v){toast("토큰을 붙여넣으세요");return;}
     try{localStorage.setItem("medit:ghtok",v);}catch(e){} toast("토큰을 이 브라우저에 저장했습니다"); loadDevIssues(db); };
   const d=$("dbTokDel"); if(d)d.onclick=()=>{ try{localStorage.removeItem("medit:ghtok");}catch(e){} toast("토큰을 삭제했습니다"); loadDevIssues(db); };
