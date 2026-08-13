@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=84, BUILD_DATE="2026-07-22";
+const BUILD=85, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -2994,10 +2994,29 @@ function renderDevBoard(host){
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
       <input id="dbRepo" placeholder="저장소 (예: hyunjeongshin83/ChewGumiSite)" value="${esc(db.repo||"")}" ${canEdit?"":"disabled"} style="flex:1;min-width:220px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;font-size:12.5px;font-family:inherit">
       <input id="dbSite" placeholder="배포 사이트 주소 (예: https://….github.io/ChewGumiSite/)" value="${esc(db.site||"")}" ${canEdit?"":"disabled"} style="flex:1;min-width:220px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;font-size:12.5px;font-family:inherit">
-      ${canEdit?'<button class="b-mint" id="dbSave" style="padding:7px 14px">저장</button>':""}
+      ${canEdit?'<button class="b-ghost" id="dbDetect" style="padding:7px 12px" title="GitHub에서 이 저장소의 결과 화면(homepage 설정 → Pages 주소)을 찾아 자동 연결합니다">결과 화면 자동 감지</button><button class="b-mint" id="dbSave" style="padding:7px 14px">저장</button>':""}
     </div>
     <div id="dbBody"></div>`;
   host.appendChild(el);
+  if(canEdit&&$("dbDetect"))$("dbDetect").onclick=async()=>{
+    const repoIn=($("dbRepo").value||"").trim().replace(/^https:\/\/github\.com\//,"").replace(/\/$/,"");
+    if(!repoIn){toast("먼저 저장소를 입력하세요");return;}
+    $("dbDetect").disabled=true; $("dbDetect").textContent="감지 중…";
+    try{
+      const r=await fetch("https://api.github.com/repos/"+repoIn,{headers:ghHeaders()});
+      if(!r.ok)throw new Error(r.status===404?"저장소를 찾을 수 없습니다":"GitHub "+r.status);
+      const d=await r.json();
+      let site="",how="";
+      if(d.homepage){ site=d.homepage; how="저장소 homepage 설정"; }
+      else if(d.has_pages){ site="https://"+d.owner.login.toLowerCase()+".github.io/"+d.name+"/"; how="GitHub Pages (index.html 서빙)"; }
+      state.devBoard={repo:repoIn,site,lang:d.language||"",noSite:!site};
+      $("dbRepo").value=repoIn; $("dbSite").value=site;
+      scheduleSave();
+      toast(site?("결과 화면 감지: "+how):("배포 화면 없음 — 언어 "+(d.language||"?")+" · README를 결과로 표시합니다"));
+      loadDevIssues(state.devBoard);
+    }catch(e){ toast("감지 실패: "+(e.message||e)); }
+    $("dbDetect").disabled=false; $("dbDetect").textContent="결과 화면 자동 감지";
+  };
   if(canEdit)$("dbSave").onclick=()=>{
     state.devBoard={repo:($("dbRepo").value||"").trim().replace(/^https:\/\/github\.com\//,"").replace(/\/$/,""),site:($("dbSite").value||"").trim()};
     scheduleSave(); toast("개발 보드 설정을 저장했습니다"); renderDevBoard(host);
@@ -3037,7 +3056,18 @@ async function loadDevIssues(db){
       <a class="b-ghost" style="padding:4px 11px;font-size:12px;text-decoration:none" href="${esc(db.site)}" target="_blank">새 탭에서 열기</a>
     </div>
     <iframe id="dbFrame" src="${esc(db.site)}" style="width:100%;height:520px;border:1px solid var(--line);border-radius:12px;background:#fff"></iframe>
-    <div class="mini" style="margin-top:4px">화면이 비어 보이면 해당 사이트가 iframe 표시를 막는 것입니다 — [새 탭에서 열기]를 쓰세요.</div>`:""}`;
+    <div class="mini" style="margin-top:4px">화면이 비어 보이면 해당 사이트가 iframe 표시를 막는 것입니다 — [새 탭에서 열기]를 쓰세요.</div>`
+    :`<div style="display:flex;gap:6px;align-items:center;margin:14px 0 6px">
+      <b style="font-size:13px;color:var(--deep)">결과 — README${db.lang?` <span class="tag" style="background:#eef4f2;color:var(--deep)">${esc(db.lang)}</span>`:""}</b>
+      <span class="mini">배포 화면(Pages·homepage)이 없는 저장소입니다${db.lang==="Python"?" — 파이썬 실행 화면은 서버 배포가 있어야 표시할 수 있어, 대신 README를 보여드립니다":""}</span>
+    </div>
+    <div id="dbReadme" class="mini" style="white-space:pre-wrap;max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff;line-height:1.65;color:var(--ink)">README 불러오는 중…</div>`}`;
+  if(!db.site){
+    fetch("https://api.github.com/repos/"+db.repo+"/readme",{headers:{...ghHeaders(),"Accept":"application/vnd.github.raw+json"}})
+      .then(r=>r.ok?r.text():Promise.reject(r.status))
+      .then(t=>{const el=$("dbReadme");if(el)el.textContent=t.slice(0,20000);})
+      .catch(()=>{const el=$("dbReadme");if(el)el.textContent="README가 없거나 읽을 수 없습니다 — [GitHub에서 열기]로 확인하세요.";});
+  }
   $("dbReload").onclick=()=>loadDevIssues(db);
   const fr=$("dbFrameReload"); if(fr)fr.onclick=()=>{ const f=$("dbFrame"); if(f)f.src=f.src; };
   $("dbNew").onclick=()=>openIssueForm(db);
