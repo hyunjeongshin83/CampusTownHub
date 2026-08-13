@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=90, BUILD_DATE="2026-07-22";
+const BUILD=91, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -3481,12 +3481,7 @@ function openProjectForm(id){
       <div class="pf-row">
         <div><label>연결할 페이지 ① <span style="font-weight:500">(선택)</span></label>
           <input id="pf_url" list="pf_urls" placeholder="예: mypage.html 또는 https://…" value="${p?esc(p.url||""):''}">
-          <datalist id="pf_urls">
-            <option value="registry.html">약사 참여 등록 사이트</option>
-            <option value="MediNote_app.html">복약·접종 앱 (MediNote)</option>
-            <option value="demo.html">복약·접종 앱 데모</option>
-            <option value="selftest.html">자가진단</option>
-          </datalist>
+          <datalist id="pf_urls"></datalist>
         </div>
         <div><label>연결할 페이지 ② <span style="font-weight:500">(선택 — 2개면 나란히 보기 가능)</span></label>
           <input id="pf_url2" list="pf_urls" placeholder="예: page2.html (선택)" value="${p?esc(p.url2||""):''}"></div>
@@ -5182,12 +5177,7 @@ function openAddAppSite(){
             <input id="aa_name" placeholder="예: 팀 사이트" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
           <div><label style="font-size:12.5px;font-weight:700;color:var(--deep)">주소 (HTML 파일명 또는 https)</label>
             <input id="aa_url" list="aa_urls" placeholder="예: mypage.html 또는 https://…" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
-            <datalist id="aa_urls">
-              <option value="MediNote_app.html">복약·접종 앱 (MediNote)</option>
-              <option value="demo.html">복약·접종 앱 데모</option>
-              <option value="registry.html">약사 참여 등록 사이트</option>
-              <option value="ux-tester.html">UX 테스터</option>
-            </datalist></div>
+            <datalist id="aa_urls"></datalist></div>
           <div><label style="font-size:12.5px;font-weight:700;color:var(--deep)">설명 (선택)</label>
             <input id="aa_desc" placeholder="한 줄 설명" style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
           <label class="mini" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="aa_tab" checked> 상단 탭으로 등록</label>
