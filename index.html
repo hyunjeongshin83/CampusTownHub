@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=97, BUILD_DATE="2026-07-22";
+const BUILD=98, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -2563,7 +2563,9 @@ function renderWebSlides(){
       <b style="font-size:14.5px;color:var(--deep)">웹 슬라이드</b>
       <span class="mini">AI로 이 회의의 발표 슬라이드를 만들고 편집합니다 (회의별 저장)</span>
       ${canEdit?`<button class="b-mint" id="wsGen" style="padding:5px 13px;font-size:12.5px">AI로 슬라이드 만들기</button>`:""}
-      ${ws.length?`<button class="b-deep" id="wsPlay" style="padding:5px 13px;font-size:12.5px">발표 모드</button>`:""}
+      ${ws.length?`<button class="b-deep" id="wsPlay" style="padding:5px 13px;font-size:12.5px">발표 모드</button>
+      <button class="b-mint" id="wsAuto" style="padding:5px 13px;font-size:12.5px" title="음성(TTS)이 각 장을 읽고 자동으로 넘어갑니다">자동 발표</button>
+      <select id="wsVoice" title="발표 음성 선택" style="padding:6px 9px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12px;max-width:170px"></select>`:""}
       ${(canEdit&&ws.length)?`<button class="b-ghost" id="wsClear" style="padding:5px 11px;font-size:12px;color:#C24A4A">전체 삭제</button>`:""}
     </div>
     ${ws.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px">
@@ -2583,7 +2585,9 @@ function renderWebSlides(){
     :'<div class="mini">아직 웹 슬라이드가 없습니다 — [AI로 슬라이드 만들기]에 주제를 넣으면 5~8장을 깔끔하게 구성해 드립니다.</div>'}
   </div>`;
   const g=$("wsGen"); if(g)g.onclick=openWsGen;
-  const p=$("wsPlay"); if(p)p.onclick=playWebSlides;
+  const p=$("wsPlay"); if(p)p.onclick=()=>playWebSlides(false);
+  const au=$("wsAuto"); if(au)au.onclick=()=>playWebSlides(true);
+  fillWsVoices();
   const c=$("wsClear"); if(c)c.onclick=()=>{ if(!confirm("웹 슬라이드를 전부 삭제할까요?"))return; state.webSlides=[]; scheduleSave(); renderWebSlides(); };
   sec.querySelectorAll("[data-wsrm]").forEach(b=>b.onclick=()=>{ state.webSlides.splice(Number(b.dataset.wsrm),1); scheduleSave(); renderWebSlides(); });
   sec.querySelectorAll("[data-wsedit]").forEach(b=>b.onclick=()=>{
@@ -2630,7 +2634,32 @@ function openWsGen(){
     }catch(e){ toast("슬라이드 생성 실패: "+(e.message||e)); }
   })();
 }
-function playWebSlides(){
+// 음성 목록 — 한국어 음성 전부 나열해 선택 (선택은 이 브라우저에 저장)
+function fillWsVoices(){
+  const sel=$("wsVoice"); if(!sel)return;
+  const load=()=>{
+    const vs=(window.speechSynthesis&&speechSynthesis.getVoices()||[]).filter(v=>/ko/i.test(v.lang));
+    if(!vs.length){ sel.innerHTML='<option value="">기본 음성</option>'; return; }
+    const saved=localStorage.getItem("medit:ttsvoice")||"";
+    sel.innerHTML=vs.map(v=>`<option value="${esc(v.name)}" ${v.name===saved?"selected":""}>${esc(v.name.replace(/Microsoft |Google /,""))}</option>`).join("");
+  };
+  load();
+  if(window.speechSynthesis) speechSynthesis.onvoiceschanged=load;
+  sel.onchange=()=>localStorage.setItem("medit:ttsvoice",sel.value);
+}
+function wsSpeak(text,onend){
+  try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang="ko-KR"; u.rate=0.95;
+    const name=localStorage.getItem("medit:ttsvoice")||"";
+    const v=(speechSynthesis.getVoices()||[]).find(x=>x.name===name);
+    if(v)u.voice=v;
+    u.onend=onend; u.onerror=onend;
+    speechSynthesis.speak(u);
+  }catch(_){ onend&&onend(); }
+}
+function playWebSlides(auto){
   const ws=state.webSlides||[]; if(!ws.length)return;
   let idx=0;
   let ov=$("wsPlayOv"); if(ov)ov.remove();
@@ -2644,11 +2673,14 @@ function playWebSlides(){
       <div style="position:fixed;bottom:18px;right:24px;font-size:13px;opacity:.7">${idx+1} / ${ws.length} — 클릭·→ 다음, ESC 종료</div>
     </div>`; };
   draw(); document.body.appendChild(ov);
-  const next=()=>{ if(idx<ws.length-1){idx++;draw();} else close(); };
-  const prev=()=>{ if(idx>0){idx--;draw();} };
+  const speakCur=()=>{ const s=ws[idx]; wsSpeak(s.t+". "+(s.pts||[]).join(". "),()=>{ if(auto){ if(idx<ws.length-1){idx++;draw();speakCur();} else close(); } }); };
+  const next=()=>{ if(idx<ws.length-1){idx++;draw(); if(auto)speakCur();} else close(); };
+  const prev=()=>{ if(idx>0){idx--;draw(); if(auto)speakCur();} };
   const key=e=>{ if(e.key==="ArrowRight"||e.key===" ")next(); else if(e.key==="ArrowLeft")prev(); else if(e.key==="Escape")close(); };
-  const close=()=>{ document.removeEventListener("keydown",key); ov.remove(); };
+  const close=()=>{ try{speechSynthesis.cancel();}catch(_){}
+    document.removeEventListener("keydown",key); ov.remove(); };
   ov.onclick=next; document.addEventListener("keydown",key);
+  if(auto)speakCur();
 }
 window.renderWebSlides=renderWebSlides;
 function deckHTML(){
@@ -2736,7 +2768,7 @@ function renderOutreachPanel(sub,set){
         <button class="b-ghost" data-odel="${esc(o.id)}" style="padding:3px 7px;font-size:11px;color:#C24A4A">삭제</button>`:""}
       </span>`).join("")
     +(canEdit?`<button class="msb" id="oAdd" style="border-style:dashed">+ 아웃리치 추가</button>`:"")
-    +(canImport?`<button class="msb" id="oImport" style="border-style:dashed">예시 불러오기 (LG U+·휴베이스)</button>`:"")
+    +(canImport?`<button class="msb" id="oImport" style="border-style:dashed">예시 불러오기</button>`:"")
     +'</div>';
   if(!list.length&&!canImport) $("emMsg").textContent=canEdit?"이 회의의 아웃리치 대상이 없습니다 — [+ 아웃리치 추가]로 만드세요.":"이 회의의 아웃리치 대상이 없습니다.";
   else $("emMsg").textContent="보낼 대상을 선택하세요. (회의별로 저장됩니다)";
@@ -5288,6 +5320,19 @@ function openAddAppSite(){
       </div>
       <div style="overflow:auto;padding:16px 18px">
         <div class="mini" style="margin-bottom:12px;line-height:1.6">같은 저장소의 HTML 파일(예: <b>mypage.html</b>)이나 외부 주소(<b>https://…</b>)를 등록합니다. 파일이 수정되면 열 때마다 최신 내용으로 표시됩니다.</div>
+        <div style="border:1.5px dashed var(--gold);border-radius:11px;padding:10px 12px;margin-bottom:12px">
+          <div class="mini" style="font-weight:800;margin-bottom:6px">AI로 페이지 만들기 <span style="font-weight:500">— 설명만 적으면 HTML 페이지를 통째로 만들어 저장소에 게시하고 아래 폼을 채웁니다 (GitHub 토큰 필요: Contents 쓰기)</span></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <select id="aa_gen_kind" style="padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px">
+              <option value="site">사이트형 (PC·소개 페이지)</option>
+              <option value="mobile">모바일형 (앱 화면 스타일)</option>
+              <option value="slides">HTML 슬라이드형 (넘김 발표 페이지)</option>
+            </select>
+            <input id="aa_gen_desc" placeholder="예: 츄구미 젤리 소개 — 제품 3종, 문의 폼, 민트 톤" style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px">
+            <button class="b-deep" id="aaGen" style="padding:8px 14px;flex:none">생성·게시</button>
+          </div>
+          <div class="mini" id="aa_gen_msg" style="margin-top:6px"></div>
+        </div>
         <div style="display:flex;gap:6px;margin-bottom:12px">
           <input id="aa_ai" placeholder="한 줄로 입력 — 예: 츄구미 사이트 https://…/chewgumi/ 상단 탭으로" style="flex:1;padding:9px 11px;border:1.5px dashed var(--mint);border-radius:9px;font-family:inherit;font-size:12.5px">
           <button class="b-mint" id="aaAI" style="padding:8px 14px;flex:none" title="적은 내용을 AI가 해석해 아래 칸을 채웁니다 — 확인 후 [추가]">AI로 채우기</button>
@@ -5319,7 +5364,40 @@ function openAddAppSite(){
     document.body.appendChild(modal);
     $("aaClose").onclick=()=>{modal.style.display="none";};
     modal.onclick=e=>{if(e.target===modal)modal.style.display="none";};
-    $("aaAI").onclick=async()=>{
+    $("aaGen").onclick=async()=>{
+    const tok=ghTok();
+    if(!tok){ $("aa_gen_msg").textContent="프로젝트 탭 개발 보드에서 GitHub 토큰(Contents: Read and write)을 먼저 등록하세요."; return; }
+    const desc=($("aa_gen_desc").value||"").trim();
+    if(!desc){ $("aa_gen_msg").textContent="페이지 설명을 적어주세요."; return; }
+    const kind=$("aa_gen_kind").value;
+    const btn=$("aaGen"); btn.disabled=true; btn.textContent="생성 중…"; $("aa_gen_msg").textContent="AI가 페이지를 작성하는 중… (30초 안팎)";
+    try{
+      const styleMap={
+        site:"PC 소개 페이지. 상단 히어로, 섹션 2~3개, 푸터.",
+        mobile:"모바일 앱 화면 스타일. max-width 430px 중앙, 하단 탭바 모양, 카드 리스트.",
+        slides:"슬라이드 발표 페이지. 각 <section>이 한 장(100vh), 좌우 키·클릭으로 넘김되는 최소 JS 포함."};
+      const sys="단일 파일 HTML 페이지 생성. 규칙: <!doctype html>부터 완결된 하나의 파일, 외부 리소스 금지(CSS·JS 인라인), 팔레트는 민트그린(#12BDB0)·짙은회색(#233), 시스템 폰트, 한국어, 과장 없는 간결한 카피, 이모지 대신 인라인 SVG 아이콘. 유형: "+styleMap[kind]+" 코드만 출력(설명·코드펜스 금지).";
+      let html=await callClaude(sys,desc,4000,{noPrompt:true});
+      html=String(html).replace(/^```html\s*/i,"").replace(/```\s*$/,"").trim();
+      if(!/^<!doctype/i.test(html)) throw new Error("생성 형식 오류 — 다시 시도해 주세요");
+      const slug="ai_"+kind+"_"+Date.now();
+      const path="ai_pages/"+slug+".html";
+      const enc=btoa(unescape(encodeURIComponent(html)));
+      const r=await fetch("https://api.github.com/repos/hyunjeongshin83/CampusTownHub/contents/"+path,{method:"PUT",
+        headers:{"Authorization":"Bearer "+tok,"Accept":"application/vnd.github+json","Content-Type":"application/json"},
+        body:JSON.stringify({message:"AI 페이지 생성: "+desc.slice(0,60),content:enc,branch:"main"})});
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.message||("GitHub "+r.status));
+      $("aa_kind").value=kind==="mobile"?"app":"site";
+      $("aa_name").value=desc.split("—")[0].trim().slice(0,20)||slug;
+      $("aa_url").value=path;
+      $("aa_desc").value="AI 생성 ("+({site:"사이트형",mobile:"모바일형",slides:"HTML 슬라이드형"})[kind]+")";
+      $("aa_gen_msg").innerHTML="게시 완료 — 1~2분 후 반영됩니다. 아래 내용 확인 후 <b>[추가]</b>를 누르면 탭·카드로 등록됩니다.";
+      toast("AI 페이지를 저장소에 게시했습니다");
+    }catch(e){ $("aa_gen_msg").textContent="실패: "+(e.message||e); }
+    btn.disabled=false; btn.textContent="생성·게시";
+  };
+  $("aaAI").onclick=async()=>{
     const raw=($("aa_ai").value||"").trim();
     if(!raw){ toast("등록할 내용을 한 줄로 적어주세요"); return; }
     const btn=$("aaAI"); btn.disabled=true; btn.textContent="해석 중…";
