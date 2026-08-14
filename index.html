@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=100, BUILD_DATE="2026-07-22";
+const BUILD=101, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -2607,88 +2607,75 @@ function renderWebSlides(){
   const sec=$("webSlidesSec"); if(!sec)return;
   const canEdit=state.user.role==="operator"||state.user.role==="host";
   const ws=state.webSlides||[];
+  if(typeof state.wsIdx!=="number"||state.wsIdx>=ws.length) state.wsIdx=0;
+  const cur=ws[state.wsIdx];
+  const slideBody=s=>s?(s.html?s.html:
+    `<div style="width:100%;height:100%;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;padding:7% 9%;background:linear-gradient(150deg,#0E3B36,#155A50 55%,#12BDB0);color:#fff">
+       <div style="font-size:clamp(22px,3.2vw,38px);font-weight:800;line-height:1.3;margin-bottom:5%">${esc(s.t||"")}</div>
+       <div style="font-size:clamp(13px,1.7vw,19px);line-height:2;opacity:.94">${(s.pts||[]).map(p=>"· "+esc(p)).join("<br>")}</div>
+     </div>`):"";
   sec.innerHTML=`
   <div class="glass tile" style="margin-bottom:14px">
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-      <b style="font-size:14.5px;color:var(--deep)">웹 슬라이드</b>
-      <span class="mini">AI로 이 회의의 발표 슬라이드를 만들고 편집합니다 (회의별 저장)</span>
-      ${canEdit?`<button class="b-mint" id="wsGen" style="padding:5px 13px;font-size:12.5px">AI로 슬라이드 만들기</button>`:""}
-      ${ws.length?`<button class="b-deep" id="wsPlay" style="padding:5px 13px;font-size:12.5px">발표 모드</button>
-      <button class="b-mint" id="wsAuto" style="padding:5px 13px;font-size:12.5px" title="음성(TTS)이 각 장을 읽고 자동으로 넘어갑니다">자동 발표</button>
-      <select id="wsVoice" title="발표 음성 선택" style="padding:6px 9px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12px;max-width:170px"></select>`:""}
-      ${(canEdit&&ws.length)?`<button class="b-ghost" id="wsClear" style="padding:5px 11px;font-size:12px;color:#C24A4A">전체 삭제</button>`:""}
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:9px">
+      <b style="font-size:14.5px;color:var(--deep)">슬라이드 미리보기</b>
+      ${ws.length?`
+      <span class="mini">${state.wsIdx+1} / ${ws.length}</span>
+      <button class="b-ghost" id="wsPrev" style="padding:4px 12px">◀ 이전</button>
+      <button class="b-ghost" id="wsNext" style="padding:4px 12px">다음 ▶</button>
+      <button class="b-deep" id="wsPlay" style="padding:5px 13px;font-size:12.5px">발표 모드</button>
+      <button class="b-mint" id="wsAuto" style="padding:5px 13px;font-size:12.5px" title="음성이 각 장을 읽고 자동으로 넘어갑니다">자동 발표</button>
+      <select id="wsVoice" title="발표 음성 선택" style="padding:6px 9px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12px;max-width:160px"></select>
+      ${canEdit?`<button class="b-ghost" id="wsEditCur" style="padding:4px 11px;font-size:12px">이 장 수정</button>
+      <button class="b-ghost" id="wsRmCur" style="padding:4px 11px;font-size:12px;color:#C24A4A">이 장 삭제</button>
+      <button class="b-ghost" id="wsClear" style="padding:4px 11px;font-size:12px;color:#C24A4A">전체 삭제</button>`:""}`:`<span class="mini">아직 슬라이드가 없습니다 — 아래에서 만들어 보세요.</span>`}
     </div>
-    ${ws.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px">
-      ${ws.map((s,i)=>`
-      <div style="border:1px solid var(--line);border-radius:13px;padding:13px 14px;background:linear-gradient(160deg,#ffffff, #F3FAF8);display:flex;flex-direction:column;gap:6px;min-height:150px">
-        <div class="mini" style="color:var(--gray)">${i+1} / ${ws.length}</div>
-        ${s.img?`<img src="${esc(s.img)}" style="width:100%;border-radius:9px;max-height:110px;object-fit:cover">`:(s.emoji?`<div style="font-size:30px">${esc(s.emoji)}</div>`:"")}
-        <b style="font-size:13.5px;color:var(--deep);line-height:1.4">${esc(s.t)}</b>
-        <ul style="margin:0;padding-left:16px;font-size:12px;color:var(--ink);line-height:1.6">${(s.pts||[]).map(p=>`<li>${esc(p)}</li>`).join("")}</ul>
-        ${canEdit?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:auto">
-          <button class="b-ghost" data-wsedit="${i}" style="padding:3px 8px;font-size:11px">수정</button>
-          ${(getAiProv()==="openai"&&getApiKey())?`<button class="b-ghost" data-wsimg="${i}" style="padding:3px 8px;font-size:11px" title="OpenAI 이미지 API로 이 장의 그림을 생성합니다 (장당 약 $0.04)">AI 그림</button>`:""}
-          <button class="b-ghost" data-wsrm="${i}" style="padding:3px 8px;font-size:11px;color:#C24A4A">삭제</button>
-        </div>`:""}
-      </div>`).join("")}
-    </div>`
-    :'<div class="mini">아직 웹 슬라이드가 없습니다 — [AI로 슬라이드 만들기]에 주제를 넣으면 5~8장을 깔끔하게 구성해 드립니다.</div>'}
+    ${ws.length?`<div id="wsStage" style="position:relative;width:100%;aspect-ratio:16/9;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#0E3B36">${slideBody(cur)}</div>`:""}
+    ${canEdit?`
+    <div style="margin-top:14px;border-top:1px dashed var(--line);padding-top:11px">
+      <b style="font-size:13.5px;color:var(--deep)">슬라이드 만들기 (AI · HTML형)</b>
+      <div class="mini" style="margin:4px 0 8px">주제·개요를 적으면 AI가 <b>디자인된 HTML 슬라이드 6장</b>을 코딩해 만듭니다. 만든 뒤 각 장을 [이 장 수정]으로 다듬을 수 있습니다.</div>
+      <textarea id="wsTopic" rows="3" placeholder="예: 츄구미 웹사이트 협업 제안 — 목표, 일정, 역할 분담" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:12.5px;line-height:1.6"></textarea>
+      <div style="display:flex;gap:6px;margin-top:7px;align-items:center;flex-wrap:wrap">
+        <button class="b-mint" id="wsGen6" style="padding:7px 15px">HTML형 6장 만들기</button>
+        <span class="mini" id="wsGenMsg"></span>
+      </div>
+    </div>`:""}
   </div>`;
-  const g=$("wsGen"); if(g)g.onclick=openWsGen;
+  const go=d=>{ state.wsIdx=Math.max(0,Math.min(ws.length-1,state.wsIdx+d)); renderWebSlides(); };
+  const pv=$("wsPrev"); if(pv)pv.onclick=()=>go(-1);
+  const nx=$("wsNext"); if(nx)nx.onclick=()=>go(1);
   const p=$("wsPlay"); if(p)p.onclick=()=>playWebSlides(false);
   const au=$("wsAuto"); if(au)au.onclick=()=>playWebSlides(true);
   fillWsVoices();
-  const c=$("wsClear"); if(c)c.onclick=()=>{ if(!confirm("웹 슬라이드를 전부 삭제할까요?"))return; state.webSlides=[]; scheduleSave(); renderWebSlides(); };
-  sec.querySelectorAll("[data-wsrm]").forEach(b=>b.onclick=()=>{ state.webSlides.splice(Number(b.dataset.wsrm),1); scheduleSave(); renderWebSlides(); });
-  sec.querySelectorAll("[data-wsedit]").forEach(b=>b.onclick=()=>{
-    const s=state.webSlides[Number(b.dataset.wsedit)]; if(!s)return;
-    formModal("슬라이드 수정",[
-      {id:"t",label:"제목",value:s.t},
-      {id:"p",label:"내용 (한 줄에 하나)",type:"textarea",rows:4,value:(s.pts||[]).join("\n")},
-      {id:"e",label:"이모지 (선택)",value:s.emoji||"",ph:"예: 📱"}
-    ],v=>{ s.t=v.t.trim()||s.t; s.pts=v.p.split("\n").map(x=>x.trim()).filter(Boolean).slice(0,5); s.emoji=v.e.trim();
-      scheduleSave(); renderWebSlides(); });
-  });
-  sec.querySelectorAll("[data-wsimg]").forEach(b=>b.onclick=async()=>{
-    const i=Number(b.dataset.wsimg); const s=state.webSlides[i]; if(!s)return;
-    b.disabled=true; b.textContent="생성 중…";
-    try{
-      const r=await fetch("https://api.openai.com/v1/images/generations",{method:"POST",
-        headers:{"Content-Type":"application/json","Authorization":"Bearer "+getApiKey()},
-        body:JSON.stringify({model:"dall-e-3",prompt:"Clean flat minimal illustration for a business slide, teal green(#12BDB0) and dark grey palette, no text, subject: "+s.t,size:"1024x1024",response_format:"b64_json"})});
-      const d=await r.json();
-      if(!r.ok) throw new Error((d.error&&d.error.message)||("OpenAI "+r.status));
-      const b64=d.data[0].b64_json;
-      const bytes=atob(b64); const arr=new Uint8Array(bytes.length); for(let k=0;k<bytes.length;k++)arr[k]=bytes.charCodeAt(k);
-      const path="webslides/"+state.currentMeetingId+"_"+Date.now()+".png";
-      const up=await sb.storage.from(BUCKET).upload(path,new Blob([arr],{type:"image/png"}));
-      if(up.error) throw up.error;
-      const su=await sb.storage.from(BUCKET).createSignedUrl(path,60*60*24*365);
-      s.img=su.data.signedUrl; s.imgPath=path;
-      scheduleSave(); renderWebSlides(); toast("그림을 넣었습니다");
-    }catch(e){ toast("그림 생성 실패: "+(e.message||e)); }
-    b.disabled=false; b.textContent="AI 그림";
-  });
-}
-function openWsGen(){
-  formModal("AI로 슬라이드 만들기",[
-    {id:"topic",label:"주제·개요",type:"textarea",rows:4,ph:"예: 츄구미 웹사이트 협업 제안 — 목표, 일정, 역할 분담"}
-  ],v=>{ const topic=(v.topic||"").trim(); if(!topic)return; wsGenRun(topic); },
-  {saveLabel:"생성",note:"표지부터 다음 단계까지 5~8장을 간결하게 구성합니다. 생성 후 각 장을 [수정]으로 다듬을 수 있습니다."});
-}
-function wsGenRun(topic){
-  toast("AI가 슬라이드를 구성하는 중…");
-  (async()=>{
+  const ec=$("wsEditCur"); if(ec)ec.onclick=()=>{
+    const s=ws[state.wsIdx]; if(!s)return;
+    if(s.html){
+      formModal("이 장 수정 (HTML)",[{id:"html",label:"슬라이드 HTML",type:"textarea",rows:12,value:s.html}],
+        v=>{ s.html=v.html||s.html; scheduleSave(); renderWebSlides(); });
+    }else{
+      formModal("이 장 수정",[
+        {id:"t",label:"제목",value:s.t||""},
+        {id:"pts",label:"내용 (줄바꿈으로 구분)",type:"textarea",rows:5,value:(s.pts||[]).join("\n")}
+      ],v=>{ s.t=(v.t||"").trim()||s.t; s.pts=(v.pts||"").split("\n").map(x=>x.trim()).filter(Boolean); scheduleSave(); renderWebSlides(); });
+    }
+  };
+  const rc=$("wsRmCur"); if(rc)rc.onclick=()=>{ ws.splice(state.wsIdx,1); state.wsIdx=Math.max(0,state.wsIdx-1); scheduleSave(); renderWebSlides(); };
+  const c=$("wsClear"); if(c)c.onclick=()=>{ if(!confirm("슬라이드를 전부 삭제할까요?"))return; state.webSlides=[]; scheduleSave(); renderWebSlides(); };
+  const g=$("wsGen6"); if(g)g.onclick=async()=>{
+    const topic=($("wsTopic").value||"").trim();
+    if(!topic){ $("wsGenMsg").textContent="주제·개요를 적어주세요."; return; }
+    g.disabled=true; g.textContent="작성 중…"; $("wsGenMsg").textContent="AI가 HTML 슬라이드 6장을 코딩하는 중… (30초 안팎)";
     try{
       const cm=currentMeeting()||{};
-      const sys='발표 슬라이드 기획. 순수 JSON 배열만 출력(코드펜스 금지), 5~8장: [{"t":"장 제목","pts":["요점 2~4개, 각 15자 내외"],"emoji":"장을 상징하는 이모지 1개"}]. 깔끔·간결, 과장 금지, 첫 장은 표지(제목+부제 요점), 마지막 장은 다음 단계.';
-      const o=await callClaude(sys,"회의: "+(cm.title||"")+"\n주제: "+topic,2000,{noPrompt:true});
+      const sys='발표 슬라이드 6장을 HTML로 코딩. 출력은 순수 JSON 배열만(코드펜스 금지): [{"html":"..."},...] 정확히 6개. 각 html은 슬라이드 한 장의 내부 마크업(최상위 div 하나, width:100%;height:100%;box-sizing:border-box, 인라인 스타일만, 외부 리소스·이미지·이모지 금지). 디자인: 짙은 청록(#0E3B36)→민트(#12BDB0) 그라데이션 배경 또는 흰 배경+민트 포인트를 장마다 변화, 큰 제목·간결한 요점, 한국어, 과장 금지. 1장=표지, 6장=다음 단계.';
+      const o=await callClaude(sys,"회의: "+(cm.title||"")+"\n주제: "+topic,3800,{noPrompt:true});
       const arr=JSON.parse(String(o).replace(/```json|```/g,"").trim());
-      if(!Array.isArray(arr)||!arr.length) throw new Error("형식 오류");
-      state.webSlides=arr.map(x=>({t:String(x.t||"").slice(0,60),pts:(x.pts||[]).map(p=>String(p).slice(0,60)).slice(0,4),emoji:x.emoji||""}));
-      scheduleSave(); renderWebSlides(); toast(arr.length+"장 구성 완료 — [수정]으로 다듬고 [발표 모드]로 확인하세요");
-    }catch(e){ toast("슬라이드 생성 실패: "+(e.message||e)); }
-  })();
+      if(!Array.isArray(arr)||!arr.length) throw new Error("형식 오류 — 다시 시도해 주세요");
+      state.webSlides=arr.slice(0,8).map(x=>({html:String(x.html||"")}));
+      state.wsIdx=0; scheduleSave(); renderWebSlides();
+      toast(state.webSlides.length+"장 완성 — ◀▶로 넘겨보고 [발표 모드]로 확인하세요");
+    }catch(e){ $("wsGenMsg").textContent="실패: "+(e.message||e); g.disabled=false; g.textContent="HTML형 6장 만들기"; }
+  };
 }
 // 음성 목록 — 한국어 음성 전부 나열해 선택 (선택은 이 브라우저에 저장)
 function fillWsVoices(){
@@ -2722,14 +2709,15 @@ function playWebSlides(auto){
   ov=document.createElement("div"); ov.id="wsPlayOv";
   ov.style.cssText="position:fixed;inset:0;z-index:10000;background:var(--deep);display:flex;align-items:center;justify-content:center;cursor:pointer";
   const draw=()=>{ const s=ws[idx];
-    ov.innerHTML=`<div style="max-width:860px;width:92vw;color:#fff;text-align:left;padding:30px">
-      ${s.img?`<img src="${esc(s.img)}" style="max-height:34vh;border-radius:14px;margin-bottom:22px">`:(s.emoji?`<div style="font-size:64px;margin-bottom:14px">${esc(s.emoji)}</div>`:"")}
-      <div style="font-size:clamp(26px,4.5vw,44px);font-weight:800;line-height:1.25;margin-bottom:22px">${esc(s.t)}</div>
-      <div style="font-size:clamp(15px,2.2vw,21px);line-height:2;opacity:.92">${(s.pts||[]).map(p=>"· "+esc(p)).join("<br>")}</div>
-      <div style="position:fixed;bottom:18px;right:24px;font-size:13px;opacity:.7">${idx+1} / ${ws.length} — 클릭·→ 다음, ESC 종료</div>
-    </div>`; };
+    const inner=s.html?`<div style="width:min(92vw,152vh);aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:#0E3B36">${s.html}</div>`
+      :`<div style="max-width:860px;width:92vw;color:#fff;text-align:left;padding:30px">
+      <div style="font-size:clamp(26px,4.5vw,44px);font-weight:800;line-height:1.25;margin-bottom:22px">${esc(s.t||"")}</div>
+      <div style="font-size:clamp(15px,2.2vw,21px);line-height:2;opacity:.92">${(s.pts||[]).map(p=>"· "+esc(p)).join("<br>")}</div></div>`;
+    ov.innerHTML=inner+`<div style="position:fixed;bottom:18px;right:24px;font-size:13px;color:#fff;opacity:.7">${idx+1} / ${ws.length} — 클릭·→ 다음, ESC 종료</div>`; };
   draw(); document.body.appendChild(ov);
-  const speakCur=()=>{ const s=ws[idx]; wsSpeak(s.t+". "+(s.pts||[]).join(". "),()=>{ if(auto){ if(idx<ws.length-1){idx++;draw();speakCur();} else close(); } }); };
+  const speakCur=()=>{ const s=ws[idx];
+    const txt=s.html?String(s.html).replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim().slice(0,400):(s.t+". "+(s.pts||[]).join(". "));
+    wsSpeak(txt,()=>{ if(auto){ if(idx<ws.length-1){idx++;draw();speakCur();} else close(); } }); };
   const next=()=>{ if(idx<ws.length-1){idx++;draw(); if(auto)speakCur();} else close(); };
   const prev=()=>{ if(idx>0){idx--;draw(); if(auto)speakCur();} };
   const key=e=>{ if(e.key==="ArrowRight"||e.key===" ")next(); else if(e.key==="ArrowLeft")prev(); else if(e.key==="Escape")close(); };
@@ -5618,7 +5606,7 @@ async function otpSend(){
   const email=($("otpEmail").value||"").trim().toLowerCase();
   const msg=$("authMsg");
   if(!email||email.indexOf("@")<0){ msg.innerHTML='<span class="gate-err">이메일을 입력해 주세요.</span>'; return; }
-  if(!allowedEmail(email)){ msg.innerHTML='<span class="gate-err">초대되지 않은 이메일입니다 — 개최자가 이 주소를 참석자로 등록해야 합니다.</span>'; return; }
+  if(!allowedEmail(email)){ msg.innerHTML='<span class="gate-err">허용되지 않은 이메일입니다.</span>'; return; }
   if(!authReady){ msg.innerHTML='<span class="gate-err">인증 서버에 연결되지 않았습니다.</span>'; return; }
   msg.innerHTML='<span style="color:#8FD9D2">인증코드를 보내는 중…</span>';
   try{
@@ -5655,6 +5643,7 @@ const ALLOWED_DOMAINS=["sookmyung.ac.kr"];
 const ALLOW_EXTRA_EMAILS=[];
 function allowedEmail(email){
   const e=(email||"").trim().toLowerCase(); if(!e)return false;
+  if(OPEN_SIGNUP)return true;   // 열린 가입 — 어떤 이메일이든 본인 인증(구글·메일 링크)만 되면 가입
   if(ALLOW_EXTRA_EMAILS.some(x=>x.toLowerCase()===e))return true;
   const dom=e.split("@")[1]||"";
   if(ALLOWED_DOMAINS.some(d=>dom===d||dom.endsWith("."+d)))return true;
