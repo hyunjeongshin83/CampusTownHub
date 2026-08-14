@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=96, BUILD_DATE="2026-07-22";
+const BUILD=97, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -809,13 +809,13 @@ async function saveSession(){
     await store.set("medit:sess:"+state.currentMeetingId,{
       tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
       nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,
-      meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos,outreach:state.outreach||[],devBoard:state.devBoard||null,notion:state.notion||[],notices:state.notices||[],webSlides:state.webSlides||[]});
+      meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos,outreach:state.outreach||[],devBoard:state.devBoard||null,notion:state.notion||[],notices:state.notices||[],webSlides:state.webSlides||[],introMigrated:!!state.introMigrated});
   }
 }
 function resetSessionState(){
   state.segments=[]; state.notes=null; state.research=[]; state.nextActions=[]; state.topicTags=[];
   state.meetingStart=null; state.liveDoc={paras:[],cursor:0};
-  state.schedule={goals:[],done:[]}; state.lit={q:"",items:[]}; state.annos=[]; state.outreach=[]; state.devBoard=null; state.notion=[]; state.notices=[]; state.webSlides=[];
+  state.schedule={goals:[],done:[]}; state.lit={q:"",items:[]}; state.annos=[]; state.outreach=[]; state.devBoard=null; state.notion=[]; state.notices=[]; state.webSlides=[]; state.introMigrated=false;
   state.tabNotes={deck:[],app:[],registry:[],console:[]};
 }
 function applySessionData(s){
@@ -832,6 +832,7 @@ function applySessionData(s){
   state.notion=Array.isArray(s.notion)?s.notion:[];
   state.notices=Array.isArray(s.notices)?s.notices:[];
   state.webSlides=Array.isArray(s.webSlides)?s.webSlides:[];
+  state.introMigrated=!!s.introMigrated;
   return true;
 }
 // 회의 입장·전환 시 그 회의의 세션을 로드 (없으면 legacy hub1 세션 → 1회 이관)
@@ -845,6 +846,20 @@ async function loadMeetingSession(mid){
     applySessionData(legacy);                          // 구버전 공용 세션 → 첫 입장 회의로 1회 이관
     await store.set("medit:sess:"+mid,{tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos});
   }
+}
+// (v97) 하드코딩 소개 슬라이드 → 웹 슬라이드 데이터로 1회 이관 (MedIT 단독 회의)
+async function migrateIntroDeck(mid){
+  try{
+    const m=(state.meetings||[]).find(x=>x.id===mid);
+    if(!m||connKey(m.company||"")!=="medit") return;
+    if(state.introMigrated) return;
+    if((state.webSlides||[]).length){ state.introMigrated=true; return; }
+    if(!Array.isArray(LEGACY_INTRO)||!LEGACY_INTRO.length){ state.introMigrated=true; return; }
+    state.webSlides=LEGACY_INTRO.map(s=>({t:s.t,pts:s.pts,emoji:s.emoji||""}));
+    state.introMigrated=true;
+    await saveNow&&saveNow();
+    console.log("소개 슬라이드를 웹 슬라이드 데이터로 이관:",state.webSlides.length,"장");
+  }catch(_){}
 }
 window.loadMeetingSession=loadMeetingSession;
 async function saveRecords(){await store.set("medit:records2",state.records);}
@@ -877,6 +892,7 @@ async function loadAll(){
   if(!state.tabNotes||typeof state.tabNotes!=="object")state.tabNotes={deck:[],app:[],registry:[],console:[]};
   state.uploads=[];   // 옛 브라우저 저장 방식 잔재 정리 (자료는 Supabase Storage로 이전)
   (state.accounts||[]).forEach(a=>{ if("pw" in a) delete a.pw; });   // 구식 비밀번호 필드 영구 소독
+  seedIncubatorCompanies();   // (v97) 입주기업 하드코딩 → 기업 DB 1회 이관
   // 소유자 계정 권한 보정 (이전에 guest로 저장된 경우)
   const owner=(state.accounts||[]).find(a=>(a.email||"").toLowerCase()==="hyunjeong.shin@sookmyung.ac.kr");
   if(owner && owner.role==="guest"){ owner.role="host"; }
@@ -1776,7 +1792,7 @@ function bindHome(){
   renderRecords();
 }
 // 숙명 창업보육센터 입주기업 현황 — 기업 등록 자동 채움과 회의 배지 자동 카드에 사용
-const INCUBATOR_DIR=[
+const INCUBATOR_SEED=[
  {bld:"창업보육센터 1관",room:"B102",name:"애니머스큐어",item:"근감소증 및 희귀 근육질환 치료제"},
  {bld:"창업보육센터 1관",room:"B103",name:"파워투팜스",item:"에너지 기반 지속가능 스마트팜 냉난방 공급 솔루션"},
  {bld:"창업보육센터 1관",room:"B104",name:"소노럭스헬스테크",item:"공기 기반 바이러스 감지 시스템 솔루션"},
@@ -1792,14 +1808,20 @@ const INCUBATOR_DIR=[
  {bld:"창업보육센터 2관",room:"403",name:"(주)더드림랩",alias:["더드림랩"],item:"AI 기반 TV 리모컨 활용 맞춤형 건강정보 제공 플랫폼"},
 ];
 function dirNames(d){ return [d.name].concat(d.alias||[]); }
+// (v97) 입주기업 목록을 기업 DB(state.companies)로 1회 이관 — 이후 자동완성은 DB에서
+function seedIncubatorCompanies(){
+  state.companies=state.companies||[];
+  if(state.companies.some(c=>c.seedDir)) return;
+  INCUBATOR_SEED.forEach(d=>{
+    if(state.companies.some(c=>(c.name||"").trim()===d.name)) return;
+    state.companies.push({id:"c_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),
+      name:d.name,alias:d.alias||[],desc:d.item||"",loc:(d.bld||"")+(d.room?" "+d.room+"호":""),seedDir:true});
+  });
+  scheduleSave&&scheduleSave();
+}
+function companyDir(){ return (state.companies||[]).map(c=>({name:c.name,alias:c.alias||[],item:c.desc||"",bld:c.loc||"",room:""})); }
 // 장소 자동 완성 — 자주 쓰는 장소 프리셋 + 기존 회의·기록에서 실제 사용한 장소
-const PLACE_PRESETS=[
-  "숙명캠퍼스타운 209호 미팅룸 1호",
-  "숙명캠퍼스타운 206호 미팅룸",
-  "숙명캠퍼스타운 2층 로비",
-  "창업보육센터 2관 202호 (MedIT)",
-  "온라인 (화상회의)",
-];
+const PLACE_PRESETS=["온라인 (화상회의)"];   // (v97) 장소는 실제 사용 이력에서 자동 학습
 function knownPlaces(){
   const set=[];
   const add=p=>{ p=String(p||"").trim(); if(p&&!set.some(x=>x.toLowerCase()===p.toLowerCase())) set.push(p); };
@@ -1827,7 +1849,7 @@ function attachCompanySuggest(inp,box){
     const parts=inp.value.split(",");
     const last=parts[parts.length-1].trim().toLowerCase();
     if(!last){ box.innerHTML=""; return; }
-    const hits=INCUBATOR_DIR.filter(d=>dirNames(d).some(n=>{const nn=n.toLowerCase();return nn.includes(last)||last.includes(nn);})).slice(0,6);
+    const hits=companyDir().filter(d=>dirNames(d).some(n=>{const nn=n.toLowerCase();return nn.includes(last)||last.includes(nn);})).slice(0,6);
     box.innerHTML=hits.map((d,i)=>`<button type="button" class="b-ghost" data-sug="${i}" style="padding:3px 10px;font-size:11.5px" title="${esc(d.item)} · ${esc(d.bld)} ${esc(d.room)}호">${esc(d.name)}${d.alias?` (${esc(d.alias[0])})`:""}</button>`).join("");
     box.querySelectorAll("[data-sug]").forEach(b=>b.onclick=()=>{
       const d=hits[Number(b.dataset.sug)];
@@ -1841,7 +1863,7 @@ function attachCompanySuggest(inp,box){
   inp.addEventListener("focus",render);
 }
 function dirMatch(text){ const t=String(text||"").trim().toLowerCase(); if(!t)return null;
-  return INCUBATOR_DIR.find(d=>dirNames(d).some(n=>{const nn=n.toLowerCase();return nn.includes(t)||t.includes(nn);}))||null; }
+  return companyDir().find(d=>dirNames(d).some(n=>{const nn=n.toLowerCase();return nn.includes(t)||t.includes(nn);}))||null; }
 function renderCompanies(){
   const box=$("companyList"); if(!box)return;
   const canManage=state.user.role==="operator";
@@ -1851,7 +1873,7 @@ function renderCompanies(){
   const nameHit=(n,b)=>{const nn=(n||"").toLowerCase();return nn.includes(b)||b.includes(nn);};
   const regList=badges.length?state.companies.filter(c=>badges.some(b=>nameHit(c.name,b))):state.companies.slice();
   // 배지에 해당하지만 아직 등록 안 된 입주기업은 현황 디렉터리에서 자동 카드로 보충
-  const autoList=badges.length?INCUBATOR_DIR.filter(d=>
+  const autoList=badges.length?companyDir().filter(d=>
       badges.some(b=>dirNames(d).some(n=>nameHit(n,b)))
       && !regList.some(c=>dirNames(d).some(n=>nameHit(c.name,(n||"").toLowerCase())))
     ).map(d=>({name:d.name+(d.alias?` (${d.alias[0]})`:""),role:"입주 기업",desc:d.item,room:d.bld+" "+d.room+"호",auto:true})):[];
@@ -2519,85 +2541,16 @@ function rmUp(i){state.uploads.splice(i,1);renderUpList();scheduleSave();refresh
 window.rmUp=rmUp;
 
 // ==================== DECK (auto-advance) ====================
-const SLIDES=[
- {cls:"s-ink",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><rect x="38" y="16" width="44" height="16" rx="4" fill="#0FD6C6"/><rect x="34" y="30" width="52" height="66" rx="9" fill="#12BDB0"/><rect x="46" y="66" width="30" height="18" rx="9" fill="#fff"/><rect x="46" y="66" width="15" height="18" rx="9" fill="#E7F7F5"/></svg></div><div class="kick">MedIT · Friday</div>
-   <h1 style="margin-top:14px">고령친화 Age-Tech 약료 플랫폼<br><span class="mint">+ 모바일 복약·접종 앱 + 약사 참여 연구 사이트</span></h1>
-   <div class="sub">하드웨어 · 로봇 협업 · 센싱 데이터 · AI 의사결정 지원 · 예방접종 · 모바일 앱 · 약사연구참여</div></div>`,
-   script:"안녕하세요. MedIT와 약학대학의 회의 내용에 대한 자료를 짧게 정리해 보았습니다. 오늘은 이미 설계한 모바일 복약·접종 앱과, 새로 제안드리는 약사 참여 연구 사이트를 말씀드리겠습니다.",
-   caption:"고령친화 Age-Tech 약료 플랫폼 — 모바일 앱 + 약사 참여 사이트",
-   terms:"Age-Tech: 고령자를 위한 기술"},
- {cls:"s-mist",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><circle cx="60" cy="52" r="20" fill="none" stroke="#12BDB0" stroke-width="5"/><path d="M60 72 L60 96" stroke="#12BDB0" stroke-width="5" stroke-linecap="round"/><circle cx="60" cy="52" r="7" fill="#12BDB0"/></svg></div><div class="kick">Agenda</div><h2 style="margin-top:6px">오늘 논의 지도</h2>
-   <div class="sgrid3">
-   <div class="sc"><div class="n">A</div><div class="t">플랫폼 개요</div><div class="d">6대 축 + 원칙</div></div>
-   <div class="sc"><div class="n">B</div><div class="t">모바일 앱</div><div class="d">복약·접종 시연</div></div>
-   <div class="sc"><div class="n">C</div><div class="t">약사 참여 사이트</div><div class="d">FIP · 4층</div></div>
-   <div class="sc"><div class="n">D</div><div class="t">데이터·규제</div><div class="d">IRB·약사 승인</div></div>
-   <div class="sc"><div class="n">E</div><div class="t">실증·다음</div><div class="d">우선순위</div></div>
-   <div class="sc"><div class="n">F</div><div class="t">협업</div><div class="d">역할·일정</div></div></div></div>`,
-   script:"오늘은 개요와 원칙, 모바일 앱, 약사 참여 사이트 제안, 데이터와 규제, 그리고 다음 단계 순서로 말씀드리겠습니다.",
-   caption:"논의 순서: 개요 · 모바일 앱 · 약사 사이트 · 데이터·규제 · 실증 · 협업",
-   terms:"IRB: 기관생명윤리위원회 (인체 대상 연구 심의)"},
- {cls:"s-deep",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><path d="M46 34 Q30 34 30 52 Q22 60 30 72 Q28 88 46 88 V34Z" fill="#0FD6C6"/><path d="M74 34 Q90 34 90 52 Q98 60 90 72 Q92 88 74 88 V34Z" fill="#E7F7F5"/><circle cx="50" cy="56" r="4" fill="#fff"/><circle cx="70" cy="56" r="4" fill="#12BDB0"/></svg></div><div class="kick">Principle</div><h2 style="margin-top:6px">AI는 보조하고, 약사·의사가 결정한다</h2>
-   <div class="sub" style="margin-top:12px">개인 맞춤형 \u2018처방\u2019을 직접 추천하지 않는다. 약사·의사 검토를 전제로 한 상담 보조·상호작용 확인·부작용 알림에 한정하며, 환자 대상 메시지·중재는 약사 승인 후에만 실행한다.</div>
-   <div class="sgrid3">
-   <div class="sc"><div class="n">1</div><div class="t">제안</div><div class="d">AI가 위험·근거 제시</div></div>
-   <div class="sc"><div class="n">2</div><div class="t">검토</div><div class="d">약사·의사 판단</div></div>
-   <div class="sc"><div class="n">3</div><div class="t">실행</div><div class="d">승인 후 전달</div></div></div></div>`,
-   script:"가장 중요한 원칙입니다. 기본 원칙입니다. 인공지능은 보조하고, 결정은 약사와 의사가 합니다. 인공지능이 위험과 근거를 제시하면, 전문가가 판단하고 승인한 뒤에만 환자에게 전달됩니다.",
-   caption:"원칙: AI는 보조, 약사·의사가 결정 — 제안 → 검토 → 승인 후 실행",
-   terms:"상호작용: 약물끼리 서로 영향을 주는 것 (DDI)"},
- {cls:"s-mist",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><rect x="44" y="44" width="32" height="32" rx="8" fill="#12BDB0"/><path d="M52 60 h6 l4-8 4 16 4-8 h6" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="kick">A · Platform</div><h2 style="margin-top:6px">고령친화 Age-Tech 6대 축</h2>
-   <div class="sgrid3">
-   <div class="sc"><div class="n">01</div><div class="t">하드웨어</div><div class="d">스마트약통·웨어러블·IoT</div></div>
-   <div class="sc"><div class="n">02</div><div class="t">돌봄 로봇</div><div class="d">효돌·ElliQ 백엔드 연계</div></div>
-   <div class="sc"><div class="n">03</div><div class="t">센싱 데이터</div><div class="d">복약·생체·수면·낙상</div></div>
-   <div class="sc"><div class="n">04</div><div class="t">예방접종</div><div class="d">이력 + 접종후 반응</div></div>
-   <div class="sc"><div class="n">05</div><div class="t">AI 의사결정</div><div class="d">상호작용·부작용(검토 전제)</div></div>
-   <div class="sc"><div class="n">06</div><div class="t">측정난이 데이터</div><div class="d">자가보고·보호자·상담</div></div></div></div>`,
-   script:"제안 방향은 여섯 축입니다. 하드웨어, 돌봄 로봇, 센싱 데이터, 예방접종, 인공지능 의사결정 지원, 그리고 측정이 어려운 데이터입니다.",
-   caption:"6대 축: 하드웨어 · 돌봄로봇 · 센싱 · 예방접종 · AI 의사결정 · 측정난이 데이터",
-   terms:"웨어러블: 몸에 착용하는 기기 · IoT: 사물인터넷 · ePRO: 환자 자가보고"},
- {cls:"s-mist",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><rect x="42" y="18" width="36" height="84" rx="8" fill="#16332F"/><rect x="47" y="26" width="26" height="60" rx="3" fill="#fff"/><rect x="47" y="26" width="26" height="14" fill="#12BDB0"/><circle cx="60" cy="94" r="3" fill="#fff"/></svg></div><div class="kick">B · Mobile App</div><h2 style="margin-top:6px">모바일 복약·접종 앱 — 이미 설계</h2>
-   <div class="sgrid2">
-   <div class="sc"><div class="t">5탭 구성</div><div class="d">홈·백신·AI도우미·애프터케어·기록</div></div>
-   <div class="sc"><div class="t">이중언어 자동</div><div class="d">한국어/영어 자동감지</div></div>
-   <div class="sc"><div class="t">오프라인 우선</div><div class="d">HTML 번들·온디바이스 저장</div></div>
-   <div class="sc"><div class="t">원코드 3플랫폼</div><div class="d">WebView: Android·iOS·웹</div></div>
-   <div class="sc"><div class="t">건강 연동</div><div class="d">HealthConnect·HealthKit</div></div>
-   <div class="sc"><div class="t">소셜 로그인</div><div class="d">Google·Kakao·Naver</div></div></div></div>`,
-   script:"모바일 앱은 이미 설계했습니다. 다섯 개 탭으로 구성되고, 건강 데이터는 기기 안에만 저장해 개인정보가 밖으로 나가지 않습니다. 한 코드로 안드로이드·아이폰·웹에서 작동합니다.",
-   caption:"이미 설계한 앱: 5탭 · 이중언어 · 오프라인 우선 · 원코드 3플랫폼 · 건강연동",
-   terms:"온디바이스: 데이터를 기기 안에만 저장 · HealthKit/HealthConnect: 건강데이터 연동 규격"},
- {cls:"s-deep",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><line x1="60" y1="60" x2="34" y2="34" stroke="#0FD6C6" stroke-width="3"/><line x1="60" y1="60" x2="86" y2="34" stroke="#0FD6C6" stroke-width="3"/><line x1="60" y1="60" x2="60" y2="92" stroke="#0FD6C6" stroke-width="3"/><circle cx="60" cy="60" r="12" fill="#fff"/><circle cx="34" cy="34" r="8" fill="#0FD6C6"/><circle cx="86" cy="34" r="8" fill="#0FD6C6"/><circle cx="60" cy="92" r="8" fill="#E7F7F5"/></svg></div><div class="kick">C · Proposal</div><h2 style="margin-top:6px">약사 참여 연구 사이트 — 제안</h2>
-   <div class="sub" style="margin-top:8px">약사가 연구에 동참하고, 그 인사이트가 연구·제약으로 이어지는 창구. 국제·전국·대학 3축.</div>
-   <div class="sgrid3">
-   <div class="sc"><div class="t">약사 등록</div><div class="d">지역사회·전국 약사 — 실무·복약 데이터 참여</div></div>
-   <div class="sc"><div class="t">제약사·의사 등록</div><div class="d">제제 설계 수요·임상 관점 — 약 디자인 협력</div></div>
-   <div class="sc"><div class="t">대학 연구 연계</div><div class="d">여러 대학 연구실 — 제제 설계·연구 설계 지원</div></div></div>
-   <div class="sub" style="margin-top:10px" class="mint">FIP·대한약사회 등록 모델 참고. 참여 장벽 1위는 시간 → 자동화로 부담을 줄이는 방향</div></div>`,
-   script:"약사 참여 연구 사이트를 제안드립니다. 지역사회와 전국의 약사, 제약사, 의사가 함께 등록해, 약을 더 잘 설계하는 약 디자인을 목적으로 합니다. 참여 장벽인 시간을 자동화로 줄이는 방향입니다.",
-   caption:"약사 참여 사이트 제안: 지역사회·전국 약사 + 제약사·의사 등록 → 약 디자인",
-   terms:"FIP: 국제약사연맹 · SIG: 특별관심그룹 · ECHO: 경제·임상·인문 성과 평가"},
- {cls:"s-mist",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><rect x="36" y="24" width="48" height="72" rx="6" fill="#fff" stroke="#0E7C74" stroke-width="3"/><rect x="36" y="24" width="48" height="16" rx="6" fill="#12BDB0"/><line x1="46" y1="52" x2="74" y2="52" stroke="#0E7C74" stroke-width="3"/><line x1="46" y1="64" x2="74" y2="64" stroke="#E7F7F5" stroke-width="3"/><line x1="46" y1="76" x2="66" y2="76" stroke="#E7F7F5" stroke-width="3"/></svg></div><div class="kick">C · Architecture</div><h2 style="margin-top:6px">약사연구참여 플랫폼 4층</h2>
-   <div class="lrow"><span class="ln">L1</span><span class="lt">약사 등록 (Registry)</span><span class="ld">면허·동의·데이터이용 라이선스</span></div>
-   <div class="lrow"><span class="ln">L2</span><span class="lt">데이터 전송 (Web→Repo)</span><span class="ld">POS 커넥터 비식별·표준화</span></div>
-   <div class="lrow"><span class="ln">L3</span><span class="lt">모바일 수집</span><span class="ld">약사 앱 + 환자 ePRO</span></div>
-   <div class="lrow"><span class="ln" style="background:var(--gold)">L4</span><span class="lt">인사이트 (Research)</span><span class="ld">substitution·순응·AE → 제약사 연계</span></div></div>`,
-   script:"사이트 구조는 네 층입니다. 약사 등록, 약국 데이터를 비식별로 전송, 모바일 수집, 그리고 연구 인사이트입니다. 비식별은 개인을 알아볼 수 없게 처리하는 것을 뜻합니다.",
-   caption:"백엔드 4층: 등록 → 비식별 전송 → 모바일 수집 → 연구 인사이트",
-   terms:"POS: 약국 판매시점관리 시스템 · 비식별: 개인 식별 불가 처리 · AE: 이상반응"},
- {cls:"s-ink",html:`<div class="pad"><div class="slide-illo"><svg viewBox="0 0 120 120"><path d="M60 20 L92 34 V64 Q92 88 60 100 Q28 88 28 64 V34Z" fill="#0FD6C6"/><path d="M48 60 L57 69 L74 50" stroke="#fff" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="kick">E·F · Next</div><h2 style="margin-top:6px">논의 & 다음 단계</h2>
-   <div class="sgrid3">
-   <div class="sc"><div class="n">01</div><div class="t">실증 우선순위</div><div class="d">무엇을 먼저</div></div>
-   <div class="sc"><div class="n">02</div><div class="t">REDCap 접근</div><div class="d">연구소 인스턴스</div></div>
-   <div class="sc"><div class="n">03</div><div class="t">약사 등록 파일럿</div><div class="d">협력약국 5~10곳</div></div>
-   <div class="sc"><div class="n">04</div><div class="t">앱 연동</div><div class="d">MediNote→L3</div></div>
-   <div class="sc"><div class="n">05</div><div class="t">IRB 사전상담</div><div class="d">등록·동의</div></div>
-   <div class="sc"><div class="n">06</div><div class="t">역할·일정</div><div class="d">분담 확정</div></div></div></div>`,
-   script:"다음 단계입니다. 실증 우선순위를 정하고, 협력 약국 시범과 앱 연동, 기관 생명윤리위원회 상담을 거쳐 역할과 일정을 확정하겠습니다. 감사합니다.",
-   caption:"다음 단계: 실증 우선순위 · REDCap · 약국 파일럿 · 앱 연동 · IRB · 역할·일정",
-   terms:"REDCap: 연구 데이터 수집 시스템 · IRB: 기관생명윤리위원회 · 파일럿: 소규모 시범"},
+const LEGACY_INTRO=[
+ {t:"고령친화 Age-Tech 약료 플랫폼",pts:["모바일 복약·접종 앱 + 약사 참여 연구 사이트","하드웨어·로봇 협업 · 센싱 · AI 의사결정 지원"],emoji:"🏥"},
+ {t:"오늘 논의 지도",pts:["A 플랫폼 개요 — 6대 축과 원칙","B 모바일 앱 데모","C 약사 참여 사이트 제안"],emoji:"🗺️"},
+ {t:"플랫폼 6대 축",pts:["복약관리 · 예방접종 · 센싱 데이터","AI 의사결정 지원 · 로봇 협업 · 약사 연구 참여"],emoji:"⚙️"},
+ {t:"모바일 복약·접종 앱 (MediNote)",pts:["5탭: 복약·접종·기록·리포트·설정","한국어·영어 자동 감지 · 데이터는 기기 안에만"],emoji:"📱"},
+ {t:"약사 참여 연구 사이트 (제안)",pts:["지역사회·전국 약사·제약사·의사 등록","약 디자인(제제 설계) 참여 연구 창구"],emoji:"🧪"},
+ {t:"다음 단계",pts:["요구사항 확정 · 데모 피드백 반영","협력 기관 아웃리치 진행"],emoji:"➡️"},
 ];
+const SLIDES=[];   // (v97) 소개 슬라이드 원문은 웹 슬라이드 데이터로 이관됨
+
 let autoAdv=null, playing=false;
 // ==================== 웹 슬라이드 — AI 생성·편집·발표 (회의별 저장) ====================
 function renderWebSlides(){
@@ -2700,7 +2653,6 @@ function playWebSlides(){
 window.renderWebSlides=renderWebSlides;
 function deckHTML(){
   const m=currentMeeting()||{};
-  const sl=SLIDES[state.deckIdx];
   const head=`<div class="glass tile" style="margin-bottom:12px">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap">
       <div><b style="font-size:14.5px;color:var(--deep)">${esc(m.title||"회의를 먼저 선택하세요")}</b>
@@ -2710,40 +2662,9 @@ function deckHTML(){
     <div id="deckMeetingFiles" class="mini" style="margin-top:8px">발표 자료를 불러오는 중…</div>
   </div>`;
   setTimeout(renderDeckMeetingFiles,0);
-  const showIntro=connKey((currentMeeting()||{}).company||"")==="medit";   // MedIT 단독 회의 전용 자료
-  return `<div class="slidewrap">
-    ${head}
-    <div id="webSlidesSec"></div>
-    ${showIntro?`<div class="section-title" style="margin-top:2px;cursor:pointer;user-select:none" id="introDeckHead"><span id="introDeckArrow">▸</span> MedIT 소개 슬라이드 <span class="mini" style="font-weight:500">(이 커넥션의 자료 — 펼쳐서 보기)</span></div>`:""}
-    <div id="introDeckWrap" style="display:${"none"}">
-    <div class="slide ${sl.cls}">${sl.html}</div>
-    <div class="progress"><div class="bar" id="progBar" style="width:${(state.deckIdx+1)/SLIDES.length*100}%"></div></div>
-    <div class="caption-box" id="captionBox">
-      <div class="cap-line">${sl.caption||""}</div>
-      ${sl.terms?`<div class="cap-terms">용어: ${sl.terms}</div>`:""}
-    </div>
-    <div class="slide-nav">
-      <button class="b-ghost" id="prevS">이전</button>
-      <span id="slideNum">${state.deckIdx+1} / ${SLIDES.length}</span>
-      <button class="b-ghost" id="nextS">다음</button>
-      <button class="b-mint autobtn" id="playS">${playing?'정지':'자동 발표'}</button>
-      <button class="b-ghost autobtn" id="editScriptS">스크립트 편집</button>
-    </div>
-    <div class="mini" style="text-align:center">자동 발표: 음성(TTS)으로 스크립트를 읽고 자막·용어 설명과 함께 슬라이드가 넘어갑니다 · 약 3분</div>
-    <div id="scriptEditor"></div>
-    </div>
-  </div>`;
+  return `<div class="slidewrap">${head}<div id="webSlidesSec"></div></div>`;
 }
-function bindDeck(){
-  renderWebSlides();
-  if(!$("introDeckHead")){ const w=$("introDeckWrap"); if(w)w.style.display="none"; }
-  const ih=$("introDeckHead");
-  if(ih)ih.onclick=()=>{const w=$("introDeckWrap"),a=$("introDeckArrow");const open=w.style.display==="none";w.style.display=open?"":"none";a.textContent=open?"▾":"▸";};
-  $("prevS").onclick=()=>{stopPlay();state.deckIdx=(state.deckIdx-1+SLIDES.length)%SLIDES.length;renderStage("deck");};
-  $("nextS").onclick=()=>{stopPlay();state.deckIdx=(state.deckIdx+1)%SLIDES.length;renderStage("deck");};
-  $("playS").onclick=()=>playing?stopPlay():startPlay();
-  $("editScriptS").onclick=openScriptEditor;
-}
+function bindDeck(){ renderWebSlides(); }
 function pickKoVoice(){
   const vs=window.speechSynthesis.getVoices()||[];
   const ko=vs.filter(v=>/ko-KR|ko_KR|ko\b/i.test(v.lang));
@@ -3758,20 +3679,8 @@ function updateProjectAPI(id,patch){
 }
 function listProjectsAPI(){ return (state.projects||[]).slice(); }
 
-async function quickAddProject(kind){
-  const presets={
-    site:{title:"약사 참여 연구 사이트", status:"제안", url:"registry.html",
-      desc:"지역사회·전국의 약사·제약사·의사가 등록해 약 디자인(제제 설계)에 참여하는 연구 창구.",
-      tags:["연구","등록","약 디자인"]},
-    app:{title:"복약·접종 앱", status:"데모", url:"MediNote_app.html",
-      desc:"MediNote — 5탭 복약·예방접종 관리 앱. 건강 데이터는 기기 안에만 저장.",
-      tags:["모바일","복약","예방접종"]},
-  };
-  const p=presets[kind]; if(!p) return;
-  state.projects=state.projects||[];
-  state.projects.push({id:"p_"+Date.now(),...p,meeting:state.currentMeetingId});
-  await saveNow(); renderProjects(); toast("'"+p.title+"'을(를) 추가했습니다");
-}
+// (v97) 빠른추가 프리셋 제거 — 프로젝트는 사용자가 직접 등록
+
 function bindProjects(){
   renderProjects();
   const a=$("projAdd"); if(a) a.onclick=()=>openProjectForm(null);
@@ -6091,7 +6000,7 @@ function renderMeetingCards(list,emptyMsg){
     await saveNow();                                    // 떠나는 회의 세션 저장
     state.currentMeetingId=b.dataset.id;
     await loadMeetingSession(state.currentMeetingId);   // 이 회의의 세션 로드
-    syncCurrentMeeting(); enterHub(); setTimeout(checkAssignNotify,600); });
+    syncCurrentMeeting(); await migrateIntroDeck(state.currentMeetingId); enterHub(); setTimeout(checkAssignNotify,600); });
   setTimeout(refineIconsAI,800);
   box.querySelectorAll(".mc-edit").forEach(b=>b.onclick=()=>openMeetingEditor(b.dataset.id));
   box.querySelectorAll(".mc-del").forEach(b=>b.onclick=()=>{
