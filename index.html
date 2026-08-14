@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=98, BUILD_DATE="2026-07-22";
+const BUILD=100, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -901,6 +901,45 @@ async function loadAll(){
 
 // ==================== CLAUDE ====================
 // AI 호출: API 키는 localStorage(이 브라우저)에만 저장 — 소스코드·GitHub에는 절대 넣지 않음
+// ==================== 공용 폼 모달 — 브라우저 prompt() 대체 (정식 페이지형 입력) ====================
+function formModal(title,fields,onSave,opts){
+  opts=opts||{};
+  let m=$("fmModal"); if(m)m.remove();
+  m=document.createElement("div"); m.id="fmModal";
+  m.style.cssText="position:fixed;inset:0;z-index:10001;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:16px";
+  const f=x=>{
+    const lab=`<label style="font-size:11.5px;font-weight:800;color:var(--soft)">${x.label||""}</label>`;
+    const base="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px";
+    if(x.type==="textarea") return `<div style="margin-bottom:10px">${lab}<textarea id="fm_${x.id}" rows="${x.rows||4}" placeholder="${esc(x.ph||"")}" style="${base};line-height:1.6">${esc(x.value||"")}</textarea></div>`;
+    if(x.type==="select") return `<div style="margin-bottom:10px">${lab}<select id="fm_${x.id}" style="${base}">${(x.opts||[]).map(o=>`<option value="${esc(o.v)}" ${o.v===x.value?"selected":""}>${esc(o.t)}</option>`).join("")}</select></div>`;
+    return `<div style="margin-bottom:10px">${lab}<input id="fm_${x.id}" type="${x.type==="password"?"password":"text"}" value="${esc(x.value||"")}" placeholder="${esc(x.ph||"")}" style="${base}"></div>`;
+  };
+  m.innerHTML=`
+  <div style="background:#fff;border-radius:16px;max-width:min(520px,96vw);width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
+      <div style="flex:1;font-weight:800;color:var(--deep);font-size:15px">${esc(title)}</div>
+      ${opts.extra?`<button class="b-ghost" id="fmExtra" style="color:${opts.extra.color||"var(--deep)"}">${esc(opts.extra.label)}</button>`:""}
+      <button class="b-ghost" id="fmCancel">취소</button>
+      <button class="b-mint" id="fmSave">${esc(opts.saveLabel||"저장")}</button>
+    </div>
+    <div style="padding:14px 18px;overflow:auto">
+      ${opts.note?`<div class="mini" style="margin-bottom:10px;line-height:1.6">${opts.note}</div>`:""}
+      ${fields.map(f).join("")}
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  const cancel=()=>{ m.remove(); opts.onCancel&&opts.onCancel(); };
+  m.onclick=e=>{ if(e.target===m)cancel(); };
+  $("fmCancel").onclick=cancel;
+  if(opts.extra)$("fmExtra").onclick=()=>{ m.remove(); opts.extra.fn&&opts.extra.fn(); };
+  $("fmSave").onclick=()=>{
+    const vals={}; fields.forEach(x=>{ const el=$("fm_"+x.id); vals[x.id]=el?el.value:""; });
+    m.remove(); onSave&&onSave(vals);
+  };
+  const first=m.querySelector("input,textarea,select"); if(first)first.focus();
+}
+function formModalP(title,fields,opts){ return new Promise(res=>formModal(title,fields,v=>res(v),Object.assign({},opts||{},{onCancel:()=>res(null)}))); }
+window.formModal=formModal;
 function getApiKey(){ return localStorage.getItem("medit:apikey")||""; }
 function getAiProv(){ return localStorage.getItem("medit:aiprov")||"claude"; }
 function setAiProv(p){ localStorage.setItem("medit:aiprov",p==="openai"?"openai":"claude"); }
@@ -939,10 +978,11 @@ function syncAiKeyUI(){
 }
 setInterval(syncAiKeyUI,1200);
 function promptApiKey(){
-  const cur=getApiKey();
-  const k=prompt("Anthropic API 키 (sk-ant-…)\nconsole.anthropic.com → API Keys에서 발급.\n이 브라우저에만 저장됩니다."+(cur?"\n\n(현재 키 등록됨 — 새 키를 넣으면 교체)":""));
-  if(k===null) return;
-  setApiKey(k); refreshApiKeyStatus();
+  const cur=getApiKey(); const prov=getAiProv();
+  formModal("내 AI 키 등록·교체",[
+    {id:"k",label:(prov==="openai"?"OpenAI 키 (sk-…)":"Anthropic 키 (sk-ant-…)")+" — 이 브라우저에만 저장",type:"password",ph:cur?"새 키를 넣으면 교체":"키 붙여넣기"}
+  ],v=>{ if(v.k&&v.k.trim()){ setApiKey(v.k); refreshApiKeyStatus(); } },
+  {note:"발급 방법은 아래 [자세히 보기]에 단계별로 있습니다."+(cur?" (현재 키 등록됨)":"")});
 }
 function refreshApiKeyStatus(){
   const el=$("apiKeyStatus"); if(!el) return;
@@ -1031,7 +1071,10 @@ async function callClaude(system,user,maxTokens,opts){
   let key=getApiKey();
   if(!key){
     if(opts.noPrompt) throw new Error(proxyWhy);   // 자동·배경 호출에서는 키 입력창을 절대 띄우지 않음
-    key=prompt("[공유 프록시 사용 불가: "+proxyWhy+"]\n\nAI 요약을 쓰려면 Anthropic API 키가 필요합니다.\nconsole.anthropic.com → API Keys에서 발급 (sk-ant-…)\n키는 이 브라우저에만 저장되고 어디에도 전송·게시되지 않습니다.\n\n비워두고 확인하면 AI 없이 진행합니다.");
+    const _fm=await formModalP("AI 키 필요 — 공유 프록시 사용 불가",[
+      {id:"k",label:"Anthropic API 키 (sk-ant-…) — 이 브라우저에만 저장",type:"password",ph:"비워두고 [저장]하면 AI 없이 진행"}],
+      {note:"사유: "+esc(proxyWhy)});
+    key=_fm?(_fm.k||""):"";
     if(key){ setApiKey(key); } else { throw new Error("API 키 없음 — AI 기능 건너뜀"); }
   }
   const ctrl=new AbortController(); const tm=setTimeout(()=>ctrl.abort(),opts.timeout||90000);
@@ -1410,15 +1453,16 @@ window.previewFromSchedule=previewFromSchedule;
 function editRecordDT(id){
   const r=(state.records||[]).find(x=>x.id===id); if(!r) return;
   const cur=r.sd?r.sd.slice(0,16).replace("T"," "):"";
-  const v=prompt("이 회차의 실제 일시를 입력하세요 (예: 2026-07-21 10:30)",cur||"2026-07-21 10:30");
-  if(v===null) return;
-  const t=new Date(v.trim().replace(" ","T"));
-  if(isNaN(t.getTime())){ toast("형식이 올바르지 않습니다 — 예: 2026-07-21 10:30"); return; }
-  const place=prompt("이 회차의 장소 (예: 2층 로비 — 비우면 표시 안 함)",r.place||"");
-  r.sd=t.toISOString(); r.dt=t.toLocaleString('ko-KR');
-  if(place!==null) r.place=place.trim();
-  saveRecords(); renderRecords&&renderRecords(); renderArchive&&renderArchive();
-  toast("회차 일시·장소를 수정했습니다");
+  formModal("회차 일시·장소 수정",[
+    {id:"dt",label:"실제 일시",value:cur||"2026-07-21 10:30",ph:"예: 2026-07-21 10:30"},
+    {id:"pl",label:"장소 (비우면 표시 안 함)",value:r.place||"",ph:"예: 2층 로비"}
+  ],v=>{
+    const t=new Date(v.dt.trim().replace(" ","T"));
+    if(isNaN(t.getTime())){ toast("일시 형식이 올바르지 않습니다 — 예: 2026-07-21 10:30"); return; }
+    r.sd=t.toISOString(); r.dt=t.toLocaleString('ko-KR'); r.place=v.pl.trim();
+    saveRecords(); renderRecords&&renderRecords(); renderArchive&&renderArchive();
+    toast("회차 일시·장소를 수정했습니다");
+  });
 }
 window.editRecordDT=editRecordDT;
 function renderDone(){
@@ -1452,11 +1496,12 @@ function renderDone(){
   });
   box.querySelectorAll("[data-dedit]").forEach(b=>b.onclick=async()=>{
     const d=state.schedule.done.find(x=>x.id===b.dataset.dedit); if(!d)return;
-    const title=prompt("내용 수정",d.title); if(title===null)return;
-    const memo=prompt("메모 수정",d.memo||""); if(memo===null)return;
-    const url=prompt("링크 수정 (비우면 링크 없음)",d.url||""); if(url===null)return;
-    d.title=title.trim()||d.title; d.memo=memo.trim(); d.url=url.trim();
-    await saveNow(); renderDone(); toast("수정했습니다");
+    formModal("작업 수정",[
+      {id:"t",label:"내용",value:d.title},
+      {id:"m",label:"메모",value:d.memo||""},
+      {id:"u",label:"링크 (비우면 없음)",value:d.url||"",ph:"https://…"}
+    ],async v=>{ d.title=v.t.trim()||d.title; d.memo=v.m.trim(); d.url=v.u.trim();
+      await saveNow(); renderDone(); toast("수정했습니다"); });
   });
 }
 function openDoneForm(){
@@ -1629,12 +1674,13 @@ async function litSearch(){
 }
 function editLitItem(i){
   const it=(state.lit.items||[])[i]; if(!it)return;
-  const title=prompt("제목 수정",it.title||""); if(title===null)return;
-  const summary=prompt("요약 수정",it.summary||""); if(summary===null)return;
-  const relevance=prompt("병원약학 관련성 수정",it.relevance||""); if(relevance===null)return;
-  const url=prompt("링크 수정 (비우면 링크 없음)",it.url||""); if(url===null)return;
-  it.title=title.trim()||it.title; it.summary=summary.trim(); it.relevance=relevance.trim(); it.url=url.trim();
-  scheduleSave(); renderLit(); toast("수정했습니다 — 내보내기에도 반영됩니다");
+  formModal("문헌 수정",[
+    {id:"t",label:"제목",value:it.title||""},
+    {id:"s",label:"요약",type:"textarea",rows:3,value:it.summary||""},
+    {id:"r",label:"이 회의에서의 의미",type:"textarea",rows:2,value:it.relevance||""},
+    {id:"u",label:"링크 (비우면 없음)",value:it.url||""}
+  ],v=>{ it.title=v.t.trim()||it.title; it.summary=v.s.trim(); it.relevance=v.r.trim(); it.url=v.u.trim();
+    scheduleSave(); renderLit(); toast("수정했습니다 — 내보내기에도 반영됩니다"); });
 }
 window.editLitItem=editLitItem;
 function litToMD(items){
@@ -1773,11 +1819,11 @@ function bindHome(){
   if(cw)cw.onclick=()=>{
     const cur=state.meeting.when?new Date(state.meeting.when):null;
     const def=cur?cur.getFullYear()+"-"+String(cur.getMonth()+1).padStart(2,"0")+"-"+String(cur.getDate()).padStart(2,"0")+" "+String(cur.getHours()).padStart(2,"0")+":"+String(cur.getMinutes()).padStart(2,"0"):"2026-07-10 10:00";
-    const v=prompt("회의 일시 입력 (예: 2026-07-10 10:00)",def);
-    if(v===null)return;
-    const t=new Date(v.trim().replace(" ","T"));
-    if(isNaN(t.getTime())){toast("형식이 올바르지 않습니다 — 예: 2026-07-10 10:00");return;}
-    state.meeting.when=t.getTime(); scheduleSave();
+    formModal("회의 일시 입력",[{id:"dt",label:"일시",value:def,ph:"예: 2026-07-10 10:00"}],vv=>{
+      const t=new Date(vv.dt.trim().replace(" ","T"));
+      if(isNaN(t.getTime())){toast("형식이 올바르지 않습니다 — 예: 2026-07-10 10:00");return;}
+      state.meeting.when=t.getTime(); scheduleSave(); renderStage&&renderStage("console");
+    }); return;
     cw.textContent=fmtTime(state.meeting.when);
     toast("회의 일시를 설정했습니다 — 회의록·기록에 이 일시가 사용됩니다");
   };
@@ -1890,16 +1936,20 @@ function renderCompanies(){
   if(canManage){
     box.innerHTML+=`<button class="b-ghost" id="addCompany" style="margin-top:9px">+ 기업 등록</button>`;
     const ac=$("addCompany"); if(ac)ac.onclick=()=>{
-      const name=prompt("기업명 (입주기업 현황에서 자동 채움 — 예: 츄구미, 메디아이티, ChewGumi)"); if(!name)return;
-      const d=dirMatch(name);
-      if(d){
-        if(state.companies.some(c=>dirNames(d).some(n=>c.name.toLowerCase().includes(n.toLowerCase())))){ toast("이미 등록된 기업입니다"); return; }
-        state.companies.push({id:"c_"+Date.now(),name:d.name+(d.alias?` (${d.alias[0]})`:""),role:"입주 기업",desc:d.item,room:d.bld+" "+d.room+"호"});
-        scheduleSave(); renderCompanies(); toast("'"+d.name+"' 정보를 입주기업 현황에서 자동으로 채웠습니다"); return;
-      }
-      const desc=prompt("한 줄 소개","")||"";
-      state.companies.push({id:"c_"+Date.now(),name,role:"입점 기업",desc});
-      scheduleSave(); renderCompanies();
+      formModal("기업 등록",[
+        {id:"n",label:"기업명 (등록된 기업 DB에서 자동 채움)",ph:"예: 츄구미, ChewGumi"},
+        {id:"d",label:"한 줄 소개 (자동 채움 시 생략 가능)",ph:""}
+      ],v=>{
+        const name=v.n.trim(); if(!name)return;
+        const d=dirMatch(name);
+        if(d){
+          if(state.companies.some(c=>dirNames(d).some(n=>c.name.toLowerCase().includes(n.toLowerCase())))){ toast("이미 등록된 기업입니다"); return; }
+          state.companies.push({id:"c_"+Date.now(),name:d.name+(d.alias&&d.alias.length?` (${d.alias[0]})`:""),role:"입주 기업",desc:d.item,room:d.bld});
+          scheduleSave(); renderCompanies(); toast("'"+d.name+"' 정보를 기업 DB에서 자동으로 채웠습니다"); return;
+        }
+        state.companies.push({id:"c_"+Date.now(),name,role:"입점 기업",desc:v.d.trim()});
+        scheduleSave(); renderCompanies();
+      });
     };
   }
 }
@@ -1950,15 +2000,15 @@ function linkJobToMeeting(jobId){
   // 연결할 수 있는 다른 회의 목록
   const others=state.meetings.filter(m=>!(j.linkedMeetingIds||[]).includes(m.id));
   if(!others.length){ toast("연결할 다른 회의가 없습니다. 먼저 회의를 만들어 주세요."); return; }
-  const list=others.map((m,i)=>`${i+1}. ${m.title} (${fmtDate(m.date)})`).join("\n");
-  const pick=prompt("이 잡을 연결할 회의 번호를 입력하세요:\n\n"+list,"1");
-  const idx=parseInt(pick,10)-1;
-  if(isNaN(idx)||idx<0||idx>=others.length)return;
-  const target=others[idx];
-  j.linkedMeetingIds=j.linkedMeetingIds||[]; j.linkedMeetingIds.push(target.id);
-  target.jobs=target.jobs||[]; if(!target.jobs.includes(j.id))target.jobs.push(j.id);
-  scheduleSave(); renderJobs();
-  toast(`'${j.title}'을(를) '${target.title}'에 연결했습니다`);
+  formModal("연결할 회의 선택",[
+    {id:"m",label:"회의",type:"select",opts:others.map(m=>({v:m.id,t:m.title+" ("+fmtDate(m.date)+")"}))}
+  ],v=>{
+    const target=others.find(x=>x.id===v.m); if(!target)return;
+    j.linkedMeetingIds=j.linkedMeetingIds||[]; j.linkedMeetingIds.push(target.id);
+    target.jobs=target.jobs||[]; if(!target.jobs.includes(j.id))target.jobs.push(j.id);
+    scheduleSave(); renderJobs();
+    toast(`'${j.title}'을(를) '${target.title}'에 연결했습니다`);
+  });
 }
 function startMeeting(){
   state.meeting.started=Date.now();state.meeting.ended=null;state.meetingStart=Date.now();
@@ -2592,10 +2642,12 @@ function renderWebSlides(){
   sec.querySelectorAll("[data-wsrm]").forEach(b=>b.onclick=()=>{ state.webSlides.splice(Number(b.dataset.wsrm),1); scheduleSave(); renderWebSlides(); });
   sec.querySelectorAll("[data-wsedit]").forEach(b=>b.onclick=()=>{
     const s=state.webSlides[Number(b.dataset.wsedit)]; if(!s)return;
-    const t=prompt("슬라이드 제목",s.t); if(t===null)return;
-    const pts=prompt("내용 (·으로 구분)", (s.pts||[]).join(" · ")); if(pts===null)return;
-    s.t=t.trim()||s.t; s.pts=pts.split("·").map(x=>x.trim()).filter(Boolean);
-    scheduleSave(); renderWebSlides();
+    formModal("슬라이드 수정",[
+      {id:"t",label:"제목",value:s.t},
+      {id:"p",label:"내용 (한 줄에 하나)",type:"textarea",rows:4,value:(s.pts||[]).join("\n")},
+      {id:"e",label:"이모지 (선택)",value:s.emoji||"",ph:"예: 📱"}
+    ],v=>{ s.t=v.t.trim()||s.t; s.pts=v.p.split("\n").map(x=>x.trim()).filter(Boolean).slice(0,5); s.emoji=v.e.trim();
+      scheduleSave(); renderWebSlides(); });
   });
   sec.querySelectorAll("[data-wsimg]").forEach(b=>b.onclick=async()=>{
     const i=Number(b.dataset.wsimg); const s=state.webSlides[i]; if(!s)return;
@@ -2619,8 +2671,12 @@ function renderWebSlides(){
   });
 }
 function openWsGen(){
-  const topic=prompt("슬라이드 주제·개요를 적어주세요 (예: 츄구미 웹사이트 협업 제안 — 목표, 일정, 역할 분담)");
-  if(topic===null||!topic.trim())return;
+  formModal("AI로 슬라이드 만들기",[
+    {id:"topic",label:"주제·개요",type:"textarea",rows:4,ph:"예: 츄구미 웹사이트 협업 제안 — 목표, 일정, 역할 분담"}
+  ],v=>{ const topic=(v.topic||"").trim(); if(!topic)return; wsGenRun(topic); },
+  {saveLabel:"생성",note:"표지부터 다음 단계까지 5~8장을 간결하게 구성합니다. 생성 후 각 장을 [수정]으로 다듬을 수 있습니다."});
+}
+function wsGenRun(topic){
   toast("AI가 슬라이드를 구성하는 중…");
   (async()=>{
     try{
@@ -3228,9 +3284,11 @@ function renderNotionBoard(host){
   });
   el.querySelectorAll("[data-ntedit]").forEach(b=>b.onclick=()=>{
     const x=items.find(z=>z.id===b.dataset.ntedit); if(!x)return;
-    const t=prompt("이슈 내용 수정",x.title); if(t===null)return;
-    const m=prompt("메모 수정 (비우면 없음)",x.memo||""); if(m===null)return;
-    x.title=t.trim()||x.title; x.memo=m.trim(); scheduleSave(); renderProjects();
+    formModal("이슈 수정",[
+      {id:"t",label:"내용",value:x.title},
+      {id:"m",label:"메모 (비우면 없음)",value:x.memo||""},
+      {id:"s",label:"상태",type:"select",value:x.status,opts:[{v:"todo",t:"미반영"},{v:"doing",t:"진행 중"},{v:"done",t:"반영됨"}]}
+    ],v=>{ x.title=v.t.trim()||x.title; x.memo=v.m.trim(); x.status=v.s; scheduleSave(); renderProjects(); });
   });
   el.querySelectorAll("[data-ntrm]").forEach(b=>b.onclick=()=>{
     state.notion=items.filter(z=>z.id!==b.dataset.ntrm); scheduleSave(); renderProjects();
@@ -4060,14 +4118,15 @@ window.liveDocReset=liveDocReset;
 function addTyped(){const v=$("typeInput").value;if(v.trim()){addSegment(v,'나');$("typeInput").value="";}}
 function editSegText(i){
   const s=state.segments[i]; if(!s)return;
-  const v=prompt("발언 내용 수정 (비우고 확인하면 이 발언 삭제)",s.text||"");
-  if(v===null)return;
-  if(!v.trim()){
-    if(!confirm("이 발언을 삭제할까요?"))return;
+  formModal("발언 수정",[{id:"t",label:"발언 내용",type:"textarea",rows:4,value:s.text||""}],v=>{
+    if(!v.t.trim()){ toast("내용이 비어 있습니다 — 삭제는 [이 발언 삭제] 버튼을 쓰세요"); return; }
+    s.text=v.t.trim(); s.auto=false;
+    renderTranscript(); renderLiveDoc&&renderLiveDoc(); scheduleSave();
+  },{extra:{label:"이 발언 삭제",color:"#C24A4A",fn:()=>{
     state.segments.splice(i,1);
     if(state.liveDoc&&state.liveDoc.cursor>state.segments.length)state.liveDoc.cursor=state.segments.length;
-  } else { s.text=v.trim(); if(s.ko)delete s.ko; if(s.lang&&s.lang!=="ko"){s.needKo=true;translateSegment(s);} }
-  renderTranscript(); renderLiveDoc(); refreshBadges(); scheduleSave();
+    renderTranscript(); renderLiveDoc&&renderLiveDoc(); refreshBadges(); scheduleSave(); toast("발언을 삭제했습니다");
+  }}});
 }
 window.editSegText=editSegText;
 // ==================== 카카오톡 대화 가져오기 ====================
@@ -4158,10 +4217,10 @@ function openKakaoImport(){
 window.openKakaoImport=openKakaoImport;
 function editSegWho(i){
   const s=state.segments[i]; if(!s) return;
-  const v=prompt("이 발언의 발화자 이름 수정",s.who||"");
-  if(v===null) return;
-  s.who=(v.trim()||s.who); s.auto=false; s.guessed=false;   // 사람이 확정 — 이후 AI 추정이 덮지 않음
-  renderTranscript(); scheduleSave();
+  formModal("발화자 수정",[{id:"w",label:"이 발언의 발화자",value:s.who||"",ph:"이름"}],v=>{
+    s.who=(v.w.trim()||s.who); s.auto=false; s.guessed=false;   // 사람이 확정 — 이후 AI 추정이 덮지 않음
+    renderTranscript(); scheduleSave();
+  });
 }
 window.editSegWho=editSegWho;
 // AI 화자 추정 — 목소리가 아니라 발언 내용(말투·자기지칭·전문영역·호칭)으로 참석자 명단과 대조해 추정
@@ -4352,16 +4411,18 @@ function addAnno(term,note,url){
   scheduleSave(); refreshAnnoViews(); toast(`'${term}' 주석 등록 — 회의록에서 점선 용어를 누르면 말풍선이 뜹니다`);
 }
 function newAnnoFlow(){
-  const term=prompt("주석을 달 용어 (회의록에 나오는 그대로)\n예: 팜"); if(!term)return;
-  const note=prompt("한 줄 설명\n예: 대형병원에서 쓰는 제약 프로그램 — 제약 이름·환자 병명 등을 DB 필드로 보유","")||"";
-  const url=prompt("링크 (선택 — 출처·문서 주소)","")||"";
-  addAnno(term,note,url);
+  formModal("용어 주석 추가",[
+    {id:"t",label:"주석을 달 용어 (회의록 표기 그대로)",ph:"예: 팜"},
+    {id:"n",label:"한 줄 설명",type:"textarea",rows:2,ph:"예: 대형병원에서 쓰는 제약 프로그램"},
+    {id:"u",label:"링크 (선택)",ph:"https://…"}
+  ],v=>{ if(!v.t.trim())return; addAnno(v.t.trim(),v.n,v.u); });
 }
 function editAnno(id){
   const a=(state.annos||[]).find(z=>z.id===id); if(!a)return; hideAnnoPop();
-  const note=prompt("설명 수정",a.note||""); if(note===null)return;
-  const url=prompt("링크 수정 (비우면 링크 없음)",a.url||""); if(url===null)return;
-  a.note=note.trim(); a.url=url.trim(); scheduleSave(); refreshAnnoViews();
+  formModal("주석 수정 — "+a.term,[
+    {id:"n",label:"설명",type:"textarea",rows:2,value:a.note||""},
+    {id:"u",label:"링크 (비우면 없음)",value:a.url||""}
+  ],v=>{ a.note=v.n.trim(); a.url=v.u.trim(); scheduleSave(); refreshAnnoViews(); });
 }
 function delAnno(id){
   hideAnnoPop();
@@ -4440,16 +4501,18 @@ function renderResearch(){const box=$("research");if(!box)return;
   box.innerHTML=state.research.length?state.research.map((r,i)=>`<div class="rcard"><div class="q" style="display:flex;gap:6px;align-items:baseline"><span style="flex:1">${esc(r.q)}</span>${canEdit&&r.ans&&!/조사 중|조사 실패/.test(r.ans)?`<button class="b-ghost" style="padding:2px 8px;font-size:11.5px;flex:none" onclick="researchToAnno(${i})" title="이 조사 내용을 회의록 용어 주석(말풍선)으로 답니다">주석 달기</button><button class="b-ghost" style="padding:2px 8px;font-size:11.5px;flex:none" onclick="editResearch(${i})">수정</button><button class="b-ghost" style="padding:2px 8px;font-size:11.5px;flex:none;color:#C24A4A" onclick="delResearch(${i})">삭제</button>`:""}</div><div>${esc(r.ans)}</div></div>`).join(""):'<div class="mini" style="font-style:italic">용어·수치를 조사합니다. 조사 결과는 [주석 달기]로 회의록 용어에 말풍선으로 연결됩니다.</div>';}
 function researchToAnno(i){
   const r=state.research[i]; if(!r)return;
-  const term=prompt("회의록에서 밑줄·말풍선을 달 용어 (회의록 표기 그대로)",r.q.split(/\s/)[0]||r.q); if(!term)return;
-  const note=prompt("말풍선 설명 (수정 가능)",String(r.ans||"").slice(0,200)); if(note===null)return;
-  const url=prompt("링크 (선택)","")||"";
-  addAnno(term,note,url);
+  formModal("조사 내용을 회의록 주석으로",[
+    {id:"t",label:"밑줄·말풍선을 달 용어 (회의록 표기 그대로)",value:r.q.split(/\s/)[0]||r.q},
+    {id:"n",label:"말풍선 설명",type:"textarea",rows:3,value:String(r.ans||"").slice(0,200)},
+    {id:"u",label:"링크 (선택)",ph:"https://…"}
+  ],v=>{ if(!v.t.trim())return; addAnno(v.t.trim(),v.n,v.u); });
 }
 window.researchToAnno=researchToAnno;
 function editResearch(i){
   const r=state.research[i]; if(!r)return;
-  const ans=prompt("조사 결과 수정",r.ans||""); if(ans===null)return;
-  r.ans=ans.trim(); scheduleSave(); renderResearch();
+  formModal("조사 결과 수정",[
+    {id:"ans",label:"조사 결과",type:"textarea",rows:6,value:r.ans||""}
+  ],v=>{ r.ans=(v.ans||"").trim(); scheduleSave(); renderResearch(); });
 }
 function delResearch(i){
   const r=state.research[i]; if(!r)return;
@@ -4782,11 +4845,15 @@ function mergeSessions(encKey){
   const items=(state.records||[]).filter(r=>(normTitle(r.title)||"untitled")===key);
   if(items.length<2){ toast("병합할 회차가 2개 이상이어야 합니다"); return; }
   if(!confirm(`'${items[0].title}'의 ${items.length}개 회차를 하나의 회의 기록으로 병합할까요?\n(각 회차의 스크립트·문단·조사 내용은 모두 보존되어 합쳐집니다)`)) return;
-  const v=prompt("병합된 회의의 실제 일시 (예: 2026-07-21 10:30)","2026-07-21 10:30");
-  if(v===null) return;
-  const t=new Date(v.trim().replace(" ","T"));
+  formModal("회차 병합 — 대표 일시·장소",[
+    {id:"dt",label:"병합된 회의의 실제 일시",value:"2026-07-21 10:30",ph:"예: 2026-07-21 10:30"},
+    {id:"place",label:"장소 (비우면 생략)",ph:"예: 2층 로비"}
+  ],vals=>{ doMergeRecords(key,vals.dt,vals.place||""); },{saveLabel:"병합"});
+}
+function doMergeRecords(key,v,place){
+  const items=(state.records||[]).filter(r=>(normTitle(r.title)||"untitled")===key);
+  const t=new Date(String(v||"").trim().replace(" ","T"));
   if(isNaN(t.getTime())){ toast("형식이 올바르지 않습니다 — 예: 2026-07-21 10:30"); return; }
-  const place=prompt("장소 (예: 2층 로비 — 비우면 생략)","")||"";
   // 최신 기록을 기준으로 나머지를 시간 역순으로 이어붙임 (오래된 것이 앞에 오도록 정렬)
   const sorted=items.slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));   // 오래된 → 최신
   const base=JSON.parse(JSON.stringify(sorted[sorted.length-1]));                     // 최신을 본체로
@@ -5463,11 +5530,14 @@ function renderAAPageList(){
 }
 function editPageFlow(id){
   const p=(state.pages||[]).find(x=>x.id===id); if(!p)return;
-  const label=prompt("탭 이름 수정",p.label); if(label===null)return;
-  const url=prompt("주소 수정 (파일명.html 또는 https://…)",p.url); if(url===null)return;
-  if(label.trim())p.label=label.trim();
-  if(url.trim())p.url=url.trim();
-  scheduleSave(); renderTabs&&renderTabs(); renderAAPageList(); toast("탭을 수정했습니다");
+  formModal("탭 수정",[
+    {id:"label",label:"탭 이름",value:p.label},
+    {id:"url",label:"주소 (파일명.html 또는 https://…)",value:p.url}
+  ],v=>{
+    if((v.label||"").trim())p.label=v.label.trim();
+    if((v.url||"").trim())p.url=v.url.trim();
+    scheduleSave(); renderTabs&&renderTabs(); renderAAPageList(); toast("탭을 수정했습니다");
+  });
 }
 function delPageFlow(id){
   const p=(state.pages||[]).find(x=>x.id===id); if(!p)return;
@@ -5894,7 +5964,7 @@ function meetingLink(id){ return location.origin+location.pathname+"?m="+encodeU
 function copyMeetingLink(id){
   const url=meetingLink(id);
   if(navigator.clipboard){ navigator.clipboard.writeText(url); toast("회의 입장 링크를 복사했습니다 — 초대 메일·카톡에 붙여넣으세요"); }
-  else prompt("회의 입장 링크",url);
+  else formModal("회의 입장 링크",[{id:"u",label:"아래 주소를 길게 눌러 복사하세요",value:url}],()=>{},{saveLabel:"닫기"});
 }
 window.copyMeetingLink=copyMeetingLink;
 // 회의 초대 QR — 링크를 QR로 (화면 스캔·이미지 저장·인쇄)
@@ -6013,12 +6083,15 @@ function showMeetingList(){
   }
   const cb=$("connBack"); if(cb)cb.onclick=()=>{ CURRENT_CONN=null; showMeetingList(); };
   const nc=$("mlNewConn"); if(nc)nc.onclick=()=>{
-    const company=prompt("커넥션의 회사들 (쉼표로 여러 개 — 예: MedIT, 츄구미)"); if(!company)return;
-    state.connections=state.connections||[];
-    if(connGroups(list).some(x=>x.key===connKey(company))&&false){}
-    state.connections.push({id:"cn_"+Date.now(),company:company.trim()});
-    saveNow&&saveNow(); CURRENT_CONN=connKey(company); showMeetingList();
-    toast("커넥션을 만들었습니다 — 이 안에서 회의를 만들면 회사 배지가 자동으로 채워집니다");
+    formModal("새 커넥션 만들기",[
+      {id:"company",label:"커넥션의 회사들 (쉼표로 여러 개)",ph:"예: MedIT, 츄구미"}
+    ],v=>{
+      const company=(v.company||"").trim(); if(!company)return;
+      state.connections=state.connections||[];
+      state.connections.push({id:"cn_"+Date.now(),company});
+      saveNow&&saveNow(); CURRENT_CONN=connKey(company); showMeetingList();
+      toast("커넥션을 만들었습니다 — 이 안에서 회의를 만들면 회사 배지가 자동으로 채워집니다");
+    },{saveLabel:"만들기"});
   };
   $("logoutBtn").onclick=async()=>{await authSignOut();state.user={role:null,name:"",email:"",id:null};clearUser();authMode="login";renderAuth();};
   $("mlSearch").onclick=async()=>{ const r=await searchMeetings($("mlQuery").value); renderMeetingCards(r.length?r:[], r.length?"":"검색 결과가 없습니다."); };
