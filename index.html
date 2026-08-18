@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=104, BUILD_DATE="2026-07-22";
+const BUILD=105, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -2632,10 +2632,14 @@ function renderWebSlides(){
     ${canEdit?`
     <div style="margin-top:14px;border-top:1px dashed var(--line);padding-top:11px">
       <b style="font-size:13.5px;color:var(--deep)">슬라이드 만들기 (AI · HTML형)</b>
-      <div class="mini" style="margin:4px 0 8px">주제·개요를 적으면 AI가 <b>디자인된 HTML 슬라이드 6장</b>을 코딩해 만듭니다. 만든 뒤 각 장을 [이 장 수정]으로 다듬을 수 있습니다.</div>
+      <div class="mini" style="margin:4px 0 8px">주제·개요를 적으면 AI가 <b>디자인된 HTML 슬라이드</b>를 원하는 장수만큼 코딩하고, 장마다 <b>발표 대본</b>까지 씁니다. [이 장 수정]으로 화면·대본 모두 다듬을 수 있습니다.</div>
       <textarea id="wsTopic" rows="3" placeholder="예: 츄구미 웹사이트 협업 제안 — 목표, 일정, 역할 분담" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:12.5px;line-height:1.6"></textarea>
       <div style="display:flex;gap:6px;margin-top:7px;align-items:center;flex-wrap:wrap">
-        <button class="b-mint" id="wsGen6" style="padding:7px 15px">HTML형 6장 만들기</button>
+        <label class="mini" style="display:flex;align-items:center;gap:4px">장수
+          <input type="number" id="wsCount" value="6" min="1" max="40" style="width:60px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:12.5px"></label>
+        <button class="b-mint" id="wsGen6" style="padding:7px 15px">HTML 슬라이드 만들기</button>
+        <button class="b-ghost" id="wsPptBtn" style="padding:7px 13px" title="파워포인트(.pptx) 파일의 내용을 읽어 HTML 슬라이드로 변환합니다 — 변환 후 자유롭게 수정">PPT에서 변환</button>
+        <input type="file" id="wsPptFile" accept=".pptx" style="display:none">
         <span class="mini" id="wsGenMsg"></span>
       </div>
     </div>`:""}
@@ -2649,8 +2653,10 @@ function renderWebSlides(){
   const ec=$("wsEditCur"); if(ec)ec.onclick=()=>{
     const s=ws[state.wsIdx]; if(!s)return;
     if(s.html){
-      formModal("이 장 수정 (HTML)",[{id:"html",label:"슬라이드 HTML",type:"textarea",rows:12,value:s.html}],
-        v=>{ s.html=v.html||s.html; scheduleSave(); renderWebSlides(); });
+      formModal("이 장 수정 (HTML · 발표 대본)",[
+        {id:"html",label:"슬라이드 HTML",type:"textarea",rows:10,value:s.html},
+        {id:"script",label:"발표 대본 (자동 발표 때 이 대사를 읽습니다)",type:"textarea",rows:3,value:s.script||""}
+      ],v=>{ s.html=v.html||s.html; s.script=(v.script||"").trim(); scheduleSave(); renderWebSlides(); });
     }else{
       formModal("이 장 수정",[
         {id:"t",label:"제목",value:s.t||""},
@@ -2663,18 +2669,61 @@ function renderWebSlides(){
   const g=$("wsGen6"); if(g)g.onclick=async()=>{
     const topic=($("wsTopic").value||"").trim();
     if(!topic){ $("wsGenMsg").textContent="주제·개요를 적어주세요."; return; }
-    g.disabled=true; g.textContent="작성 중…"; $("wsGenMsg").textContent="AI가 HTML 슬라이드 6장을 코딩하는 중… (30초 안팎)";
+    const total=Math.max(1,Math.min(40,Number($("wsCount").value)||6));
+    g.disabled=true; g.textContent="작성 중…";
     try{
       const cm=currentMeeting()||{};
-      const sys='발표 슬라이드 6장을 HTML로 코딩. 출력은 순수 JSON 배열만(코드펜스 금지): [{"html":"..."},...] 정확히 6개. 각 html은 슬라이드 한 장의 내부 마크업(최상위 div 하나, width:100%;height:100%;box-sizing:border-box, 인라인 스타일만, 외부 리소스·이미지·이모지 금지). 디자인: 짙은 청록(#0E3B36)→민트(#12BDB0) 그라데이션 배경 또는 흰 배경+민트 포인트를 장마다 변화, 큰 제목·간결한 요점, 한국어, 과장 금지. 1장=표지, 6장=다음 단계.';
-      const o=await callClaude(sys,"회의: "+(cm.title||"")+"\n주제: "+topic,3800,{noPrompt:true});
-      const arr=JSON.parse(String(o).replace(/```json|```/g,"").trim());
-      if(!Array.isArray(arr)||!arr.length) throw new Error("형식 오류 — 다시 시도해 주세요");
-      state.webSlides=arr.slice(0,8).map(x=>({html:String(x.html||"")}));
+      const out=[];
+      for(let start=1;start<=total;start+=6){
+        const end=Math.min(total,start+5);
+        $("wsGenMsg").textContent=`AI가 ${start}~${end}장을 코딩하는 중… (전체 ${total}장)`;
+        const sys=`발표 슬라이드를 HTML로 코딩. 전체 ${total}장 중 ${start}~${end}장만 이번에 작성. 출력은 순수 JSON 배열만(코드펜스 금지): [{"html":"...","script":"이 장의 발표 대사 2~3문장"},...] 정확히 ${end-start+1}개. 각 html은 슬라이드 한 장의 내부 마크업(최상위 div 하나, width:100%;height:100%;box-sizing:border-box, 인라인 스타일만, 외부 리소스·이미지·이모지 금지). 디자인: 짙은 청록(#0E3B36)→민트(#12BDB0) 그라데이션 또는 흰 배경+민트 포인트를 장마다 변화, 큰 제목·간결한 요점, 한국어, 과장 금지. 1장=표지, 마지막 장=다음 단계.`;
+        const ctx="회의: "+(cm.title||"")+"\n주제: "+topic+(out.length?("\n직전 장 대본: "+String(out[out.length-1].script||"").slice(0,200)):"");
+        const o=await callClaude(sys,ctx,3800,{noPrompt:true});
+        const arr=JSON.parse(String(o).replace(/```json|```/g,"").trim());
+        if(!Array.isArray(arr)||!arr.length) throw new Error("형식 오류 — 다시 시도해 주세요");
+        arr.forEach(x=>out.push({html:String(x.html||""),script:String(x.script||"")}));
+      }
+      state.webSlides=out.slice(0,total);
       state.wsIdx=0; scheduleSave(); renderWebSlides();
-      toast(state.webSlides.length+"장 완성 — ◀▶로 넘겨보고 [발표 모드]로 확인하세요");
-    }catch(e){ $("wsGenMsg").textContent="실패: "+(e.message||e); g.disabled=false; g.textContent="HTML형 6장 만들기"; }
+      toast(state.webSlides.length+"장 완성 (발표 대본 포함) — [자동 발표]가 대본을 읽습니다");
+    }catch(e){ $("wsGenMsg").textContent="실패: "+(e.message||e); g.disabled=false; g.textContent="HTML 슬라이드 만들기"; }
   };
+  // ── PPT(.pptx) → HTML 슬라이드 변환 ──
+  const pb=$("wsPptBtn"), pf=$("wsPptFile");
+  if(pb&&pf){ pb.onclick=()=>pf.click();
+    pf.onchange=async()=>{
+      const file=pf.files&&pf.files[0]; if(!file)return;
+      pb.disabled=true; pb.textContent="변환 중…";
+      try{
+        $("wsGenMsg").textContent="PPT 파일을 읽는 중…";
+        if(!window.JSZip){ await new Promise((res,rej)=>{ const s=document.createElement("script");
+          s.src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+        const zip=await JSZip.loadAsync(await file.arrayBuffer());
+        const names=Object.keys(zip.files).filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n))
+          .sort((a,b)=>Number(a.match(/\d+/)[0])-Number(b.match(/\d+/)[0]));
+        if(!names.length) throw new Error("슬라이드를 찾을 수 없습니다 (.pptx 파일인지 확인)");
+        const pages=[];
+        for(const n of names){
+          const xml=await zip.files[n].async("string");
+          const texts=[...xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map(m=>m[1]).filter(Boolean);
+          pages.push(texts.join(" | "));
+        }
+        const total=pages.length; const out=[];
+        for(let i=0;i<total;i+=6){
+          const chunk=pages.slice(i,i+6);
+          $("wsGenMsg").textContent=`AI가 ${i+1}~${i+chunk.length}장을 HTML로 변환 중… (전체 ${total}장)`;
+          const sys=`파워포인트 슬라이드 텍스트를 HTML 슬라이드로 재디자인. 출력은 순수 JSON 배열만: [{"html":"...","script":"발표 대사 2~3문장"},...] 정확히 ${chunk.length}개, 입력 순서 유지. 내용(문구)은 보존하되 배치·디자인만 새로: 각 html은 한 장의 내부 마크업(최상위 div, width:100%;height:100%;box-sizing:border-box, 인라인 스타일만, 이미지·이모지 금지), 짙은 청록(#0E3B36)·민트(#12BDB0) 팔레트, 한국어.`;
+          const o=await callClaude(sys,chunk.map((t,k)=>`[${i+k+1}장] ${t||"(내용 없음)"}`).join("\n"),3800,{noPrompt:true});
+          const arr=JSON.parse(String(o).replace(/```json|```/g,"").trim());
+          arr.forEach(x=>out.push({html:String(x.html||""),script:String(x.script||"")}));
+        }
+        state.webSlides=out; state.wsIdx=0; scheduleSave(); renderWebSlides();
+        toast("PPT "+total+"장을 HTML 슬라이드로 변환했습니다 — [이 장 수정]으로 다듬어 보세요");
+      }catch(e){ $("wsGenMsg").textContent="변환 실패: "+(e.message||e); }
+      pb.disabled=false; pb.textContent="PPT에서 변환"; pf.value="";
+    };
+  }
 }
 // 음성 목록 — 한국어 음성 전부 나열해 선택 (선택은 이 브라우저에 저장)
 function fillWsVoices(){
@@ -2715,7 +2764,8 @@ function playWebSlides(auto){
     ov.innerHTML=inner+`<div style="position:fixed;bottom:18px;right:24px;font-size:13px;color:#fff;opacity:.7">${idx+1} / ${ws.length} — 클릭·→ 다음, ESC 종료</div>`; };
   draw(); document.body.appendChild(ov);
   const speakCur=()=>{ const s=ws[idx];
-    const txt=s.html?String(s.html).replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim().slice(0,400):(s.t+". "+(s.pts||[]).join(". "));
+    const txt=(s.script&&s.script.trim())?s.script.trim()
+      :(s.html?String(s.html).replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim().slice(0,400):(s.t+". "+(s.pts||[]).join(". ")));
     wsSpeak(txt,()=>{ if(auto){ if(idx<ws.length-1){idx++;draw();speakCur();} else close(); } }); };
   const next=()=>{ if(idx<ws.length-1){idx++;draw(); if(auto)speakCur();} else close(); };
   const prev=()=>{ if(idx>0){idx--;draw(); if(auto)speakCur();} };
