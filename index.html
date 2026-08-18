@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=102, BUILD_DATE="2026-07-22";
+const BUILD=103, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -804,7 +804,7 @@ function refreshAll(){
 // 회의와 무관한 공용 데이터 → medit:hub1 / 회의 안에서 쌓이는 데이터 → medit:sess:<회의ID> (회의별 완전 분리)
 async function saveSession(){
   await store.set("medit:hub1",{
-    accounts:state.accounts,meetings:state.meetings,companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,fileMeeting:state.fileMeeting,connections:state.connections||[],currentMeetingId:state.currentMeetingId});
+    accounts:state.accounts,meetings:(()=>{const seen=new Set();return (state.meetings||[]).filter(x=>{const k=x&&x.id;if(!k||seen.has(k))return false;seen.add(k);return true;});})(),companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,fileMeeting:state.fileMeeting,connections:state.connections||[],currentMeetingId:state.currentMeetingId});
   if(state.currentMeetingId){
     await store.set("medit:sess:"+state.currentMeetingId,{
       tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
@@ -5261,6 +5261,7 @@ function exportData(){
     version:1, exportedAt:new Date().toISOString(),
     accounts:state.accounts, meetings:state.meetings, companies:state.companies,
     jobs:state.jobs, records:state.records, currentMeetingId:state.currentMeetingId,
+    /* 중복 방지는 아래 meetings 정제에서 수행 */
   };
   const blob=new Blob([JSON.stringify(dump,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob);
@@ -5674,11 +5675,16 @@ function isInvited(email){
   // 어떤 회의든 참석자 명단에 있으면 초대된 것으로 본다
   return state.meetings.some(m=>(m.attendees||[]).some(a=>(a.email||"").trim().toLowerCase()===e));
 }
+function onInviteList(email){
+  const e=(email||"").trim().toLowerCase(); if(!e)return false;
+  return (state.meetings||[]).some(m=>(m.attendees||[]).some(a=>(a.email||"").trim().toLowerCase()===e));
+}
 function invitedRole(email){
   const e=(email||"").trim().toLowerCase();
   const acc=state.accounts.find(a=>a.email.toLowerCase()===e);
-  if(acc)return acc.role;              // 이미 역할이 정해져 있으면 그것을 사용
-  return "guest";                       // 초대로 들어오는 사람은 기본 '초대자'
+  if(acc)return acc.role;               // 이미 역할이 정해져 있으면 그것을 사용
+  if(onInviteList(e))return "guest";    // 초대 명단에 있음 → 자동 입장
+  return "pending";                      // 명단에 없음 → 주최자 승인 대기
 }
 // [서버 연동 자리] 실제 인증(Supabase 등)을 붙일 때 이 함수를 구현하세요.
 // async function serverAuth(email, pw){ ... return {ok, user} }
@@ -5822,11 +5828,30 @@ async function restoreSession(){
       } else if(!acc.claimed){
         acc.claimed=true; acc.name=u.name||acc.name; scheduleSave();
       }
+      if(acc.role==="pending"){ renderPendingGate(acc); return null; }   // 승인 대기
       state.user={role:acc.role,name:acc.name,email:acc.email,id:acc.id};
       return state.user;
     }
   }catch(e){ console.warn("세션 복원 실패:",e.message); }
   return null;
+}
+// ── 승인 대기 화면 — 주최자가 승인하면 자동 입장 ──
+function renderPendingGate(acc){
+  const box=$("authArea"); if(!box)return;
+  box.innerHTML=`
+    <div style="text-align:center;padding:34px 18px">
+      <div style="font-size:38px;margin-bottom:10px">⏳</div>
+      <div style="font-size:16px;font-weight:800;color:#fff;margin-bottom:8px">주최자 승인 대기 중</div>
+      <div class="mini" style="color:#BFE8E2;line-height:1.8;margin-bottom:16px">
+        <b>${esc(acc.email)}</b> 계정의 입장 요청이 주최자에게 전달되었습니다.<br>
+        승인되면 이 화면에서 자동으로 입장됩니다. (약 20초마다 확인)</div>
+      <button class="b-mint" id="pgRecheck" style="padding:8px 18px">지금 다시 확인</button>
+      <button class="b-ghost" id="pgOut" style="padding:8px 14px;margin-left:6px;color:#fff;border-color:rgba(255,255,255,.4)">로그아웃</button>
+    </div>`;
+  const recheck=async()=>{ await loadAll(); const u=await restoreSession(); if(u){ showMeetingList(); } };
+  $("pgRecheck").onclick=recheck;
+  $("pgOut").onclick=async()=>{ await authSignOut(); location.reload(); };
+  clearInterval(window.__pgTimer); window.__pgTimer=setInterval(recheck,20000);
 }
 
 function socialSignup(provider){
@@ -6039,7 +6064,17 @@ function showMeetingList(){
       if(m){ state.currentMeetingId=m.id; loadMeetingSession(m.id).then(()=>{ syncCurrentMeeting(); enterHub(); }); toast("초대 링크의 회의로 입장했습니다"); return; }
     }
   }catch(_){}
+  const pend=(state.accounts||[]).filter(a=>a.role==="pending");
+  const canApprove=state.user.role==="host"||state.user.role==="operator";
   box.innerHTML=`
+    ${(canApprove&&pend.length)?`<div style="background:#FFF6E3;border:1px solid #E7CE93;border-radius:13px;padding:11px 14px;margin-bottom:12px">
+      <b style="font-size:13px;color:#7a5b00">입장 승인 대기 ${pend.length}명</b>
+      ${pend.map(a=>`<div style="display:flex;gap:8px;align-items:center;margin-top:7px">
+        <span style="flex:1;font-size:12.5px;color:#333"><b>${esc(a.name)}</b> · ${esc(a.email)}</span>
+        <button class="b-mint" data-apok="${esc(a.email)}" style="padding:4px 13px;font-size:12px">승인</button>
+        <button class="b-ghost" data-apno="${esc(a.email)}" style="padding:4px 11px;font-size:12px;color:#C24A4A">거절</button>
+      </div>`).join("")}
+    </div>`:""}
     <div class="ml-head">
       <div><b>${esc(state.user.name)}</b> · ${roleLabel(state.user.role)}</div>
       <button class="at" id="logoutBtn">로그아웃</button>
@@ -6082,6 +6117,14 @@ function showMeetingList(){
     },{saveLabel:"만들기"});
   };
   $("logoutBtn").onclick=async()=>{await authSignOut();state.user={role:null,name:"",email:"",id:null};clearUser();authMode="login";renderAuth();};
+  box.querySelectorAll("[data-apok]").forEach(b=>b.onclick=async()=>{
+    const a=(state.accounts||[]).find(x=>(x.email||"").toLowerCase()===b.dataset.apok.toLowerCase()); if(!a)return;
+    a.role="guest"; await saveNow(); showMeetingList(); toast(a.name+" 님을 승인했습니다 — 20초 안에 자동 입장됩니다");
+  });
+  box.querySelectorAll("[data-apno]").forEach(b=>b.onclick=async()=>{
+    state.accounts=(state.accounts||[]).filter(x=>(x.email||"").toLowerCase()!==b.dataset.apno.toLowerCase());
+    await saveNow(); showMeetingList(); toast("요청을 거절했습니다");
+  });
   $("mlSearch").onclick=async()=>{ const r=await searchMeetings($("mlQuery").value); renderMeetingCards(r.length?r:[], r.length?"":"검색 결과가 없습니다."); };
   $("mlQuery").addEventListener("keydown",async e=>{if(e.key==='Enter'){const r=await searchMeetings($("mlQuery").value);renderMeetingCards(r.length?r:[],r.length?"":"검색 결과가 없습니다.");}});
   $("mlVoice").onclick=()=>voiceSearch(async t=>{$("mlQuery").value=t;const r=await searchMeetings(t);renderMeetingCards(r.length?r:[],r.length?"":"검색 결과가 없습니다.");});
