@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=105, BUILD_DATE="2026-07-22";
+const BUILD=106, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -6265,12 +6265,12 @@ function renderMeetingCards(list,emptyMsg){
     </div>
     <div class="mc-meta">${esc(fmtDate(m.date))} ${esc(m.time)} · ${esc(m.place||"")}</div>
     <div class="mc-meta">개최자 ${esc(m.host)} · 참석 ${(m.attendees||[]).length}명</div>
-    <div style="display:flex;gap:6px">
-      <button class="b-mint mc-enter" data-id="${m.id}" style="flex:1">입장</button>
-      <button class="b-ghost" onclick="event.stopPropagation();copyMeetingLink('${m.id}')" title="이 회의로 바로 들어오는 초대 링크를 복사합니다">링크</button>
-      <button class="b-ghost" onclick="event.stopPropagation();showMeetingQR('${m.id}')" title="초대 링크를 QR로 만들어 화면·카톡·인쇄물로 공유합니다">QR</button>
-      ${m.kakao?`<button class="b-ghost" style="color:#8a6d00" onclick="event.stopPropagation();window.open('${esc(m.kakao)}','_blank')" title="이 회의의 카카오톡 오픈채팅방을 엽니다">카톡방</button>`:""}
-      ${canManage?`<button class="b-ghost mc-edit" data-id="${m.id}">수정</button><button class="b-ghost mc-del" data-id="${m.id}" style="color:#C24A4A">삭제</button>`:""}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:6px">
+      <button class="b-mint mc-enter" data-id="${m.id}" style="padding:8px 0">입장</button>
+      <button class="b-ghost" style="padding:8px 0" onclick="event.stopPropagation();copyMeetingLink('${m.id}')" title="이 회의로 바로 들어오는 초대 링크를 복사합니다">링크</button>
+      <button class="b-ghost" style="padding:8px 0" onclick="event.stopPropagation();showMeetingQR('${m.id}')" title="초대 링크를 QR로 만들어 화면·카톡·인쇄물로 공유합니다">QR</button>
+      ${m.kakao?`<button class="b-ghost" style="padding:8px 0;color:#8a6d00" onclick="event.stopPropagation();window.open('${esc(m.kakao)}','_blank')" title="이 회의의 카카오톡 오픈채팅방을 엽니다">카톡방</button>`:""}
+      ${canManage?`<button class="b-ghost mc-edit" data-id="${m.id}" style="padding:8px 0">수정</button><button class="b-ghost mc-del" data-id="${m.id}" style="padding:8px 0;color:#C24A4A">삭제</button>`:""}
     </div>
   </div>`).join("");
   box.querySelectorAll(".mc-enter").forEach(b=>b.onclick=async()=>{
