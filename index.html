@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=103, BUILD_DATE="2026-07-22";
+const BUILD=104, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -4880,6 +4880,43 @@ function emailRecordGmail(id){
 }
 window.emailRecordGmail=emailRecordGmail;
 
+// ==================== 규제 리포트 — 회차 내용에서 규제 관련 항목을 찾아 근거·대응으로 정리 ====================
+async function aiRegReport(rid){
+  const r=(state.records||[]).find(x=>x.id===rid); if(!r){toast("회차를 찾을 수 없습니다");return;}
+  if(r.regReport){ viewInlineDoc("규제 리포트 — "+r.title, r.regReport); return; }
+  toast("규제 항목을 분석하는 중… (웹 검색 포함, 30~60초)");
+  try{
+    const src=["회차: "+r.title+" ("+(r.dt||"")+")",
+      r.summary?("요약: "+r.summary):"",
+      (r.agenda||[]).length?("안건: "+r.agenda.join(" / ")):"",
+      (r.decisions||[]).length?("결정: "+r.decisions.join(" / ")):"",
+      (r.actions||[]).length?("액션: "+r.actions.join(" / ")):"",
+      r.rawNote?("노트: "+String(r.rawNote).slice(0,4000)):""
+    ].filter(Boolean).join("\n");
+    const sys="너는 한국 규제 검토 보조자다. 아래 회의 내용에서 규제가 걸릴 수 있는 항목만 골라 리포트하라. 각 항목: ① 무엇이(회의 속 표현 인용) ② 관련 법령·조항(약사법·의료법·의료기기법·개인정보보호법 등 — 웹 검색으로 확인, 한국식 제○○조 표기) ③ 왜 걸리는지 한 줄 ④ 현실적 대응 방향(허가·신고·유권해석·규제샌드박스 등). 확실하지 않으면 확인 필요로 표시하고 단정 금지. 마지막에 규제 무관 판단 항목 한 줄. 간결한 HTML(<h3>,<ul>)로.";
+    const out=await callClaude(sys,src,3000,{noPrompt:true,search:true});
+    r.regReport='<div class="mini" style="margin-bottom:8px">자동 생성 참고 자료입니다 — 법률 자문이 아니며, 실제 판단은 소관 부처·전문가 확인이 필요합니다.</div>'+out;
+    r.regReportAt=new Date().toLocaleString("ko-KR");
+    await saveRecords();
+    viewInlineDoc("규제 리포트 — "+r.title, r.regReport);
+  }catch(e){ toast("규제 리포트 실패: "+(e.message||e)); }
+}
+function viewInlineDoc(title,html){
+  let modal=$("regModal"); if(modal)modal.remove();
+  modal=document.createElement("div"); modal.id="regModal";
+  modal.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(20,30,30,.6);display:flex;align-items:center;justify-content:center;padding:14px";
+  modal.innerHTML=`<div style="background:#fff;border-radius:16px;max-width:min(760px,96vw);width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
+      <b style="flex:1;font-size:14px;color:var(--deep)">${esc(title)}</b>
+      <button class="b-ghost" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('regBody').innerText).then(()=>toast('복사했습니다'))">복사</button>
+      <button class="b-deep" onclick="document.getElementById('regModal').remove()">닫기</button>
+    </div>
+    <div id="regBody" style="padding:16px 20px;overflow:auto;font-size:13px;line-height:1.8;color:var(--ink)">${html}</div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+}
+window.aiRegReport=aiRegReport;
 // ==================== AI 보고서 — 회차 내용을 구조화 문서로 정리해 HTML 페이지로 보존 ====================
 let reportBusy=false;
 async function aiReportRecord(id){
@@ -5032,6 +5069,7 @@ function sessionRow(r,pvPrefix){
         <button class="b-ghost" onclick="emailRecordGmail('${r.id}')" title="이 회차 회의록을 Gmail 작성 창으로 엽니다 (수정해 보내려면 이메일 탭 → 회의록)">Gmail</button>
         <button class="b-deep" onclick="exportRecord('${r.id}')">MD</button>
         <button class="b-mint" onclick="aiReportRecord('${r.id}')" title="이 회차를 구조화 보고서(큰 그림→서비스→데이터→법률→사업화→후속 과제)로 정리해 HTML 페이지로 남깁니다">${r.report?"보고서 보기":"AI 보고서"}</button>
+        <button class="b-ghost" onclick="aiRegReport('${r.id}')" style="color:#7a4c00" title="이 회차 내용에서 규제(약사법·의료법·개인정보보호법 등) 관련 항목을 AI가 찾아 근거 법령과 대응 방향으로 정리합니다">규제 리포트</button>
         ${canEdit?`<button class="b-ghost" style="padding:4px 10px;font-size:12px" onclick="openRecordEditor('${r.id}')" title="이 회차의 제목·요약·회의록·스크립트를 직접 수정합니다">수정</button>
         <button class="b-ghost" style="padding:4px 10px;font-size:12px;color:#C24A4A" onclick="deleteRecord('${r.id}')" title="이 회차 기록을 삭제합니다">삭제</button>`:""}
       </div>
@@ -6005,6 +6043,7 @@ async function showMeetingQR(id){
     <div style="display:flex;gap:8px;justify-content:center">
       <button class="b-mint" id="qrSave">이미지 저장</button>
       <button class="b-ghost" id="qrCopy">링크 복사</button>
+      <button class="b-ghost" id="qrShare" style="color:#8a6d00" title="휴대폰: 공유 창에서 카카오톡 선택 → 방 선택 · PC: 초대 문구가 복사되니 카톡에 붙여넣기">카톡으로 보내기</button>
       <button class="b-deep" id="qrClose">닫기</button>
     </div>
   </div>`;
@@ -6012,6 +6051,12 @@ async function showMeetingQR(id){
   new QRCode($("qrBox"),{text:url,width:220,height:220,correctLevel:QRCode.CorrectLevel.M});
   modal.onclick=e=>{if(e.target===modal)modal.remove();};
   $("qrClose").onclick=()=>modal.remove();
+  $("qrShare").onclick=async()=>{
+    const text="["+m.title+"] 회의 초대\n"+(m.date||"")+" "+(m.time||"")+(m.place?" · "+m.place:"")+"\n아래 링크로 입장하세요:\n"+url;
+    if(navigator.share){ try{ await navigator.share({title:m.title,text}); return; }catch(_){/* 취소 */} }
+    try{ await navigator.clipboard.writeText(text); toast("초대 문구+링크를 복사했습니다 — 카톡 대화방에 붙여넣으세요"); }
+    catch(_){ toast("복사가 안 되면 [링크 복사]를 사용하세요"); }
+  };
   $("qrCopy").onclick=()=>copyMeetingLink(id);
   $("qrSave").onclick=()=>{
     const img=$("qrBox").querySelector("img")||$("qrBox").querySelector("canvas");
@@ -6211,8 +6256,10 @@ function openMeetingEditor(id){
     <div style="overflow:auto;padding:14px 18px">
       ${fld("제목","mt_title",m.title)}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        ${fld("날짜","mt_date",m.date,"YYYY-MM-DD")}
-        ${fld("시간","mt_time",m.time,"HH:MM")}
+        <div style="margin-bottom:9px"><label style="font-size:11.5px;font-weight:800;color:var(--soft)">날짜 (탭하면 달력이 열립니다)</label>
+          <input type="date" id="mt_date" value="${esc(m.date||"")}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
+        <div style="margin-bottom:9px"><label style="font-size:11.5px;font-weight:800;color:var(--soft)">시간 (탭하면 시간표가 열립니다)</label>
+          <input type="time" id="mt_time" value="${esc(m.time||"")}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
       </div>
       ${fld("장소 (누르면 자주 쓰는 장소가 나옵니다)","mt_place",m.place)}
       <div id="mt_place_sug" style="display:flex;gap:5px;flex-wrap:wrap;margin:-3px 0 9px"></div>
@@ -6261,8 +6308,10 @@ function openMeetingCreator(presetCompany){
     <div style="overflow:auto;padding:14px 18px">
       ${fld("제목","mn_title","","예: 디지털 약료 플랫폼 전략 기획 회의")}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        ${fld("날짜","mn_date",today,"YYYY-MM-DD")}
-        ${fld("시간","mn_time","10:00","HH:MM")}
+        <div style="margin-bottom:9px"><label style="font-size:11.5px;font-weight:800;color:var(--soft)">날짜 (탭하면 달력이 열립니다)</label>
+          <input type="date" id="mn_date" value="${today}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
+        <div style="margin-bottom:9px"><label style="font-size:11.5px;font-weight:800;color:var(--soft)">시간 (탭하면 시간표가 열립니다)</label>
+          <input type="time" id="mn_time" value="10:00" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
       </div>
       ${fld("장소 (누르면 자주 쓰는 장소가 나옵니다)","mn_place","")}
       <div id="mn_place_sug" style="display:flex;gap:5px;flex-wrap:wrap;margin:-3px 0 9px"></div>
@@ -6292,6 +6341,19 @@ function openMeetingCreator(presetCompany){
   };
   attachCompanySuggest($("mn_company"),$("mn_company_sug"));
   attachPlaceSuggest($("mn_place"),$("mn_place_sug"));
+  // 제목에서 날짜·시간 추측 — "8/21 오후 2시 츄구미 회의"처럼 쓰면 자동 채움
+  const tEl=$("mn_title");
+  if(tEl)tEl.addEventListener("input",()=>{
+    const s=tEl.value||""; const Y=new Date().getFullYear();
+    const dm=/(\d{1,2})\s*[\/월.]\s*(\d{1,2})\s*일?/.exec(s);
+    if(dm){ const d=new Date(Y,Number(dm[1])-1,Number(dm[2]));
+      if(!isNaN(d)){ const p=n=>String(n).padStart(2,"0"); $("mn_date").value=d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); } }
+    const tm=/(오전|오후|저녁|밤)?\s*(\d{1,2})\s*[시:]\s*(\d{0,2})/.exec(s);
+    if(tm&&(tm[1]||/시/.test(s))){ let hh=Number(tm[2]); const half=tm[1]||"";
+      if((half==="오후"||half==="저녁"||half==="밤")&&hh<12)hh+=12;
+      const mm=tm[3]?String(tm[3]).padStart(2,"0"):"00";
+      if(hh>=0&&hh<24) $("mn_time").value=String(hh).padStart(2,"0")+":"+mm; }
+  });
   $("mnSave").onclick=()=>build(false);
   $("mnEnter").onclick=()=>build(true);
   $("mn_title").focus();
