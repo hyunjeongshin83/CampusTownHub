@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=106, BUILD_DATE="2026-07-22";
+const BUILD=107, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -3460,6 +3460,7 @@ async function loadDevIssues(db){
       <a href="${esc(i.html_url)}" target="_blank" style="flex:1;font-size:12.5px;color:var(--deep);font-weight:700;text-decoration:none;${i.state==="closed"?"text-decoration:line-through":""}">${esc(i.title)}</a>
       ${(i.labels||[]).slice(0,3).map(l=>`<span class="mini" style="background:#eef4f2;border-radius:7px;padding:1px 7px">${esc(l.name)}</span>`).join("")}
       <span class="mini" style="color:var(--gray)">${esc((i.user&&i.user.login)||"")}</span>
+      ${db.repo==="hyunjeongshin83/CampusTownHub"?`<button class="b-ghost" data-imail="${i.number}" data-ititle="${esc(i.title)}" style="padding:3px 9px;font-size:11px" title="보고자에게 보낼 처리 메일 문구를 만듭니다 — 메일의 버튼만 누르면 로그인 없이 이슈가 닫히거나 재수정 대기로 바뀝니다">처리 메일</button>`:""}
     </div>`;
   const rows=open.map(row1).join("")
     +(closed.length?`
@@ -3498,8 +3499,49 @@ async function loadDevIssues(db){
   if(ct)ct.onclick=()=>{const w=$("dbClosedWrap"),a=$("dbClosedArrow");const o=w.style.display==="none";w.style.display=o?"":"none";a.textContent=o?"▾":"▸";};
   const fr=$("dbFrameReload"); if(fr)fr.onclick=()=>{ const f=$("dbFrame"); if(f)f.src=f.src; };
   $("dbNew").onclick=()=>openIssueForm(db);
+  body.querySelectorAll("[data-imail]").forEach(b=>b.onclick=()=>issueMailCopy(Number(b.dataset.imail),b.dataset.ititle));
   bindDevToken(db);
 }
+// ── 이슈 처리 메일 — 링크의 열쇠(ISSUE_KEY)로 로그인 없이 닫기/재오픈 ──
+function issueMailCopy(num,title){
+  const key=localStorage.getItem("medit:issuekey")||"";
+  if(!key){
+    formModal("이슈 처리 열쇠 등록 (한 번만)",[
+      {id:"k",label:"ISSUE_KEY — Supabase 함수 시크릿에 등록한 것과 똑같이",ph:"예: hub-2026-secret"}
+    ],v=>{ const k=(v.k||"").trim(); if(!k)return;
+      localStorage.setItem("medit:issuekey",k); issueMailCopy(num,title); },
+    {saveLabel:"저장",note:"이 열쇠는 메일 버튼 링크에 담겨, 받는 사람이 로그인 없이 이슈를 처리하게 해줍니다. 이 브라우저에만 저장됩니다."});
+    return;
+  }
+  const F="https://xaclqvveppvccdpebzsz.supabase.co/functions/v1/issue-action";
+  const q=s=>encodeURIComponent(s);
+  const text=
+`[개발자][${state.user.name||"개발자"}] ${title}
+— 고쳐서 올렸습니다
+
+화면        〈어느 화면인지〉
+원인        〈원인 한 줄〉
+고친 내용    〈무엇을 바꿨는지〉
+배포        성공
+확인 화면    https://hyunjeongshin83.github.io/CampusTownHub/?v=${BUILD}
+이슈        https://github.com/hyunjeongshin83/CampusTownHub/issues/${num} (#${num})
+
+     확인하셨나요?
+  고쳐졌습니다 · 닫기 →
+  ${F}?op=close&issue=${num}&k=${q(key)}
+
+  아직 안 됩니다 →
+  ${F}?op=reopen&issue=${num}&k=${q(key)}
+
+  추가로 문제가 있으시면 — 새 이슈 올리기 →
+  ${F}?op=new&k=${q(key)}
+
+※ 버튼(링크)만 누르면 로그인 없이 바로 처리됩니다.`;
+  (navigator.clipboard?navigator.clipboard.writeText(text):Promise.reject()).then(
+    ()=>toast("#"+num+" 처리 메일 문구를 복사했습니다 — 〈 〉 부분만 채워 보내세요"),
+    ()=>viewInlineDoc("처리 메일 문구 — #"+num,"<pre style='white-space:pre-wrap;font-size:12px'>"+esc(text)+"</pre>"));
+}
+window.issueMailCopy=issueMailCopy;
 function devTokenRow(){
   const has=!!ghTok();
   return `<div class="mini" style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
