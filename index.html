@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=107, BUILD_DATE="2026-07-22";
+const BUILD=109, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -788,6 +788,92 @@ const store={
     return ok;
   },
 };
+
+// ==================== 동시 저장 병합 (v108) ====================
+// 문제: 탭을 두 개 열어두거나 참석자 두 명이 같은 회의를 동시에 편집하면,
+//       나중에 저장한 쪽이 앞서 저장된 내용을 통째로 덮어써 사라졌다.
+// 해결: 저장 직전에 서버본을 다시 읽어 [기준본 · 내 화면 · 서버본] 세 가지를 비교해 합친다.
+//       - 내가 고친 항목      → 내 것이 우선
+//       - 상대가 새로 넣은 항목 → 그대로 살림
+//       - 내가 지운 항목      → 되살리지 않음
+//       - 상대가 지웠고 나는 손대지 않은 항목 → 삭제를 따름
+const TAB_ID=Math.random().toString(36).slice(2,10);
+const mergeBase={};          // 저장키 → 마지막으로 읽거나 저장한 시점의 스냅샷
+let mergeNotified=0;
+
+function _snap(v){ try{ return JSON.stringify(v); }catch(e){ return ""; } }
+function _same(a,b){ return _snap(a)===_snap(b); }
+function markBase(key,value){ mergeBase[key]=_snap(value); }
+function getBase(key){ try{ return (key in mergeBase)?JSON.parse(mergeBase[key]):null; }catch(e){ return null; } }
+function _idArray(a){ return Array.isArray(a)&&a.length>0&&a.every(x=>x&&typeof x==="object"&&x.id!==undefined); }
+function _byId(a){ const m={}; (a||[]).forEach(x=>{ if(x&&x.id!==undefined)m[x.id]=x; }); return m; }
+
+function merge3Array(base,mine,theirs){
+  base=Array.isArray(base)?base:[]; mine=Array.isArray(mine)?mine:[]; theirs=Array.isArray(theirs)?theirs:[];
+  const B=_byId(base), T=_byId(theirs), M=_byId(mine), out=[];
+  mine.forEach(x=>{
+    const id=x&&x.id;
+    if(id!==undefined&&(id in B)&&!(id in T)&&_same(x,B[id])) return;   // 상대가 삭제 · 나는 미변경 → 삭제 반영
+    out.push(x);
+  });
+  theirs.forEach(x=>{
+    const id=x&&x.id; if(id===undefined) return;
+    if(id in M) return;      // 내 것이 우선
+    if(id in B) return;      // 내가 지운 것 → 부활 금지
+    out.push(x);             // 상대가 새로 추가 → 살림
+  });
+  return out;
+}
+
+function merge3(base,mine,theirs){
+  if(theirs===null||theirs===undefined) return mine;
+  if(mine===null||mine===undefined) return theirs;
+  if(typeof mine!=="object"||typeof theirs!=="object"||Array.isArray(mine)!==Array.isArray(theirs)){
+    return _same(mine,base)?theirs:mine;
+  }
+  if(Array.isArray(mine)){
+    if(_idArray(mine)||_idArray(theirs)) return merge3Array(base,mine,theirs);
+    return _same(mine,base)?theirs:mine;
+  }
+  base=(base&&typeof base==="object")?base:{};
+  const out={}, keys=new Set([...Object.keys(mine),...Object.keys(theirs)]);
+  keys.forEach(k=>{
+    if(k==="_rev"||k==="_tab"||k==="_at") return;
+    if(!(k in theirs)){ out[k]=mine[k]; return; }
+    if(!(k in mine)){ out[k]=theirs[k]; return; }
+    out[k]=merge3(base[k],mine[k],theirs[k]);
+  });
+  return out;
+}
+
+// 저장을 한 줄로 세운다 — 자기 저장끼리 겹쳐 부딪히는 것도 막는다
+let saveChain=Promise.resolve();
+function mergeSave(key,next,onMerged){
+  saveChain=saveChain.then(()=>_mergeSaveOne(key,next,onMerged))
+                     .catch(e=>{ console.warn("병합 저장 실패:",e&&e.message); });
+  return saveChain;
+}
+async function _mergeSaveOne(key,next,onMerged){
+  let server=null, merged=next, conflicted=false;
+  if(cloud.enabled()){ try{ server=await cloud.get(key); }catch(e){ server=null; } }
+  const base=getBase(key);
+  if(server&&typeof server==="object"&&base!==null&&!_same(server,base)){
+    merged=merge3(base,next,server);
+    conflicted=true;
+  }
+  merged=Object.assign({},merged,{_rev:((server&&server._rev)||0)+1,_tab:TAB_ID,_at:new Date().toISOString()});
+  await store.set(key,merged);
+  markBase(key,merged);
+  if(conflicted){
+    try{ if(typeof onMerged==="function") onMerged(merged); }catch(e){ console.warn("병합 반영 실패:",e); }
+    if(Date.now()-mergeNotified>8000){
+      mergeNotified=Date.now();
+      try{ toast("다른 탭·참석자의 변경을 함께 반영했습니다 — 덮어쓰지 않았습니다"); }catch(e){}
+    }
+  }
+  return merged;
+}
+
 function storageMode(){
   if(cloud.enabled()) return cloudOK?"cloud":"cloud-error";
   return "local";
@@ -803,13 +889,18 @@ function refreshAll(){
 }
 // 회의와 무관한 공용 데이터 → medit:hub1 / 회의 안에서 쌓이는 데이터 → medit:sess:<회의ID> (회의별 완전 분리)
 async function saveSession(){
-  await store.set("medit:hub1",{
-    accounts:state.accounts,meetings:(()=>{const seen=new Set();return (state.meetings||[]).filter(x=>{const k=x&&x.id;if(!k||seen.has(k))return false;seen.add(k);return true;});})(),companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,fileMeeting:state.fileMeeting,connections:state.connections||[],currentMeetingId:state.currentMeetingId});
+  await mergeSave("medit:hub1",{
+    accounts:state.accounts,meetings:(()=>{const seen=new Set();return (state.meetings||[]).filter(x=>{const k=x&&x.id;if(!k||seen.has(k))return false;seen.add(k);return true;});})(),companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,fileMeeting:state.fileMeeting,connections:state.connections||[],currentMeetingId:state.currentMeetingId},
+    m=>{ Object.assign(state,{accounts:m.accounts||state.accounts,meetings:m.meetings||state.meetings,companies:m.companies||state.companies,jobs:m.jobs||state.jobs,projects:m.projects||state.projects,pages:m.pages||state.pages,connections:m.connections||state.connections,fileNames:m.fileNames||state.fileNames,fileMeeting:m.fileMeeting||state.fileMeeting});
+         try{ refreshAll(); }catch(e){} });
   if(state.currentMeetingId){
-    await store.set("medit:sess:"+state.currentMeetingId,{
+    const _mid=state.currentMeetingId;
+    await mergeSave("medit:sess:"+_mid,{
       tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
       nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,
-      meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos,outreach:state.outreach||[],devBoard:state.devBoard||null,notion:state.notion||[],notices:state.notices||[],webSlides:state.webSlides||[],introMigrated:!!state.introMigrated});
+      meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos,outreach:state.outreach||[],devBoard:state.devBoard||null,notion:state.notion||[],notices:state.notices||[],webSlides:state.webSlides||[],introMigrated:!!state.introMigrated},
+      m=>{ if(state.currentMeetingId!==_mid) return;   // 그새 회의를 옮겼으면 반영하지 않는다
+           try{ applySessionData(m); refreshAll(); }catch(e){} });
   }
 }
 function resetSessionState(){
@@ -840,6 +931,7 @@ async function loadMeetingSession(mid){
   resetSessionState();
   if(!mid) return;
   const s=await store.get("medit:sess:"+mid);
+  markBase("medit:sess:"+mid,s);     // (v108) 회의별 병합 기준본
   if(applySessionData(s)) return;
   const legacy=await store.get("medit:hub1");
   if(legacy&&legacy.segments&&legacy.segments.length||legacy&&(legacy.lit||legacy.schedule||legacy.research)){
@@ -880,6 +972,7 @@ async function loadAll(){
   const rec=await store.get("medit:records2");if(rec)state.records=rec;
   try{repairRecords();}catch(_){}
   const s=await store.get("medit:hub1");
+  markBase("medit:hub1",s);          // (v108) 병합 기준본 — 이 시점 이후의 서버 변경만 상대 변경으로 본다
   if(s && typeof s==="object"){
     Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],projects:s.projects||[],pages:s.pages||[],fileNames:s.fileNames||{},fileMeeting:s.fileMeeting||{},connections:s.connections||[],
       currentMeetingId:s.currentMeetingId||null,uploads:s.uploads||[]});
@@ -6545,6 +6638,305 @@ function enterHub(){
 
   renderAuth();
 })();
+
+// ==================== v109 운영 도구 — 자동 점검 · 카카오 · 세션 검토 ====================
+// ① 자동 점검·자가수정  ② 카카오 로그인/사용자 추가/푸시  ③ 다른 회의 세션 검토·가져오기  ④ AI 알림
+const OPS = (()=>{
+  const LOGKEY="medit:opslog";
+  function log(kind,msg){
+    try{ const a=JSON.parse(localStorage.getItem(LOGKEY)||"[]");
+      a.unshift({t:new Date().toISOString(),kind,msg}); localStorage.setItem(LOGKEY,JSON.stringify(a.slice(0,300))); }catch(e){}
+  }
+  function logs(){ try{ return JSON.parse(localStorage.getItem(LOGKEY)||"[]"); }catch(e){ return []; } }
+
+  // ────────── ① 자동 점검 · 자가수정 ──────────
+  // 안전하게 고칠 수 있는 것은 고치고(fixed), 사람이 판단할 것은 보고만 한다(found)
+  function audit(apply){
+    const fixed=[], found=[];
+    const S=state;
+
+    // 1. 회의 id 중복 — 뒤에 온 것을 버린다
+    { const seen=new Set(), keep=[];
+      (S.meetings||[]).forEach(m=>{ if(!m||!m.id) return; if(seen.has(m.id)){ found.push("회의 id 중복: "+(m.title||m.id)); return; } seen.add(m.id); keep.push(m); });
+      if(keep.length!==(S.meetings||[]).length){ if(apply){ S.meetings=keep; fixed.push("중복 회의 "+((S.meetings||[]).length-keep.length+found.length)+"건 정리"); } }
+    }
+    // 2. 제목 없는 회의 — 날짜로 임시 제목 생성
+    (S.meetings||[]).forEach(m=>{
+      if(m && !String(m.title||"").trim()){
+        if(apply){ m.title=(m.date||"날짜 미정")+" 회의"; fixed.push("제목 없는 회의에 임시 제목 부여"); }
+        else found.push("제목 없는 회의");
+      }
+    });
+    // 3. 참석자 배열 정리 — 공백·중복 제거
+    (S.meetings||[]).forEach(m=>{
+      if(!m||!Array.isArray(m.attendees)) return;
+      const before=m.attendees.length;
+      const norm=[...new Set(m.attendees.map(x=>typeof x==="string"?x.trim():(x&&x.email?String(x.email).trim():"")).filter(Boolean))];
+      if(norm.length!==before){ if(apply){ m.attendees=norm; fixed.push("참석자 명단 정리("+(m.title||m.id)+")"); } else found.push("참석자 명단에 빈 값·중복"); }
+    });
+    // 4. 끊긴 참조 — 없는 회의를 가리키는 잡·프로젝트
+    const mids=new Set((S.meetings||[]).map(m=>m&&m.id));
+    ["jobs","projects"].forEach(k=>{
+      (S[k]||[]).forEach(x=>{
+        if(x && x.meetingId && !mids.has(x.meetingId)){
+          if(apply){ x.meetingId=null; fixed.push("삭제된 회의를 가리키던 "+(k==="jobs"?"잡":"프로젝트")+" 연결 해제"); }
+          else found.push("끊긴 회의 참조("+k+")");
+        }
+      });
+    });
+    // 5. 현재 회의가 목록에 없음
+    if(S.currentMeetingId && !mids.has(S.currentMeetingId)){
+      if(apply){ S.currentMeetingId=(S.meetings||[])[0]?S.meetings[0].id:null; fixed.push("사라진 현재 회의 → 첫 회의로 이동"); }
+      else found.push("현재 회의가 목록에 없음");
+    }
+    // 6. id 없는 세션 항목 — 병합이 불가능해지므로 id 부여
+    ["segments","research","nextActions","webSlides","annos"].forEach(k=>{
+      const arr=S[k]; if(!Array.isArray(arr)) return;
+      arr.forEach((x,i)=>{ if(x&&typeof x==="object"&&x.id===undefined){
+        if(apply){ x.id=k+"_"+Date.now()+"_"+i; fixed.push("id 없는 "+k+" 항목에 id 부여"); }
+        else found.push("id 없는 "+k+" 항목 — 동시편집 병합 불가");
+      }});
+    });
+    // 7. 저장 용량
+    try{ let b=0; for(const k in localStorage) if(k.startsWith("medit:")) b+=(localStorage[k]||"").length;
+      if(b>4_000_000) found.push("브라우저 저장 용량 "+(b/1048576).toFixed(1)+"MB — 정리 권장(5MB 한도)"); }catch(e){}
+
+    // ── UX 제안 (고치지 않고 안내만) ──
+    const ux=[];
+    (S.meetings||[]).forEach(m=>{
+      if(!m) return;
+      if(!m.date||!m.time) ux.push("‘"+(m.title||m.id)+"’ 일시 미입력 — 알림·캘린더 연동 불가");
+      if(!(m.attendees||[]).length) ux.push("‘"+(m.title||m.id)+"’ 참석자 0명 — 입장 게이트가 모두를 승인 대기로 보냅니다");
+    });
+    if(!(S.accounts||[]).length) ux.push("등록 사용자 0명 — 카카오 로그인으로 참석자를 추가할 수 있습니다");
+    return {fixed,found,ux};
+  }
+
+  async function runAudit(apply,quiet){
+    const r=audit(!!apply);
+    if(apply && r.fixed.length){ try{ await saveSession(); refreshAll(); }catch(e){} }
+    log("audit",(apply?"자동수정 ":"점검 ")+r.fixed.length+"건 수정 / "+r.found.length+"건 확인필요 / UX "+r.ux.length+"건");
+    if(!quiet){
+      const n=r.fixed.length+r.found.length;
+      toast(n?("점검 완료 — 수정 "+r.fixed.length+"건, 확인필요 "+r.found.length+"건"):"점검 완료 — 이상 없음");
+    }
+    return r;
+  }
+
+  // ────────── ② 카카오 연동 ──────────
+  const KKEY=()=>localStorage.getItem("medit:kakaokey")||"";
+  function setKakaoKey(k){ localStorage.setItem("medit:kakaokey",(k||"").trim()); }
+  function sdk(){
+    return new Promise((res,rej)=>{
+      if(window.Kakao&&window.Kakao.isInitialized&&window.Kakao.isInitialized()) return res(window.Kakao);
+      const go=()=>{ try{ if(!KKEY()) return rej(new Error("카카오 JavaScript 키가 등록되지 않았습니다")); 
+        if(!window.Kakao.isInitialized()) window.Kakao.init(KKEY()); res(window.Kakao); }catch(e){ rej(e); } };
+      if(window.Kakao) return go();
+      const s=document.createElement("script");
+      s.src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js";
+      s.integrity="sha384-DKYJZ8NLiK8MN4/C5P2dtSmLQ4KwPaoqAfyA/DfmEc1VDxu4yyC7wy6K1Hs90nka";
+      s.crossOrigin="anonymous";
+      s.onload=go; s.onerror=()=>rej(new Error("카카오 SDK를 불러오지 못했습니다"));
+      document.head.appendChild(s);
+    });
+  }
+  // 카카오 로그인 → 사용자 추가 (accounts에 등록)
+  async function kakaoAddUser(role){
+    const K=await sdk();
+    await new Promise((res,rej)=>K.Auth.login({scope:"profile_nickname,account_email,talk_message",success:res,fail:rej}));
+    const me=await K.API.request({url:"/v2/user/me"});
+    const acc=me.kakao_account||{}, prof=acc.profile||{};
+    const id="k_"+me.id;
+    const rec={ id, name:prof.nickname||("카카오"+me.id), email:acc.email||"", role:role||"guest",
+                via:"kakao", kakaoId:String(me.id), addedAt:new Date().toISOString() };
+    state.accounts=state.accounts||[];
+    const i=state.accounts.findIndex(a=>a.id===id);
+    if(i>=0){ state.accounts[i]=Object.assign({},state.accounts[i],rec); } else { state.accounts.push(rec); }
+    await saveSession(); refreshAll();
+    log("kakao","사용자 추가: "+rec.name+" ("+rec.role+")");
+    toast("사용자 추가됨 — "+rec.name);
+    return rec;
+  }
+  // 나에게 보내기 (권한 신청 없이 즉시 사용 가능한 유일한 발송 경로)
+  async function kakaoPushSelf(text,link){
+    const K=await sdk();
+    if(!K.Auth.getAccessToken()) await new Promise((res,rej)=>K.Auth.login({scope:"talk_message",success:res,fail:rej}));
+    await K.API.request({url:"/v2/api/talk/memo/default/send",data:{template_object:{
+      object_type:"text", text:String(text).slice(0,190),
+      link:{web_url:link||location.href, mobile_web_url:link||location.href},
+      button_title:"허브 열기"}}});
+    log("kakao","나에게 보내기 발송");
+    toast("카카오톡으로 보냈습니다");
+  }
+  // 앱 멤버(친구)에게 — 소셜 API 권한이 없으면 앱 멤버로 등록된 계정에만 전달됩니다
+  async function kakaoPushFriends(text,link){
+    const K=await sdk();
+    if(!K.Auth.getAccessToken()) await new Promise((res,rej)=>K.Auth.login({scope:"friends,talk_message",success:res,fail:rej}));
+    const fr=await K.API.request({url:"/v1/api/talk/friends"});
+    const uu=(fr.elements||[]).map(f=>f.uuid).slice(0,5);   // 1회 최대 5명
+    if(!uu.length) throw new Error("보낼 수 있는 대상이 없습니다 — 카카오톡 소셜 API 권한 신청이 필요합니다");
+    await K.API.request({url:"/v1/api/talk/friends/message/default/send",data:{
+      receiver_uuids:JSON.stringify(uu),
+      template_object:JSON.stringify({object_type:"text",text:String(text).slice(0,190),
+        link:{web_url:link||location.href,mobile_web_url:link||location.href},button_title:"허브 열기"})}});
+    log("kakao","친구 발송 "+uu.length+"명");
+    toast(uu.length+"명에게 보냈습니다");
+  }
+
+  // ────────── ③ 다른 회의 세션 검토 · 가져오기 ──────────
+  async function reviewSessions(){
+    const out=[];
+    for(const m of (state.meetings||[])){
+      if(!m||!m.id||m.id===state.currentMeetingId) continue;
+      let s=null; try{ s=await store.get("medit:sess:"+m.id); }catch(e){}
+      if(!s) continue;
+      out.push({ id:m.id, title:m.title||m.id, date:m.date||"",
+        counts:{ 발언:(s.segments||[]).length, 자료:(s.research||[]).length,
+                 다음액션:(s.nextActions||[]).length, 문헌:((s.lit&&s.lit.items)||[]).length,
+                 슬라이드:(s.webSlides||[]).length },
+        data:s });
+    }
+    return out;
+  }
+  const FIELDS={발언:"segments",자료:"research",다음액션:"nextActions",문헌:null,슬라이드:"webSlides"};
+  async function importFrom(srcId,kinds){
+    const s=await store.get("medit:sess:"+srcId); if(!s) throw new Error("세션을 찾을 수 없습니다");
+    const src=(state.meetings||[]).find(m=>m.id===srcId);
+    const tag=(src&&src.title)||srcId;
+    let n=0;
+    kinds.forEach(k=>{
+      if(k==="문헌"){
+        const items=(s.lit&&s.lit.items)||[]; state.lit=state.lit||{items:[]}; state.lit.items=state.lit.items||[];
+        items.forEach(x=>{ const c=Object.assign({},x,{id:"imp_"+Date.now()+"_"+(n++),from:tag}); state.lit.items.push(c); });
+        return;
+      }
+      const f=FIELDS[k]; if(!f) return;
+      const arr=s[f]||[]; state[f]=state[f]||[];
+      arr.forEach(x=>{ const c=Object.assign({},x,{id:"imp_"+Date.now()+"_"+(n++),from:tag}); state[f].push(c); });
+    });
+    await saveSession(); refreshAll();
+    log("import",tag+" → 현재 회의로 "+n+"건 가져옴");
+    toast(tag+"에서 "+n+"건을 가져왔습니다");
+    return n;
+  }
+
+  // ────────── ④ AI 알림 ──────────
+  async function aiNotify(send){
+    const m=(state.meetings||[]).find(x=>x.id===state.currentMeetingId);
+    const r=audit(false);
+    const ctx=["회의: "+((m&&m.title)||"미선택"),
+      "참석자 "+(((m&&m.attendees)||[]).length)+"명",
+      "발언 "+((state.segments||[]).length)+"건",
+      "다음 액션 "+((state.nextActions||[]).length)+"건",
+      "점검 확인필요 "+r.found.length+"건",
+      r.ux.length?("UX 제안: "+r.ux.slice(0,3).join(" / ")):""].filter(Boolean).join("\n");
+    let txt="";
+    try{
+      txt=await callClaude(
+        "너는 회의 운영 보조다. 아래 상태를 한국어 알림 문구로 요약하라. 3줄 이내, 각 줄 40자 이내, 명사형으로 끝내라. 과장 없이 사실만.",
+        ctx, 300, {noPrompt:true});
+    }catch(e){ txt=ctx.split("\n").slice(0,3).join("\n"); log("ai","AI 알림 생성 실패 — 원본 상태로 대체"); }
+    txt=String(txt).trim().slice(0,180);
+    if(send){ try{ await kakaoPushSelf(txt); }catch(e){ toast("카톡 발송 실패: "+(e.message||e)); } }
+    log("notify",txt.replace(/\n/g," | "));
+    return txt;
+  }
+
+  return {audit,runAudit,logs,log,setKakaoKey,KKEY,kakaoAddUser,kakaoPushSelf,kakaoPushFriends,
+          reviewSessions,importFrom,aiNotify};
+})();
+
+// ────────── 운영 패널 UI ──────────
+function opsPanel(){
+  let m=$("opsModal"); if(m)m.remove();
+  m=document.createElement("div"); m.id="opsModal";
+  m.style.cssText="position:fixed;inset:0;z-index:10002;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:16px";
+  m.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:18px 20px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <b style="font-size:15px;color:var(--deep)">운영 도구</b>
+      <span class="mini">자동 점검 · 카카오 · 세션 가져오기</span>
+      <button id="opsX" style="margin-left:auto;border:1px solid var(--line);background:#fff;border-radius:8px;padding:4px 10px;cursor:pointer">닫기</button>
+    </div>
+    <div id="opsBody" style="font-size:12.5px;line-height:1.65"></div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener("click",e=>{ if(e.target===m) m.remove(); });
+  $("opsX").onclick=()=>m.remove();
+  opsRender();
+}
+function opsRender(){
+  const b=$("opsBody"); if(!b) return;
+  const r=OPS.audit(false);
+  const li=a=>a.length?("<ul style='margin:4px 0 0;padding-left:18px'>"+a.map(x=>"<li>"+esc(x)+"</li>").join("")+"</ul>"):"<div class='mini'>없음</div>";
+  const btn="border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 11px;cursor:pointer;font-size:12px";
+  b.innerHTML=`
+    <div style="border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:10px">
+      <b>자동 점검</b> <span class="mini">데이터 정합성 · UX 미비점</span>
+      <div style="margin-top:6px"><b style="color:var(--deep)">확인 필요 ${r.found.length}건</b>${li(r.found)}</div>
+      <div style="margin-top:8px"><b style="color:var(--deep)">UX 제안 ${r.ux.length}건</b>${li(r.ux)}</div>
+      <div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap">
+        <button id="opsFix" style="${btn}">자동 수정 실행</button>
+        <button id="opsRe" style="${btn}">다시 점검</button>
+      </div>
+    </div>
+    <div style="border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:10px">
+      <b>카카오</b> <span class="mini">사용자 추가 · 알림 발송</span>
+      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <input id="opsKk" placeholder="카카오 JavaScript 키" value="${esc(OPS.KKEY())}" style="flex:1;min-width:180px;padding:6px 9px;border:1px solid var(--line);border-radius:8px;font-size:12px">
+        <button id="opsKkSave" style="${btn}">키 저장</button>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+        <button id="opsAdd" style="${btn}">카카오 로그인으로 사용자 추가</button>
+        <button id="opsSelf" style="${btn}">나에게 알림 보내기</button>
+        <button id="opsAI" style="${btn}">AI 요약 알림 보내기</button>
+      </div>
+      <div class="mini" style="margin-top:6px">친구 발송은 카카오 소셜 API 권한 신청·심사가 필요합니다. 신청 전에는 앱 멤버로 등록된 계정에만 전달됩니다.</div>
+    </div>
+    <div style="border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:10px">
+      <b>다른 회의 세션 검토</b> <span class="mini">필요한 항목만 현재 회의로 가져옵니다</span>
+      <div id="opsSess" style="margin-top:6px" class="mini">불러오는 중…</div>
+    </div>`;
+  $("opsFix").onclick=async()=>{ await OPS.runAudit(true); opsRender(); };
+  $("opsRe").onclick=()=>opsRender();
+  $("opsKkSave").onclick=()=>{ OPS.setKakaoKey($("opsKk").value); toast("카카오 키 저장됨"); };
+  $("opsAdd").onclick=async()=>{ try{ await OPS.kakaoAddUser("guest"); opsRender(); }catch(e){ toast("실패: "+(e.message||e)); } };
+  $("opsSelf").onclick=async()=>{ try{ await OPS.kakaoPushSelf("["+((state.meetings||[]).find(x=>x.id===state.currentMeetingId)||{}).title+"] 캠퍼스타운 허브 알림"); }catch(e){ toast("실패: "+(e.message||e)); } };
+  $("opsAI").onclick=async()=>{ try{ const t=await OPS.aiNotify(true); toast("발송: "+t.split("\n")[0]); }catch(e){ toast("실패: "+(e.message||e)); } };
+  OPS.reviewSessions().then(list=>{
+    const el=$("opsSess"); if(!el) return;
+    if(!list.length){ el.textContent="가져올 다른 회의가 없습니다."; return; }
+    const btn="border:1px solid var(--line);background:#fff;border-radius:7px;padding:3px 8px;cursor:pointer;font-size:11.5px";
+    el.innerHTML=list.map(s=>{
+      const kinds=Object.keys(s.counts).filter(k=>s.counts[k]>0);
+      return `<div style="border-top:1px solid var(--line);padding:7px 0">
+        <b style="color:var(--deep);font-size:12.5px">${esc(s.title)}</b> <span class="mini">${esc(s.date)}</span><br>
+        ${kinds.length?kinds.map(k=>`<label style="margin-right:9px"><input type="checkbox" data-s="${s.id}" data-k="${k}"> ${k} ${s.counts[k]}</label>`).join(""):"<span class='mini'>내용 없음</span>"}
+        ${kinds.length?`<button style="${btn}" data-imp="${s.id}">가져오기</button>`:""}
+      </div>`;
+    }).join("");
+    el.querySelectorAll("[data-imp]").forEach(b2=>{
+      b2.onclick=async()=>{
+        const sid=b2.getAttribute("data-imp");
+        const ks=[...el.querySelectorAll(`input[data-s="${sid}"]:checked`)].map(x=>x.getAttribute("data-k"));
+        if(!ks.length) return toast("가져올 항목을 선택하세요");
+        try{ await OPS.importFrom(sid,ks); opsRender(); }catch(e){ toast("실패: "+(e.message||e)); }
+      };
+    });
+  });
+}
+// 실행 버튼 + 로드 후 조용한 자동 점검
+(function opsBoot(){
+  function mount(){
+    if($("opsBtn")) return;
+    const b=document.createElement("button"); b.id="opsBtn"; b.textContent="운영";
+    b.title="자동 점검 · 카카오 · 세션 가져오기";
+    b.style.cssText="position:fixed;right:14px;bottom:14px;z-index:9000;border:1px solid var(--line);background:#fff;color:var(--deep);border-radius:999px;padding:9px 16px;font-weight:800;font-size:12.5px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.12)";
+    b.onclick=opsPanel; document.body.appendChild(b);
+  }
+  if(document.readyState!=="loading") mount(); else document.addEventListener("DOMContentLoaded",mount);
+  setTimeout(()=>{ try{ OPS.runAudit(true,true); }catch(e){ console.warn("자동 점검 실패:",e); } },4000);
+})();
+
 </script>
 </body>
 </html>
