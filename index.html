@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=110, BUILD_DATE="2026-07-22";
+const BUILD=111, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -6667,12 +6667,27 @@ const OPS = (()=>{
         else found.push("제목 없는 회의");
       }
     });
-    // 3. 참석자 배열 정리 — 공백·중복 제거
+    // 3. 참석자 배열 정리 — 앱은 {name,email} 객체를 기대한다.
+    //    문자열로 저장된 옛 데이터는 객체로 되살리고, 이름은 절대 버리지 않는다.
     (S.meetings||[]).forEach(m=>{
       if(!m||!Array.isArray(m.attendees)) return;
-      const before=m.attendees.length;
-      const norm=[...new Set(m.attendees.map(x=>typeof x==="string"?x.trim():(x&&x.email?String(x.email).trim():"")).filter(Boolean))];
-      if(norm.length!==before){ if(apply){ m.attendees=norm; fixed.push("참석자 명단 정리("+(m.title||m.id)+")"); } else found.push("참석자 명단에 빈 값·중복"); }
+      const seen=new Set(), norm=[]; let changed=false;
+      m.attendees.forEach(x=>{
+        let o;
+        if(typeof x==="string"){ const s=x.trim(); if(!s) { changed=true; return; }
+          o={name:s.includes("@")?s.split("@")[0]:s, email:s.includes("@")?s:""}; changed=true; }
+        else if(x&&typeof x==="object"){
+          const nm=String(x.name||"").trim(), em=String(x.email||"").trim();
+          if(!nm&&!em){ changed=true; return; }
+          o=Object.assign({},x,{name:nm||em,email:em});
+          if(nm!==x.name||em!==x.email) changed=true;
+        } else { changed=true; return; }
+        const k=(o.email||o.name).toLowerCase();
+        if(seen.has(k)){ changed=true; return; }
+        seen.add(k); norm.push(o);
+      });
+      if(changed){ if(apply){ m.attendees=norm; fixed.push("참석자 명단 정리("+(m.title||m.id)+")"); }
+                   else found.push("참석자 명단에 빈 값·중복 또는 옛 문자열 형식"); }
     });
     // 4. 끊긴 참조 — 없는 회의를 가리키는 잡·프로젝트
     const mids=new Set((S.meetings||[]).map(m=>m&&m.id));
@@ -6714,7 +6729,7 @@ const OPS = (()=>{
 
   async function runAudit(apply,quiet){
     const r=audit(!!apply);
-    if(apply && r.fixed.length){ try{ await saveSession(); refreshAll(); }catch(e){} }
+    if(apply && r.fixed.length){ try{ if(typeof syncCurrentMeeting==="function") syncCurrentMeeting(); await saveSession(); refreshAll(); }catch(e){} }
     log("audit",(apply?"자동수정 ":"점검 ")+r.fixed.length+"건 수정 / "+r.found.length+"건 확인필요 / UX "+r.ux.length+"건");
     if(!quiet){
       const n=r.fixed.length+r.found.length;
