@@ -1,0 +1,99 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>캠퍼스타운 허브 — 복구 도구</title>
+<style>
+ :root{--mint:#12BDB0;--deep:#0E4C4A;--line:#dfe7e6;--bg:#f4f8f8}
+ *{box-sizing:border-box}
+ body{margin:0;padding:20px;background:var(--bg);color:#14312f;
+      font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Malgun Gothic",sans-serif;font-size:14px;line-height:1.7}
+ .wrap{max-width:680px;margin:0 auto}
+ h1{font-size:17px;color:var(--deep);margin:0 0 4px}
+ .sub{font-size:12.5px;color:#5c7674;margin-bottom:16px}
+ .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+ .card b{color:var(--deep);font-size:13.5px}
+ table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+ td,th{border-top:1px solid var(--line);padding:5px 4px;text-align:left;word-break:break-all}
+ th{color:#5c7674;font-weight:600;border-top:none}
+ button{border:1px solid var(--line);background:#fff;color:var(--deep);border-radius:9px;
+        padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;margin:4px 6px 0 0}
+ button.p{background:var(--mint);border-color:var(--mint);color:#fff}
+ button.d{background:#fff;border-color:#e6b0a8;color:#b4453a}
+ .ok{color:#0a7d55;font-weight:700}.ng{color:#b4453a;font-weight:700}
+ pre{background:#f7fbfb;border:1px solid var(--line);border-radius:8px;padding:9px;
+     font-size:11.5px;overflow:auto;max-height:220px;margin:8px 0 0}
+ .mini{font-size:12px;color:#5c7674}
+</style></head><body><div class="wrap">
+<h1>캠퍼스타운 허브 — 복구 도구</h1>
+<div class="sub">허브 화면이 비어 보일 때 원인을 찾고 브라우저에 남은 데이터를 정리합니다. 서버 데이터는 건드리지 않습니다.</div>
+
+<div class="card"><b>1. 배포 상태</b><div id="dep">확인 중…</div></div>
+<div class="card"><b>2. 브라우저 저장 데이터</b><div id="ls">확인 중…</div></div>
+<div class="card"><b>3. 조치</b>
+  <div class="mini">아래는 <u>이 브라우저에 저장된 것만</u> 지웁니다. Supabase의 회의·회의록은 그대로입니다.</div>
+  <button class="p" onclick="hard()">캐시 무시하고 허브 다시 열기</button>
+  <button class="d" onclick="wipe(false)">허브 데이터만 지우고 다시 받기</button>
+  <button class="d" onclick="wipe(true)">로그인까지 전부 초기화</button>
+  <button onclick="dl()">지우기 전 백업 내려받기</button>
+  <div id="msg" class="mini" style="margin-top:8px"></div>
+</div>
+<div class="card"><b>4. 진단 요약</b>
+  <div class="mini">아래 내용을 그대로 복사해 전달해 주시면 원인을 바로 찾을 수 있습니다.</div>
+  <pre id="diag">…</pre><button onclick="copy()">복사</button></div>
+
+<script>
+var HUB="./index.html", D={};
+function el(i){return document.getElementById(i);}
+function keys(){var a=[];for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);
+  if(k&&(k.indexOf("medit:")===0||k.indexOf("medinote:")===0))a.push(k);}return a.sort();}
+
+fetch(HUB+"?nc="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():"";}).then(function(t){
+  var m=t.match(/const BUILD=(\d+)/), n=t.length;
+  D.build=m?m[1]:"확인 실패"; D.size=n;
+  var ok=!!m&&n>400000;
+  el("dep").innerHTML='<table><tr><th>서버 BUILD</th><td class="'+(ok?"ok":"ng")+'">'+D.build+'</td></tr>'+
+    '<tr><th>파일 크기</th><td>'+n.toLocaleString()+' B '+(ok?'<span class="ok">정상</span>':'<span class="ng">비정상 — 파일이 잘렸습니다</span>')+'</td></tr></table>';
+  dump();
+}).catch(function(e){ D.build="네트워크 오류: "+e.message;
+  el("dep").innerHTML='<span class="ng">index.html을 받지 못했습니다 — '+e.message+'</span>'; dump(); });
+
+(function(){
+  var ks=keys(), rows="", bad=0, total=0;
+  if(!ks.length){ el("ls").innerHTML='<span class="mini">저장된 데이터가 없습니다 (첫 방문이거나 이미 초기화됨).</span>'; D.ls="없음"; return; }
+  ks.forEach(function(k){
+    var v=localStorage.getItem(k)||"", st="", cls="ok"; total+=v.length;
+    try{ var o=JSON.parse(v);
+      if(k==="medit:hub1"){ var mt=(o&&o.meetings)||[];
+        var strAt=mt.some(function(m){return (m.attendees||[]).some(function(a){return typeof a==="string";});});
+        st="회의 "+mt.length+"건"+(strAt?" · 참석자 형식 손상":""); if(strAt){cls="ng";bad++;}
+      } else st=Array.isArray(o)?("배열 "+o.length):"정상";
+    }catch(e){ st="JSON 깨짐"; cls="ng"; bad++; }
+    rows+='<tr><th>'+k+'</th><td>'+v.length.toLocaleString()+' 자 · <span class="'+cls+'">'+st+'</span></td></tr>';
+  });
+  D.ls=ks.length+"개 / "+total+"자 / 이상 "+bad+"건";
+  el("ls").innerHTML='<table>'+rows+'</table><div class="mini" style="margin-top:6px">합계 '+total.toLocaleString()+
+    '자'+(bad?' · <span class="ng">이상 '+bad+'건 — 아래 [허브 데이터만 지우고 다시 받기]를 권합니다</span>':' · 이상 없음')+'</div>';
+})();
+
+function dump(){ el("diag").textContent=
+  "BUILD(서버): "+D.build+"\n파일크기: "+(D.size||"-")+
+  "\n로컬저장: "+(D.ls||"-")+"\n주소: "+location.href+
+  "\n브라우저: "+navigator.userAgent+"\n온라인: "+navigator.onLine+"\n시각: "+new Date().toISOString(); }
+setTimeout(dump,600);
+
+function dl(){ var o={};keys().forEach(function(k){o[k]=localStorage.getItem(k);});
+  var b=new Blob([JSON.stringify(o,null,2)],{type:"application/json"});
+  var a=document.createElement("a");a.href=URL.createObjectURL(b);
+  a.download="hub-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();
+  el("msg").textContent="백업을 내려받았습니다."; }
+
+function wipe(all){
+  if(!confirm(all?"로그인 정보까지 전부 지웁니다. 계속할까요?":"허브 데이터를 지웁니다. 서버에서 다시 받아옵니다. 계속할까요?")) return;
+  keys().forEach(function(k){ if(!all&&k==="medit:user") return; localStorage.removeItem(k); });
+  el("msg").textContent="정리했습니다. 3초 뒤 허브로 이동합니다.";
+  setTimeout(hard,3000);
+}
+function hard(){ location.href=HUB+"?v="+(D.build||Date.now())+"&nc="+Date.now(); }
+function copy(){ navigator.clipboard.writeText(el("diag").textContent)
+  .then(function(){el("msg").textContent="복사했습니다.";},
+        function(){el("msg").textContent="복사 실패 — 위 내용을 직접 선택해 주세요.";}); }
+</script></div></body></html>
