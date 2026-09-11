@@ -36,7 +36,13 @@
   <button onclick="dl()">지우기 전 백업 내려받기</button>
   <div id="msg" class="mini" style="margin-top:8px"></div>
 </div>
-<div class="card"><b>4. 진단 요약</b>
+<div class="card"><b>4. 허브 부트 시험</b>
+  <div class="mini">허브를 눈에 안 보이게 실제로 띄워, 화면이 비는 원인을 직접 잡습니다.</div>
+  <button class="p" onclick="boot()">시험 실행</button>
+  <div id="boot" class="mini" style="margin-top:8px">아직 실행하지 않았습니다.</div>
+  <iframe id="fr" style="width:1px;height:1px;opacity:0;position:absolute;left:-9999px"></iframe></div>
+
+<div class="card"><b>5. 진단 요약</b>
   <div class="mini">아래 내용을 그대로 복사해 전달해 주시면 원인을 바로 찾을 수 있습니다.</div>
   <pre id="diag">…</pre><button onclick="copy()">복사</button></div>
 
@@ -48,10 +54,12 @@ function keys(){var a=[];for(var i=0;i<localStorage.length;i++){var k=localStora
 
 fetch(HUB+"?nc="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():"";}).then(function(t){
   var m=t.match(/const BUILD=(\d+)/), n=t.length;
-  D.build=m?m[1]:"확인 실패"; D.size=n;
-  var ok=!!m&&n>400000;
+  var ended=/<\/html>\s*$/.test(t);
+  D.build=m?m[1]:"확인 실패"; D.size=n; D.ended=ended;
+  var ok=!!m&&n>380000&&ended;
   el("dep").innerHTML='<table><tr><th>서버 BUILD</th><td class="'+(ok?"ok":"ng")+'">'+D.build+'</td></tr>'+
-    '<tr><th>파일 크기</th><td>'+n.toLocaleString()+' B '+(ok?'<span class="ok">정상</span>':'<span class="ng">비정상 — 파일이 잘렸습니다</span>')+'</td></tr></table>';
+    '<tr><th>받은 분량</th><td>'+n.toLocaleString()+' 자 (약 '+Math.round(n*1.14/1024)+' KB)</td></tr>'+
+    '<tr><th>파일 끝</th><td class="'+(ended?"ok":"ng")+'">'+(ended?'</html>까지 정상 수신':'중간에 잘렸습니다')+'</td></tr></table>';
   dump();
 }).catch(function(e){ D.build="네트워크 오류: "+e.message;
   el("dep").innerHTML='<span class="ng">index.html을 받지 못했습니다 — '+e.message+'</span>'; dump(); });
@@ -66,8 +74,11 @@ fetch(HUB+"?nc="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.t
         var strAt=mt.some(function(m){return (m.attendees||[]).some(function(a){return typeof a==="string";});});
         st="회의 "+mt.length+"건"+(strAt?" · 참석자 형식 손상":""); if(strAt){cls="ng";bad++;}
       } else st=Array.isArray(o)?("배열 "+o.length):"정상";
-    }catch(e){ st="JSON 깨짐"; cls="ng"; bad++; }
-    rows+='<tr><th>'+k+'</th><td>'+v.length.toLocaleString()+' 자 · <span class="'+cls+'">'+st+'</span></td></tr>';
+    }catch(e){
+      if(/(aikey|kakaokey|issuekey|apikey|user$|prefer|token)/i.test(k)){ st="문자열 값 (정상)"; }
+      else { st="JSON 깨짐"; cls="ng"; bad++; }
+    }
+    rows+='<tr><th style="max-width:220px">'+k+'</th><td>'+v.length.toLocaleString()+' 자 · <span class="'+cls+'">'+st+'</span></td></tr>';
   });
   D.ls=ks.length+"개 / "+total+"자 / 이상 "+bad+"건";
   el("ls").innerHTML='<table>'+rows+'</table><div class="mini" style="margin-top:6px">합계 '+total.toLocaleString()+
@@ -76,7 +87,7 @@ fetch(HUB+"?nc="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.t
 
 function dump(){ el("diag").textContent=
   "BUILD(서버): "+D.build+"\n파일크기: "+(D.size||"-")+
-  "\n로컬저장: "+(D.ls||"-")+"\n주소: "+location.href+
+  "\n부트시험: "+(D.boot||"미실행")+"\n로컬저장: "+(D.ls||"-")+"\n주소: "+location.href+
   "\n브라우저: "+navigator.userAgent+"\n온라인: "+navigator.onLine+"\n시각: "+new Date().toISOString(); }
 setTimeout(dump,600);
 
@@ -91,6 +102,37 @@ function wipe(all){
   keys().forEach(function(k){ if(!all&&k==="medit:user") return; localStorage.removeItem(k); });
   el("msg").textContent="정리했습니다. 3초 뒤 허브로 이동합니다.";
   setTimeout(hard,3000);
+}
+function boot(){
+  var out=el("boot"); out.innerHTML="띄우는 중… (최대 12초)";
+  var fr=el("fr"), errs=[], done=false;
+  fr.src=HUB+"?boottest=1&nc="+Date.now();
+  fr.onload=function(){
+    var w=fr.contentWindow, d=fr.contentDocument;
+    try{ w.addEventListener("error",function(e){ errs.push((e.message||"")+" @"+(e.lineno||"?")+"행"); });
+         w.addEventListener("unhandledrejection",function(e){ errs.push("Promise: "+((e.reason&&e.reason.message)||e.reason)); });
+    }catch(_){ }
+    setTimeout(function(){
+      if(done) return; done=true;
+      var r=[];
+      try{
+        var txt=(d.body.textContent||"").trim();
+        var auth=d.getElementById("authArea");
+        var app =d.getElementById("app")||d.getElementById("hub");
+        r.push("화면 글자수: "+txt.length+(txt.length>200?' <span class="ok">렌더됨</span>':' <span class="ng">비어 있음</span>'));
+        r.push("로그인 영역: "+(auth?(auth.offsetHeight>0?'<span class="ok">표시</span>':'숨김(로그인된 상태)'):'없음'));
+        r.push("허브 영역: "+(app?(app.offsetHeight>0?'<span class="ok">표시</span>':'숨김'):'없음'));
+        var b=txt.match(/v(\d{3})/); r.push("화면 표기 버전: "+(b?b[0]:"확인 실패"));
+        var red=d.querySelectorAll('[style*="FFB4A2"]');
+        if(red.length) r.push('<span class="ng">오류 배너: '+(red[0].textContent||"").slice(0,200)+'</span>');
+        D.boot=txt.length+"자 / 오류 "+errs.length+"건";
+      }catch(e){ r.push('<span class="ng">iframe 접근 실패: '+e.message+'</span>'); D.boot="접근실패"; }
+      if(errs.length){ r.push('<span class="ng">스크립트 오류 '+errs.length+'건</span>'); errs.forEach(function(x){ r.push("&nbsp;&nbsp;· "+x); }); D.boot+=" | "+errs.join(" ; "); }
+      else r.push('스크립트 오류: <span class="ok">없음</span>');
+      out.innerHTML=r.join("<br>"); dump();
+    },7000);
+  };
+  fr.onerror=function(){ out.innerHTML='<span class="ng">허브를 불러오지 못했습니다 — 네트워크나 차단을 확인해 주세요.</span>'; };
 }
 function hard(){ location.href=HUB+"?v="+(D.build||Date.now())+"&nc="+Date.now(); }
 function copy(){ navigator.clipboard.writeText(el("diag").textContent)
