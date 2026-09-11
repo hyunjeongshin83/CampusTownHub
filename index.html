@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=111, BUILD_DATE="2026-07-22";
+const BUILD=112, BUILD_DATE="2026-07-22";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -733,19 +733,39 @@ let storageOK=true;
 let cloudOK=false;
 
 // Supabase REST 호출 (라이브러리 없이 fetch만 사용)
+// (v112) 로그인 세션 토큰 — REST 호출은 반드시 로그인한 사용자 자격으로 나가야 한다.
+// hub_state의 RLS는 anon에게 is_public=true 행만 허용하므로, anon 키로만 호출하면
+// 회의 데이터가 한 건도 조회되지 않아 화면이 비어 보인다.
+let SB_TOKEN="";
+function sbToken(){ return SB_TOKEN||""; }
+async function refreshSbToken(){
+  try{
+    if(!authReady||!sb) return "";
+    const {data:{session}}=await sb.auth.getSession();
+    SB_TOKEN=(session&&session.access_token)||"";
+  }catch(e){ SB_TOKEN=""; }
+  return SB_TOKEN;
+}
 async function sbFetch(path, opts={}){
   const url=SUPABASE_URL.replace(/\/$/,"")+"/rest/v1/"+path;
+  const bearer=sbToken()||SUPABASE_ANON_KEY;
   const res=await fetch(url,{
     ...opts,
     headers:{
       "apikey":SUPABASE_ANON_KEY,
-      "Authorization":"Bearer "+SUPABASE_ANON_KEY,
+      "Authorization":"Bearer "+bearer,
       "Content-Type":"application/json",
       "Prefer":"resolution=merge-duplicates,return=representation",
       ...(opts.headers||{}),
     },
   });
-  if(!res.ok) throw new Error("Supabase "+res.status+" "+(await res.text()).slice(0,120));
+  if(!res.ok){
+    if((res.status===401||res.status===403)&&!opts._retried){
+      await refreshSbToken();
+      if(sbToken()&&sbToken()!==bearer) return sbFetch(path,{...opts,_retried:true});
+    }
+    throw new Error("Supabase "+res.status+" "+(await res.text()).slice(0,120));
+  }
   const txt=await res.text();
   return txt?JSON.parse(txt):null;
 }
@@ -6034,6 +6054,7 @@ async function restoreSession(){
   captureOAuthError();
   try{
     const {data:{session}}=await sb.auth.getSession();
+    SB_TOKEN=(session&&session.access_token)||"";     // (v112)
     if(session&&session.user){
       // 숙명 계정만 허용 — 그 외에는 즉시 로그아웃하고 안내
       if(!allowedEmail(session.user.email)){
@@ -6612,10 +6633,11 @@ function enterHub(){
     const u=await restoreSession();
     if(u){
       if(window.history&&window.location.hash){ history.replaceState(null,"",window.location.pathname+window.location.search); }
+      await refreshSbToken();              // (v112) 이후 REST 호출을 로그인 자격으로
       saveUser();
       showMeetingList();
       // 로그인 상태 변화 감지 (로그아웃·토큰 갱신)
-      sb.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT"){ state.user={role:null,name:"",email:"",id:null}; clearUser(); authMode="login"; renderAuth(); } });
+      sb.auth.onAuthStateChange((ev,sess)=>{ SB_TOKEN=(sess&&sess.access_token)||""; if(ev==="SIGNED_OUT"){ state.user={role:null,name:"",email:"",id:null}; clearUser(); authMode="login"; renderAuth(); } });
       return;
     }
     sb.auth.onAuthStateChange(async(ev)=>{
