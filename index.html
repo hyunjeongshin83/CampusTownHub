@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=113, BUILD_DATE="2026-07-22";
+const BUILD=114, BUILD_DATE="2026-09-12";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -6386,6 +6386,7 @@ function showMeetingList(){
   };
   const sh=$("storeHint");
   if(sh) diagStatus(sh);          // (v113) 자격·조회건수까지 사실대로 표시
+  setTimeout(()=>{ try{ accessGuard(); }catch(e){ console.warn("접근 가드 실패:",e); } },900);   // (v114)
   if(false){
     const mode=storageMode();
     if(mode==="cloud")      sh.innerHTML='<span style="color:#5FE3D6">● 클라우드 연결됨</span> — 초대된 분들과 회의·회의록이 공유됩니다.';
@@ -6918,6 +6919,7 @@ function opsRender(){
       <div style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap">
         <button id="opsFix" style="${btn}">자동 수정 실행</button>
         <button id="opsRe" style="${btn}">다시 점검</button>
+        <button id="opsSync" style="${btn}">서버에서 강제 재동기화</button>
       </div>
     </div>
     <div style="border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:10px">
@@ -6939,6 +6941,7 @@ function opsRender(){
     </div>`;
   $("opsFix").onclick=async()=>{ await OPS.runAudit(true); opsRender(); };
   $("opsRe").onclick=()=>opsRender();
+  $("opsSync").onclick=()=>{ try{ forceResync(); }catch(e){ toast("실패: "+(e.message||e)); } };
   $("opsKkSave").onclick=()=>{ OPS.setKakaoKey($("opsKk").value); toast("카카오 키 저장됨"); };
   $("opsAdd").onclick=async()=>{ try{ await OPS.kakaoAddUser("guest"); opsRender(); }catch(e){ toast("실패: "+(e.message||e)); } };
   $("opsSelf").onclick=async()=>{ try{ await OPS.kakaoPushSelf("["+((state.meetings||[]).find(x=>x.id===state.currentMeetingId)||{}).title+"] 캠퍼스타운 허브 알림"); }catch(e){ toast("실패: "+(e.message||e)); } };
@@ -7021,6 +7024,67 @@ async function diagStatus(el){
   const r=$("sbReload");
   if(r) r.onclick=async()=>{ try{ await refreshSbToken(); await loadAll(); refreshAll(); toast("서버에서 다시 불러왔습니다"); }
                              catch(e){ toast("실패: "+(e.message||e)); } };
+}
+
+
+// ==================== v114 데이터 접근 가드 ====================
+// 회의가 서버에 있는데도 화면이 비는 상황을 사용자가 스스로 풀 수 있게 한다.
+// 원인은 둘 중 하나다 — ① 서버 로그인 세션 없음(anon) ② 화면 필터(canView)가 전부 걸러냄.
+// 어느 쪽인지 판정해 그에 맞는 조치를 바로 띄운다.
+let _guardShown=false;
+async function accessGuard(){
+  if(_guardShown||!cloud.enabled()) return;
+  let token=false, serverCount=null, err="";
+  try{ await refreshSbToken(); token=!!sbToken(); }catch(e){}
+  try{
+    const rows=await sbFetch("hub_state?key=eq."+encodeURIComponent("medit:hub1")+"&select=value");
+    serverCount=(rows&&rows.length&&rows[0].value&&(rows[0].value.meetings||[]).length)||0;
+  }catch(e){ err=e.message||String(e); }
+  const shown=(state.meetings||[]).filter(canView).length;
+  if(shown>0) return;                       // 잘 보이면 아무것도 하지 않는다
+  _guardShown=true;
+
+  let title,msg,btn=null;
+  if(err){
+    title="서버에 연결하지 못했습니다";
+    msg="오류: "+esc(err.slice(0,160))+"<br>잠시 후 새로고침하거나 네트워크·차단 여부를 확인해 주세요.";
+  } else if(!token){
+    title="서버 로그인이 필요합니다";
+    msg="회의록은 로그인한 분에게만 열립니다. 화면에는 로그인된 것처럼 보여도 서버 세션이 없으면 회의가 조회되지 않습니다.";
+    btn={t:"구글 계정으로 서버 로그인",f:async()=>{ try{ await oauthLogin("Google"); }catch(e){ toast("로그인 실패: "+(e.message||e)); } }};
+  } else if(serverCount>0){
+    title="회의 "+serverCount+"건이 서버에 있지만 화면에 표시되지 않습니다";
+    msg="로그인 계정("+esc(state.user.email||state.user.name||"")+")이 참석자 명단·개최자와 일치하지 않아 걸러졌습니다.";
+    btn={t:"서버에서 다시 불러오기",f:async()=>{ try{ await refreshSbToken(); await loadAll(); refreshAll(); _guardShown=false; toast("다시 불러왔습니다"); }catch(e){ toast("실패: "+(e.message||e)); } }};
+  } else {
+    title="서버에 저장된 회의가 없습니다";
+    msg="새 회의를 만들면 이 자리에 표시됩니다.";
+  }
+  const box=document.createElement("div");
+  box.id="guardBox";
+  box.style.cssText="margin:12px 0;padding:13px 15px;border:1px solid #FFB4A2;border-radius:11px;background:rgba(255,180,162,.08);font-size:13px;line-height:1.7";
+  box.innerHTML='<b style="color:#FFB4A2">'+esc(title)+'</b><br>'+msg
+    +(btn?'<br><button id="guardBtn" style="margin-top:9px;border:1px solid #5FE3D6;background:transparent;color:#5FE3D6;border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer">'+esc(btn.t)+'</button>':'')
+    +'<br><span style="font-size:11.5px;opacity:.75;margin-top:6px;display:inline-block">문제가 계속되면 <a href="recover.html" style="color:#8FD9D2">복구 도구</a>를 여세요.</span>';
+  const host=$("storeHint");
+  if(host&&host.parentNode) host.parentNode.insertBefore(box,host);
+  else document.body.appendChild(box);
+  if(btn){ const b=$("guardBtn"); if(b) b.onclick=btn.f; }
+  try{ OPS.log("guard",title); }catch(e){}
+}
+
+// 강제 재동기화 — 브라우저 사본을 버리고 서버본으로 다시 채운다
+async function forceResync(){
+  if(!confirm("브라우저에 남은 허브 데이터를 지우고 서버에서 다시 받아옵니다. 서버 데이터는 그대로입니다. 계속할까요?")) return;
+  try{
+    Object.keys(localStorage).filter(k=>k.indexOf("medit:")===0&&k!=="medit:user"&&k!=="medit:apikey")
+      .forEach(k=>localStorage.removeItem(k));
+    for(const k in memStore) delete memStore[k];
+    await refreshSbToken();
+    await loadAll(); refreshAll();
+    _guardShown=false;
+    toast("서버에서 다시 받아왔습니다 — 회의 "+((state.meetings||[]).filter(canView).length)+"건");
+  }catch(e){ toast("재동기화 실패: "+(e.message||e)); }
 }
 
 </script>
