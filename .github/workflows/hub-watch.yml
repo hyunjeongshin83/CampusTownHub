@@ -1,0 +1,68 @@
+name: 허브 자동 점검
+
+on:
+  schedule:
+    - cron: "0 22 * * *"      # 매일 07:00 KST (UTC 22:00)
+  workflow_dispatch:           # 수동 실행도 가능
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 점검 실행
+        id: chk
+        env:
+          SB_URL: https://xaclqvveppvccdpebzsz.supabase.co
+          SB_ANON: ${{ secrets.SB_ANON_KEY }}
+          SITE: https://hyunjeongshin83.github.io/CampusTownHub
+        run: python3 scripts/hub_watch.py
+
+      - name: 문제 발견 시 이슈 등록·갱신
+        if: steps.chk.outputs.status != 'ok'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('watch-report.md', 'utf8');
+            const title = '[자동점검] 허브 이상 감지';
+            const {data: issues} = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'auto-watch'
+            });
+            if (issues.length) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issues[0].number, body
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body, labels: ['auto-watch']
+              });
+            }
+
+      - name: 정상 복구 시 이슈 닫기
+        if: steps.chk.outputs.status == 'ok'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {data: issues} = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'auto-watch'
+            });
+            for (const i of issues) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: i.number, body: '자동 점검 결과 정상으로 돌아와 닫습니다.'
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: i.number, state: 'closed'
+              });
+            }
