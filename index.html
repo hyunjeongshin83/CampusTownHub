@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=114, BUILD_DATE="2026-09-12";
+const BUILD=115, BUILD_DATE="2026-09-12";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -6932,6 +6932,7 @@ function opsRender(){
         <button id="opsAdd" style="${btn}">카카오 로그인으로 사용자 추가</button>
         <button id="opsSelf" style="${btn}">나에게 알림 보내기</button>
         <button id="opsAI" style="${btn}">AI 요약 알림 보내기</button>
+        <button id="opsChan" style="${btn}">회의 카톡 채널 연결·대화 가져오기</button>
       </div>
       <div class="mini" style="margin-top:6px">친구 발송은 카카오 소셜 API 권한 신청·심사가 필요합니다. 신청 전에는 앱 멤버로 등록된 계정에만 전달됩니다.</div>
     </div>
@@ -6945,6 +6946,7 @@ function opsRender(){
   $("opsKkSave").onclick=()=>{ OPS.setKakaoKey($("opsKk").value); toast("카카오 키 저장됨"); };
   $("opsAdd").onclick=async()=>{ try{ await OPS.kakaoAddUser("guest"); opsRender(); }catch(e){ toast("실패: "+(e.message||e)); } };
   $("opsSelf").onclick=async()=>{ try{ await OPS.kakaoPushSelf("["+((state.meetings||[]).find(x=>x.id===state.currentMeetingId)||{}).title+"] 캠퍼스타운 허브 알림"); }catch(e){ toast("실패: "+(e.message||e)); } };
+  $("opsChan").onclick=()=>{ try{ channelPanel(); }catch(e){ toast("실패: "+(e.message||e)); } };
   $("opsAI").onclick=async()=>{ try{ const t=await OPS.aiNotify(true); toast("발송: "+t.split("\n")[0]); }catch(e){ toast("실패: "+(e.message||e)); } };
   OPS.reviewSessions().then(list=>{
     const el=$("opsSess"); if(!el) return;
@@ -7085,6 +7087,156 @@ async function forceResync(){
     _guardShown=false;
     toast("서버에서 다시 받아왔습니다 — 회의 "+((state.meetings||[]).filter(canView).length)+"건");
   }catch(e){ toast("재동기화 실패: "+(e.message||e)); }
+}
+
+
+// ==================== v115 카카오톡 채널 연동 ====================
+// 회의별로 카카오톡 채널을 붙여 [채널 추가] · [채팅 열기]를 제공한다.
+// 주의: 카카오는 채널 대화 "내용"을 읽어오는 공개 API를 제공하지 않는다.
+//       그래서 대화 기록은 카톡에서 내보낸 텍스트를 붙여넣어 회의록으로 가져온다.
+const CHAN = (()=>{
+  function idOf(m){ return (m&&(m.kakaoChannel||"")).trim(); }
+  function setId(m,v){ m.kakaoChannel=(v||"").trim().replace(/^.*\/(_[A-Za-z0-9]+).*$/,"$1"); }
+
+  async function follow(pid){                       // 간편 추가 — 결과를 응답으로 받는다
+    const K=await OPS_sdk();
+    if(K.Channel&&K.Channel.followChannel){
+      try{ const r=await K.Channel.followChannel({channelPublicId:pid});
+           toast("채널을 추가했습니다"); return r; }
+      catch(e){ /* 미지원·미동의 시 아래 브리지 방식으로 */ }
+    }
+    K.Channel.addChannel({channelPublicId:pid});    // 브리지 페이지 — 결과는 알 수 없음
+    toast("채널 추가 창을 열었습니다");
+  }
+  async function chat(pid){ const K=await OPS_sdk(); K.Channel.chat({channelPublicId:pid}); }
+
+  async function relation(pid){                     // 관계 조회 — 실제 추가 여부 확인
+    const K=await OPS_sdk();
+    if(!K.Auth.getAccessToken()) await new Promise((res,rej)=>K.Auth.login({scope:"talk_message",success:res,fail:rej}));
+    const r=await K.API.request({url:"/v1/api/talk/channels"});
+    const hit=(r.channels||[]).find(c=>c.channel_public_id===pid);
+    return hit?hit.relation:"NONE";                 // ADDED / BLOCKED / NONE
+  }
+
+  // 카톡에서 내보낸 대화 텍스트 → 발언 배열
+  // 안드로이드/iOS/PC 내보내기 형식을 모두 받는다.
+  function parseExport(raw){
+    const out=[]; let date="";
+    const L=String(raw).replace(/\r/g,"").split("\n");
+    const reDate=/^-+\s*(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일.*-+$/;
+    const rePc=/^(\d{4})[.\-/]\s?(\d{1,2})[.\-/]\s?(\d{1,2})[.\s]*(오전|오후)?\s*(\d{1,2}):(\d{2}),\s*([^:]{1,40}):\s?([\s\S]*)$/;
+    const reMo=/^\[([^\]]{1,40})\]\s*\[(오전|오후)?\s*(\d{1,2}):(\d{2})\]\s*([\s\S]*)$/;
+    const pad=n=>String(n).padStart(2,"0");
+    const h24=(ap,h)=>{ h=+h; if(ap==="오후"&&h<12)h+=12; if(ap==="오전"&&h===12)h=0; return pad(h); };
+    L.forEach(line=>{
+      let m;
+      if((m=line.match(reDate))){ date=`${m[1]}-${pad(m[2])}-${pad(m[3])}`; return; }
+      if((m=line.match(rePc))){
+        out.push({who:m[7].trim(), at:`${m[1]}-${pad(m[2])}-${pad(m[3])} ${h24(m[4],m[5])}:${m[6]}`, text:m[8].trim()});
+        return;
+      }
+      if((m=line.match(reMo))){
+        out.push({who:m[1].trim(), at:`${date||""} ${h24(m[2],m[3])}:${m[4]}`.trim(), text:m[5].trim()});
+        return;
+      }
+      if(out.length && line.trim()) out[out.length-1].text += "\n"+line.trim();   // 여러 줄 메시지
+    });
+    return out.filter(x=>x.text && !/^(사진|동영상|이모티콘|삭제된 메시지입니다)$/.test(x.text));
+  }
+
+  // 파싱한 대화를 현재 회의의 발언으로 넣는다 (이미 있는 것은 건너뜀)
+  async function importChat(raw){
+    const msgs=parseExport(raw);
+    if(!msgs.length) throw new Error("대화를 인식하지 못했습니다 — 카톡 [대화 내보내기]로 받은 텍스트를 그대로 붙여넣어 주세요");
+    state.segments=state.segments||[];
+    const have=new Set(state.segments.map(s=>(s.who||"")+"|"+(s.at||"")+"|"+(s.text||"").slice(0,40)));
+    let n=0;
+    msgs.forEach(x=>{
+      const k=x.who+"|"+x.at+"|"+x.text.slice(0,40);
+      if(have.has(k)) return;
+      have.add(k);
+      state.segments.push({id:"kt_"+Date.now()+"_"+(n++), who:x.who, at:x.at, text:x.text, src:"kakao"});
+    });
+    await saveSession(); refreshAll();
+    OPS.log("kakao","대화 "+n+"건 가져옴 (전체 "+msgs.length+"건 중 신규)");
+    toast("카톡 대화 "+n+"건을 회의 기록에 넣었습니다");
+    return {added:n, total:msgs.length};
+  }
+  return {idOf,setId,follow,chat,relation,parseExport,importChat};
+})();
+async function OPS_sdk(){   // OPS 내부 sdk()를 밖에서도 쓰기 위한 통로
+  if(window.Kakao&&window.Kakao.isInitialized&&window.Kakao.isInitialized()) return window.Kakao;
+  return new Promise((res,rej)=>{
+    const key=OPS.KKEY();
+    if(!key) return rej(new Error("카카오 JavaScript 키가 없습니다 — 운영 패널에서 등록해 주세요"));
+    if(window.Kakao){ try{ if(!window.Kakao.isInitialized()) window.Kakao.init(key); return res(window.Kakao); }catch(e){ return rej(e); } }
+    const s=document.createElement("script");
+    s.src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js";
+    s.onload=()=>{ try{ window.Kakao.init(key); res(window.Kakao); }catch(e){ rej(e); } };
+    s.onerror=()=>rej(new Error("카카오 SDK를 불러오지 못했습니다"));
+    document.head.appendChild(s);
+  });
+}
+
+// 회의 화면에서 여는 채널 패널
+function channelPanel(mid){
+  const m=(state.meetings||[]).find(x=>x.id===(mid||state.currentMeetingId));
+  if(!m) return toast("회의를 먼저 선택해 주세요");
+  let w=$("chanModal"); if(w)w.remove();
+  w=document.createElement("div"); w.id="chanModal";
+  w.style.cssText="position:fixed;inset:0;z-index:10003;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:16px";
+  const btn="border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;margin:4px 6px 0 0";
+  w.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:600px;width:100%;max-height:86vh;overflow:auto;padding:18px 20px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <b style="font-size:15px;color:var(--deep)">카카오톡 채널 — ${esc(m.title||m.id)}</b>
+      <button id="chanX" style="margin-left:auto;${btn}">닫기</button>
+    </div>
+    <div style="font-size:12.5px;line-height:1.7;margin-top:10px">
+      <div style="border:1px solid var(--line);border-radius:10px;padding:11px 13px">
+        <b>채널 연결</b>
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+          <input id="chanId" placeholder="채널 공개 ID (_로 시작) 또는 채널 홈 주소"
+                 value="${esc(CHAN.idOf(m))}" style="flex:1;min-width:200px;padding:6px 9px;border:1px solid var(--line);border-radius:8px;font-size:12px">
+          <button id="chanSave" style="${btn}">저장</button>
+        </div>
+        <div style="margin-top:8px">
+          <button id="chanAdd" style="${btn}">채널 추가</button>
+          <button id="chanChat" style="${btn}">채팅 열기</button>
+          <button id="chanRel" style="${btn}">추가 여부 확인</button>
+        </div>
+        <div class="mini" style="margin-top:6px">채널 홈 주소 <code>pf.kakao.com/_ZeUTxl</code> 의 <code>_ZeUTxl</code> 부분이 공개 ID입니다.</div>
+      </div>
+      <div style="border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:10px">
+        <b>대화 내용 가져오기</b>
+        <div class="mini" style="margin-top:4px">카카오는 채널 대화를 읽어오는 API를 제공하지 않습니다.
+          카톡 대화방 → 메뉴 → <b>대화 내용 내보내기</b> → 텍스트를 아래에 붙여넣으세요.</div>
+        <textarea id="chanRaw" rows="6" placeholder="[신현정] [오후 2:13] 회의 시작하겠습니다"
+          style="width:100%;margin-top:7px;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:12px;font-family:inherit"></textarea>
+        <button id="chanPrev" style="${btn}">미리보기</button>
+        <button id="chanImp" style="${btn}">회의 기록에 넣기</button>
+        <div id="chanOut" class="mini" style="margin-top:7px"></div>
+      </div>
+    </div></div>`;
+  document.body.appendChild(w);
+  w.addEventListener("click",e=>{ if(e.target===w) w.remove(); });
+  $("chanX").onclick=()=>w.remove();
+  const pid=()=>CHAN.idOf(m);
+  const need=()=>{ if(!pid()){ toast("채널 공개 ID를 먼저 저장해 주세요"); return false; } return true; };
+  $("chanSave").onclick=async()=>{ CHAN.setId(m,$("chanId").value); await saveSession(); $("chanId").value=pid(); toast("저장했습니다"); };
+  $("chanAdd").onclick =async()=>{ if(need()) try{ await CHAN.follow(pid()); }catch(e){ toast("실패: "+(e.message||e)); } };
+  $("chanChat").onclick=async()=>{ if(need()) try{ await CHAN.chat(pid()); }catch(e){ toast("실패: "+(e.message||e)); } };
+  $("chanRel").onclick =async()=>{ if(!need())return; try{ const r=await CHAN.relation(pid());
+      toast(r==="ADDED"?"채널이 추가되어 있습니다":r==="BLOCKED"?"차단된 상태입니다":"아직 추가하지 않았습니다"); }
+      catch(e){ toast("확인 실패: "+(e.message||e)); } };
+  $("chanPrev").onclick=()=>{
+    const p=CHAN.parseExport($("chanRaw").value);
+    $("chanOut").innerHTML=p.length
+      ? "<b>"+p.length+"건 인식</b><br>"+p.slice(0,5).map(x=>esc(x.who)+" · "+esc(x.at)+" — "+esc(x.text.slice(0,50))).join("<br>")
+      : "<span style='color:#b4453a'>인식된 대화가 없습니다</span>";
+  };
+  $("chanImp").onclick=async()=>{ try{ const r=await CHAN.importChat($("chanRaw").value);
+      $("chanOut").textContent="신규 "+r.added+"건 추가 (인식 "+r.total+"건)"; }
+      catch(e){ $("chanOut").textContent="실패: "+(e.message||e); } };
 }
 
 </script>
