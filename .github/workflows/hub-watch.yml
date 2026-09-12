@@ -13,7 +13,7 @@ jobs:
   watch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 점검 실행
         id: chk
@@ -25,7 +25,7 @@ jobs:
 
       - name: 문제 발견 시 이슈 등록·갱신
         if: steps.chk.outputs.status != 'ok'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -49,7 +49,7 @@ jobs:
 
       - name: 정상 복구 시 이슈 닫기
         if: steps.chk.outputs.status == 'ok'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const {data: issues} = await github.rest.issues.listForRepo({
