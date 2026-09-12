@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=115, BUILD_DATE="2026-09-12";
+const BUILD=116, BUILD_DATE="2026-09-12";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -7097,6 +7097,8 @@ async function forceResync(){
 const CHAN = (()=>{
   function idOf(m){ return (m&&(m.kakaoChannel||"")).trim(); }
   function setId(m,v){ m.kakaoChannel=(v||"").trim().replace(/^.*\/(_[A-Za-z0-9]+).*$/,"$1"); }
+  function ocOf(m){ return (m&&(m.openChat||"")).trim(); }            // 오픈채팅방 링크
+  function setOc(m,v){ v=(v||"").trim(); m.openChat=v?(v.startsWith("http")?v:"https://open.kakao.com/o/"+v.replace(/^\/+/,"")):""; }
 
   async function follow(pid){                       // 간편 추가 — 결과를 응답으로 받는다
     const K=await OPS_sdk();
@@ -7139,9 +7141,46 @@ const CHAN = (()=>{
         out.push({who:m[1].trim(), at:`${date||""} ${h24(m[2],m[3])}:${m[4]}`.trim(), text:m[5].trim()});
         return;
       }
-      if(out.length && line.trim()) out[out.length-1].text += "\n"+line.trim();   // 여러 줄 메시지
+      // 오픈채팅 입·퇴장 안내 — 발언은 아니지만 참여자 명단의 근거가 된다
+      let s;
+      if((s=line.match(/^(.{1,40}?)님이 (들어왔습니다|나갔습니다|退)/))){
+        out.push({who:s[1].trim(), at:date, text:"", sys:s[2].startsWith("들어") ? "join" : "leave"});
+        return;
+      }
+      if(out.length && line.trim() && !out[out.length-1].sys) out[out.length-1].text += "\n"+line.trim();   // 여러 줄 메시지
     });
-    return out.filter(x=>x.text && !/^(사진|동영상|이모티콘|삭제된 메시지입니다)$/.test(x.text));
+    return out.filter(x=>x.sys || (x.text && !/^(사진|동영상|이모티콘|삭제된 메시지입니다|채팅방 관리자가.*)$/.test(x.text)));
+  }
+
+  // 내보낸 대화에서 참여자(닉네임)를 뽑는다.
+  // 오픈채팅은 참여자 조회 API가 없어, 이 방법이 명단을 얻는 유일한 경로다.
+  function people(raw){
+    const msgs=parseExport(raw), map={};
+    msgs.forEach(m=>{
+      const n=(m.who||"").trim(); if(!n) return;
+      const p=map[n]||(map[n]={name:n,says:0,first:"",last:"",left:false});
+      if(m.sys==="leave"){ p.left=true; return; }
+      if(m.sys==="join")  return;
+      p.says++;
+      if(!p.first) p.first=m.at;
+      p.last=m.at;
+    });
+    return Object.values(map).sort((a,b)=>b.says-a.says);
+  }
+
+  // 뽑은 닉네임을 현재 회의 참석자로 올린다 (앱이 기대하는 {name,email} 형식 유지)
+  async function addPeople(names){
+    const m=(state.meetings||[]).find(x=>x.id===state.currentMeetingId);
+    if(!m) throw new Error("회의를 먼저 선택해 주세요");
+    m.attendees=Array.isArray(m.attendees)?m.attendees:[];
+    const have=new Set(m.attendees.map(a=>String((a&&a.name)||a||"").trim()));
+    let n=0;
+    names.forEach(nm=>{ nm=String(nm).trim(); if(!nm||have.has(nm)) return;
+      have.add(nm); m.attendees.push({name:nm,email:"",via:"openchat"}); n++; });
+    await saveSession(); refreshAll();
+    OPS.log("kakao","오픈채팅 참여자 "+n+"명 참석자로 추가");
+    toast(n?("참석자 "+n+"명 추가했습니다"):"새로 추가할 참여자가 없습니다");
+    return n;
   }
 
   // 파싱한 대화를 현재 회의의 발언으로 넣는다 (이미 있는 것은 건너뜀)
@@ -7162,7 +7201,7 @@ const CHAN = (()=>{
     toast("카톡 대화 "+n+"건을 회의 기록에 넣었습니다");
     return {added:n, total:msgs.length};
   }
-  return {idOf,setId,follow,chat,relation,parseExport,importChat};
+  return {idOf,setId,follow,chat,relation,parseExport,importChat,people,addPeople,ocOf,setOc};
 })();
 async function OPS_sdk(){   // OPS 내부 sdk()를 밖에서도 쓰기 위한 통로
   if(window.Kakao&&window.Kakao.isInitialized&&window.Kakao.isInitialized()) return window.Kakao;
@@ -7207,6 +7246,16 @@ function channelPanel(mid){
         <div class="mini" style="margin-top:6px">채널 홈 주소 <code>pf.kakao.com/_ZeUTxl</code> 의 <code>_ZeUTxl</code> 부분이 공개 ID입니다.</div>
       </div>
       <div style="border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:10px">
+        <b>오픈채팅방</b> <span class="mini">회의용 단체방 링크</span>
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+          <input id="chanOc" placeholder="https://open.kakao.com/o/XXXXXXX"
+                 value="${esc(CHAN.ocOf(m))}" style="flex:1;min-width:200px;padding:6px 9px;border:1px solid var(--line);border-radius:8px;font-size:12px">
+          <button id="chanOcSave" style="${btn}">저장</button>
+          <button id="chanOcOpen" style="${btn}">열기</button>
+        </div>
+        <div class="mini" style="margin-top:6px">오픈채팅은 참여자·대화를 조회하는 API가 없습니다. 아래 [대화 내용 가져오기]로 명단과 기록을 함께 가져옵니다.</div>
+      </div>
+      <div style="border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:10px">
         <b>대화 내용 가져오기</b>
         <div class="mini" style="margin-top:4px">카카오는 채널 대화를 읽어오는 API를 제공하지 않습니다.
           카톡 대화방 → 메뉴 → <b>대화 내용 내보내기</b> → 텍스트를 아래에 붙여넣으세요.</div>
@@ -7214,6 +7263,7 @@ function channelPanel(mid){
           style="width:100%;margin-top:7px;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:12px;font-family:inherit"></textarea>
         <button id="chanPrev" style="${btn}">미리보기</button>
         <button id="chanImp" style="${btn}">회의 기록에 넣기</button>
+        <button id="chanWho" style="${btn}">참여자 뽑기</button>
         <div id="chanOut" class="mini" style="margin-top:7px"></div>
       </div>
     </div></div>`;
@@ -7233,6 +7283,22 @@ function channelPanel(mid){
     $("chanOut").innerHTML=p.length
       ? "<b>"+p.length+"건 인식</b><br>"+p.slice(0,5).map(x=>esc(x.who)+" · "+esc(x.at)+" — "+esc(x.text.slice(0,50))).join("<br>")
       : "<span style='color:#b4453a'>인식된 대화가 없습니다</span>";
+  };
+  $("chanOcSave").onclick=async()=>{ CHAN.setOc(m,$("chanOc").value); await saveSession(); $("chanOc").value=CHAN.ocOf(m); toast("저장했습니다"); };
+  $("chanOcOpen").onclick=()=>{ const u=CHAN.ocOf(m); if(!u) return toast("오픈채팅방 링크를 먼저 저장해 주세요"); window.open(u,"_blank","noopener"); };
+  $("chanWho").onclick=()=>{
+    const ppl=CHAN.people($("chanRaw").value);
+    if(!ppl.length) return $("chanOut").innerHTML="<span style='color:#b4453a'>참여자를 찾지 못했습니다</span>";
+    $("chanOut").innerHTML="<b>참여자 "+ppl.length+"명</b><br>"
+      +ppl.map((p,i)=>`<label style="display:inline-block;margin:3px 10px 0 0"><input type="checkbox" class="ocp" value="${esc(p.name)}" ${p.left?"":"checked"}> ${esc(p.name)} <span class="mini">(${p.says}회${p.left?" · 나감":""})</span></label>`).join("")
+      +`<br><button id="chanWhoAdd" style="${btn}">선택한 사람을 참석자로 추가</button>`;
+    const a=$("chanWhoAdd");
+    if(a) a.onclick=async()=>{
+      const sel=[...document.querySelectorAll(".ocp:checked")].map(x=>x.value);
+      if(!sel.length) return toast("추가할 사람을 선택하세요");
+      try{ const n=await CHAN.addPeople(sel); $("chanOut").textContent="참석자 "+n+"명 추가했습니다"; }
+      catch(e){ toast("실패: "+(e.message||e)); }
+    };
   };
   $("chanImp").onclick=async()=>{ try{ const r=await CHAN.importChat($("chanRaw").value);
       $("chanOut").textContent="신규 "+r.added+"건 추가 (인식 "+r.total+"건)"; }
