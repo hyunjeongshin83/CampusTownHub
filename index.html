@@ -594,7 +594,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=127, BUILD_DATE="2026-10-17";
+const BUILD=128, BUILD_DATE="2026-10-17";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -2121,9 +2121,7 @@ function renderJobs(){
   const box=$("jobList"); if(!box)return;
   const cm=currentMeeting();
   if(!state.jobs.length){ box.innerHTML='<div class="mini">진행 중인 잡이 없습니다.</div>'; return; }
-  // (v127) 개최자는 자기가 만든 회의만 관리한다. 운영자는 전체. (이슈 #7)
-  const canManageOf=m=>state.user.role==="operator" ||
-      (state.user.role==="host" && !!m && !!m.host && m.host===state.user.name);
+  const canManage=state.user.role==="operator"||state.user.role==="host";
   // 회의별 격리: 이 회의에 연결된 잡만 본 목록에 표시
   const mineJobs=state.jobs.filter(j=>cm&&(j.linkedMeetingIds||[]).includes(cm.id));
   const otherJobs=state.jobs.filter(j=>!(cm&&(j.linkedMeetingIds||[]).includes(cm.id)));
@@ -6480,6 +6478,9 @@ function renderMeetingCards(list,emptyMsg){
     </div>`;
     return;
   }
+  // (v128) 개최자는 자기가 만든 회의만 관리한다. 운영자는 전체. (이슈 #7)
+  const canManageOf=m=>state.user.role==="operator" ||
+      (state.user.role==="host" && !!m && !!m.host && m.host===state.user.name);
   const canManage=state.user.role==="operator"||state.user.role==="host";
 
   const icoColor=t=>{ let n=0; for(const ch of String(t)) n=(n*31+ch.charCodeAt(0))>>>0;
