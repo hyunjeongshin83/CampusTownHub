@@ -594,7 +594,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=123, BUILD_DATE="2026-10-17";
+const BUILD=124, BUILD_DATE="2026-10-17";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -949,7 +949,7 @@ async function saveSession(){
     await mergeSave("medit:sess:"+_mid,{
       tabNotes:state.tabNotes,segments:state.segments,notes:state.notes,research:state.research,
       nextActions:state.nextActions,topicTags:state.topicTags,meetingStart:state.meetingStart,
-      meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos,outreach:state.outreach||[],devBoard:state.devBoard||null,notion:state.notion||[],notices:state.notices||[],webSlides:state.webSlides||[],introMigrated:!!state.introMigrated},
+      meeting:state.meeting,liveDoc:state.liveDoc,schedule:state.schedule,lit:state.lit,annos:state.annos,outreach:state.outreach||[],devBoard:state.devBoard||null,notion:state.notion||[],notices:state.notices||[],webSlides:state.webSlides||[],researchQueue:state.researchQueue||[],introMigrated:!!state.introMigrated},
       m=>{ if(state.currentMeetingId!==_mid) return;   // 그새 회의를 옮겼으면 반영하지 않는다
            try{ applySessionData(m); refreshAll(); }catch(e){} });
   }
@@ -5470,7 +5470,8 @@ function recordToMD(r){
     md+=sec("안건",n.agenda)+sec("아이디어·제안",n.ideas)+sec("조사·리서치 항목",n.research)+sec("결정 사항",n.decisions)+sec("액션 아이템",n.actions)+sec("후속",n.followups)+sec("AI 추천 다음 할 일",r.nextActions);}
   // 회의 내용 — 시간순 구획 ([기록 M.D. HH:MM] 도장 기준으로 나눔)
   if(r.rawNote){
-    md+=`## 회의 내용 (시간순)\n\n`;
+    // (v124) 원문은 위 정리 내용과 그대로 겹친다. 부록으로 접어 중복을 줄인다.
+    md+=`## 부록 — 원문 기록\n\n<details><summary>펼쳐 보기 (${r.rawNote.length.toLocaleString()}자)</summary>\n\n`;
     const parts=r.rawNote.split(/\n?(?=\[기록 [^\]]+\])/).map(s=>s.trim()).filter(Boolean);
     if(parts.length>1 || /^\[기록 /.test(r.rawNote.trim())){
       parts.forEach(p=>{
@@ -5479,6 +5480,7 @@ function recordToMD(r){
         else md+=p+"\n\n";
       });
     } else { md+=r.rawNote+"\n\n"; }
+    md+=`</details>\n\n`;
   }
   const tn=r.tabNotes||{},nm={deck:"슬라이드",app:"복약앱",registry:"약사사이트",console:"콘솔"};
   Object.keys(tn).forEach(k=>{if(tn[k]&&tn[k].length)md+=`## [${nm[k]}] 메모\n`+tn[k].map(x=>`- ${x.text}`).join("\n")+"\n\n";});
@@ -6469,7 +6471,7 @@ function renderMeetingCards(list,emptyMsg){
         <span style="display:flex;gap:4px;flex-wrap:wrap">${(m.company||"").split(",").map(c=>c.trim()).filter(Boolean).map(c=>`<span class="mc-badge">${esc(c)}</span>`).join("")}</span></div>
     </div>
     <div class="mc-meta">${esc(fmtDate(m.date))} ${esc(m.time)} · ${esc(m.place||"")}</div>
-    <div class="mc-meta">개최자 ${esc(m.host)} · 참석 ${(m.attendees||[]).length}명</div>
+    <div class="mc-meta">개최자 ${esc(m.host)} · 참석 ${(m.attendees||[]).length}명${m.kakao?' · <span style="color:#8a6d00;font-weight:700">카톡방 있음</span>':''}</div>
     <div class="mc-acts" style="--n:${2 + (m.kakao?1:0) + (canManage?2:0)}">
       <button class="b-mint mc-enter" data-id="${m.id}">입장</button>
       <button class="b-ghost" onclick="event.stopPropagation();copyMeetingLink('${m.id}')" title="이 회의로 바로 들어오는 초대 링크를 복사합니다">링크</button>
@@ -6992,12 +6994,17 @@ function opsRender(){
       <div class="mini" style="margin-top:6px">친구 발송은 카카오 소셜 API 권한 신청·심사가 필요합니다. 신청 전에는 앱 멤버로 등록된 계정에만 전달됩니다.</div>
     </div>
     <div style="border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:10px">
+      <b>리서치 대기열</b> <span class="mini">회의록의 '리서치 필요' 항목이 모입니다</span>
+      <div id="opsRq" style="margin-top:6px"></div>
+    </div>
+    <div style="border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:10px">
       <b>다른 회의 세션 검토</b> <span class="mini">필요한 항목만 현재 회의로 가져옵니다</span>
       <div id="opsSess" style="margin-top:6px" class="mini">불러오는 중…</div>
     </div>`;
   $("opsFix").onclick=async()=>{ await OPS.runAudit(true); opsRender(); };
   $("opsRe").onclick=()=>opsRender();
   $("opsSync").onclick=()=>{ try{ forceResync(); }catch(e){ toast("실패: "+(e.message||e)); } };
+  renderResearchQueue();
   $("opsKkSave").onclick=()=>{ OPS.setKakaoKey($("opsKk").value); toast("카카오 키 저장됨"); };
   $("opsAdd").onclick=async()=>{ try{ await OPS.kakaoAddUser("guest"); opsRender(); }catch(e){ toast("실패: "+(e.message||e)); } };
   $("opsSelf").onclick=async()=>{ try{ await OPS.kakaoPushSelf("["+((state.meetings||[]).find(x=>x.id===state.currentMeetingId)||{}).title+"] 캠퍼스타운 허브 알림"); }catch(e){ toast("실패: "+(e.message||e)); } };
@@ -7520,6 +7527,48 @@ function kakaoRoomHelper(prefix){
   };
 }
 window.kakaoRoomHelper=kakaoRoomHelper;
+
+
+// ==================== v124 리서치 대기열 ====================
+// 회의록의 '리서치 필요' 항목을 모아두고, 조사한 링크를 붙여 다음 회의로 넘긴다.
+function renderResearchQueue(){
+  const el=$("opsRq"); if(!el) return;
+  const q=Array.isArray(state.researchQueue)?state.researchQueue:[];
+  if(!q.length){ el.innerHTML='<span class="mini">아직 없습니다. 회의록을 만들면 \'리서치 필요\' 항목이 여기에 쌓입니다.</span>'; return; }
+  const open=q.filter(x=>!x.done), done=q.filter(x=>x.done);
+  const btn="border:1px solid var(--line);background:#fff;border-radius:7px;padding:3px 9px;cursor:pointer;font-size:11.5px;margin-left:4px";
+  const row=x=>`<div style="border-top:1px solid var(--line);padding:7px 0" data-rq="${esc(x.id)}">
+      <label style="display:flex;gap:6px;align-items:flex-start">
+        <input type="checkbox" class="rq-done" data-id="${esc(x.id)}" ${x.done?"checked":""} style="margin-top:3px">
+        <span style="flex:1${x.done?';opacity:.55;text-decoration:line-through':''}">${esc(x.text)}
+          ${x.from?`<br><span class="mini">출처: ${esc(x.from)}</span>`:""}
+          ${x.link?`<br><a href="${esc(x.link)}" target="_blank" rel="noopener" class="mini" style="color:var(--deep)">${esc(x.link.slice(0,60))}</a>`:""}
+        </span>
+      </label>
+      <div style="margin-top:4px;display:flex;gap:5px;flex-wrap:wrap">
+        <input class="rq-link" data-id="${esc(x.id)}" placeholder="조사 결과 링크" value="${esc(x.link||"")}"
+               style="flex:1;min-width:160px;padding:4px 8px;border:1px solid var(--line);border-radius:7px;font-size:11.5px">
+        <button class="rq-save" data-id="${esc(x.id)}" style="${btn}">저장</button>
+        <button class="rq-del" data-id="${esc(x.id)}" style="${btn};color:#b4453a">삭제</button>
+      </div>
+    </div>`;
+  el.innerHTML=`<div class="mini"><b style="color:var(--deep)">조사 필요 ${open.length}건</b>${done.length?` · 완료 ${done.length}건`:""}</div>`
+    +open.map(row).join("")+(done.length?`<details style="margin-top:6px"><summary class="mini" style="cursor:pointer">완료 ${done.length}건</summary>${done.map(row).join("")}</details>`:"");
+
+  const find=id=>(state.researchQueue||[]).find(x=>x.id===id);
+  el.querySelectorAll(".rq-done").forEach(c=>c.onchange=async()=>{
+    const x=find(c.dataset.id); if(!x) return; x.done=c.checked;
+    try{ await saveSession(); }catch(e){} renderResearchQueue(); });
+  el.querySelectorAll(".rq-save").forEach(b=>b.onclick=async()=>{
+    const x=find(b.dataset.id); if(!x) return;
+    const inp=el.querySelector(`.rq-link[data-id="${CSS.escape(b.dataset.id)}"]`);
+    x.link=(inp&&inp.value||"").trim();
+    try{ await saveSession(); }catch(e){} toast("저장했습니다"); renderResearchQueue(); });
+  el.querySelectorAll(".rq-del").forEach(b=>b.onclick=async()=>{
+    state.researchQueue=(state.researchQueue||[]).filter(x=>x.id!==b.dataset.id);
+    try{ await saveSession(); }catch(e){} renderResearchQueue(); });
+}
+window.renderResearchQueue=renderResearchQueue;
 
 </script>
 </body>
