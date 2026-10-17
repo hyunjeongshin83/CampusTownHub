@@ -588,7 +588,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=116, BUILD_DATE="2026-09-12";
+const BUILD=117, BUILD_DATE="2026-09-12";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -880,6 +880,23 @@ async function _mergeSaveOne(key,next,onMerged){
   if(server&&typeof server==="object"&&base!==null&&!_same(server,base)){
     merged=merge3(base,next,server);
     conflicted=true;
+  } else if(server&&typeof server==="object"&&base===null){
+    // (v117) 기준본을 모르는 저장 — 서버본을 한 번도 못 읽은 상태다.
+    // 이때 그대로 쓰면 서버 데이터가 통째로 날아간다(2026-10-17 사고).
+    // 빈 기준본으로 병합해 "추가는 되고 삭제는 안 되는" 저장으로 만든다.
+    merged=merge3({},next,server);
+    conflicted=true;
+  }
+  // (v117) 최후의 안전장치 — 어떤 경우에도 서버에 있던 목록을 0건으로 비우지 않는다
+  if(server&&typeof server==="object"){
+    ["meetings","accounts","companies","jobs","projects","pages"].forEach(k=>{
+      const was=(server[k]||[]).length, now=((merged&&merged[k])||[]).length;
+      if(was>0&&now===0){
+        merged[k]=server[k];
+        console.warn("저장이 "+k+" "+was+"건을 지우려 해 서버본을 유지했습니다");
+        conflicted=true;
+      }
+    });
   }
   merged=Object.assign({},merged,{_rev:((server&&server._rev)||0)+1,_tab:TAB_ID,_at:new Date().toISOString()});
   await store.set(key,merged);
@@ -908,7 +925,15 @@ function refreshAll(){
   if(state.activeTab) renderStage(state.activeTab);
 }
 // 회의와 무관한 공용 데이터 → medit:hub1 / 회의 안에서 쌓이는 데이터 → medit:sess:<회의ID> (회의별 완전 분리)
+let HUB_LOADED=false;   // (v117) 서버본을 한 번이라도 읽었는가
 async function saveSession(){
+  // (v117) 서버 데이터를 못 읽은 상태에서는 저장하지 않는다.
+  // 빈 화면 그대로 저장되어 서버가 비워지는 사고를 막는다.
+  if(cloud.enabled() && !HUB_LOADED){
+    console.warn("서버본을 아직 읽지 못해 저장을 건너뜁니다");
+    try{ toast("서버 데이터를 불러오는 중이라 저장을 보류했습니다"); }catch(e){}
+    return;
+  }
   await mergeSave("medit:hub1",{
     accounts:state.accounts,meetings:(()=>{const seen=new Set();return (state.meetings||[]).filter(x=>{const k=x&&x.id;if(!k||seen.has(k))return false;seen.add(k);return true;});})(),companies:state.companies,jobs:state.jobs,projects:state.projects,pages:state.pages,fileNames:state.fileNames,fileMeeting:state.fileMeeting,connections:state.connections||[],currentMeetingId:state.currentMeetingId},
     m=>{ Object.assign(state,{accounts:m.accounts||state.accounts,meetings:m.meetings||state.meetings,companies:m.companies||state.companies,jobs:m.jobs||state.jobs,projects:m.projects||state.projects,pages:m.pages||state.pages,connections:m.connections||state.connections,fileNames:m.fileNames||state.fileNames,fileMeeting:m.fileMeeting||state.fileMeeting});
@@ -993,6 +1018,7 @@ async function loadAll(){
   try{repairRecords();}catch(_){}
   const s=await store.get("medit:hub1");
   markBase("medit:hub1",s);          // (v108) 병합 기준본 — 이 시점 이후의 서버 변경만 상대 변경으로 본다
+  if(s && typeof s==="object") HUB_LOADED=true;   // (v117) 서버본을 실제로 읽었다
   if(s && typeof s==="object"){
     Object.assign(state,{accounts:s.accounts||[],meetings:s.meetings||[],companies:s.companies||[],jobs:s.jobs||[],projects:s.projects||[],pages:s.pages||[],fileNames:s.fileNames||{},fileMeeting:s.fileMeeting||{},connections:s.connections||[],
       currentMeetingId:s.currentMeetingId||null,uploads:s.uploads||[]});
