@@ -592,7 +592,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=119, BUILD_DATE="2026-10-17";
+const BUILD=120, BUILD_DATE="2026-10-17";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1100,7 +1100,7 @@ async function callPersonal(system,user,maxTokens,opts){
     if(!r.ok) throw new Error((d.error&&d.error.message)||("OpenAI "+r.status));
     return (d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||"";
   }
-  const body={model:"claude-sonnet-4-6",max_tokens:Math.min(Number(maxTokens)||1000,4000),system:system||"",
+  const body={model:(opts&&opts.cheap?AI_MODEL_CHEAP:AI_MODEL),max_tokens:Math.min(Number(maxTokens)||1000,4000),system:system||"",
     messages:[{role:"user",content:String(user).slice(0,60000)}]};
   if(opts.search) body.tools=[{type:"web_search_20250305",name:"web_search"}];
   const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
@@ -1199,6 +1199,9 @@ function parseLooseJSON(txt){
   r=tryP(fixed); if(r!==undefined) return r;
   throw new Error("응답이 중간에 잘렸습니다 — 다시 시도해 주세요");
 }
+// (v120) 사용 모델 — 품질용/저가용 분리. 회의록처럼 긴 입력은 저가 모델로 1차 압축 후 고급 모델로 마무리한다.
+const AI_MODEL="claude-sonnet-5-5";      // 최종 작성
+const AI_MODEL_CHEAP="claude-haiku-5-5"; // 1차 압축·추출
 async function callClaude(system,user,maxTokens,opts){
   opts=opts||{};
   // ⓪ 내 키 우선 모드 — 등록된 개인 키(Claude/GPT)로 먼저, 실패 시 공유 프록시로
@@ -1226,7 +1229,7 @@ async function callClaude(system,user,maxTokens,opts){
     res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal:ctrl.signal,
       headers:{"Content-Type":"application/json","x-api-key":key,
         "anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:maxTokens||1000,system,messages:[{role:"user",content:user}]})});
+      body:JSON.stringify({model:(opts&&opts.cheap?AI_MODEL_CHEAP:AI_MODEL),max_tokens:maxTokens||1000,system,messages:[{role:"user",content:user}]})});
   }catch(e){ throw new Error(e.name==="AbortError"?"개인 키 호출 시간 초과":"개인 키 호출 실패: "+(e.message||e)); }
   finally{ clearTimeout(tm); }
   if(res.status===401){ localStorage.removeItem("medit:apikey"); throw new Error("API 키가 유효하지 않습니다 — 다시 입력해 주세요"); }
@@ -1251,7 +1254,7 @@ async function testAI(){
     try{
       const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:16,messages:[{role:"user",content:"확인"}]})});
+        body:JSON.stringify({model:AI_MODEL,max_tokens:16,messages:[{role:"user",content:"확인"}]})});
       if(res.ok){ if(el){el.textContent="공유 프록시 사용 불가("+why+") — ✔ 등록된 개인 키로는 AI를 쓸 수 있습니다."; el.style.color="var(--deep)";} return; }
       if(el){el.textContent="공유 프록시 사용 불가("+why+") · 개인 키도 오류("+res.status+") — 새 키를 등록해 주세요."; el.style.color="#C24A4A";}
       return;
@@ -4200,14 +4203,7 @@ function bindConsole(){
     const btn=$("aiTidyNote");btn.disabled=true;btn.textContent="정리 중…";
     tst("AI가 자료를 정리하는 중… (수 초~수십 초)");
     try{
-      const sys="회의 노트 정리 담당자. 아래 원문을 사실 위주로 담백하게 정리한다. "+
-        "짧은 문장. 과장·수식어·철학적 표현 금지. 원문에 없는 내용을 추가하지 않되, 원문에 있는 항목은 사소해 보여도 빠뜨리지 않는다. "+
-        "출력 형식(마크다운): ## 요약(3~4문장) / ## 논의 사항(항목) / "+
-        "## 아이디어·제안(원문에 나온 아이디어·구상·제안을 모두 나열, 예: 신기술 적용, 서비스 구상, 기관 제안) / "+
-        "## 조사·리서치 항목(조사가 필요하다고 언급된 것) / "+
-        "## 결정 사항(없으면 생략) / ## 다음 액션(번호 목록, 없으면 생략). "+
-        "다른 말 없이 정리 결과만 출력.";
-      const out=await callClaude(sys, src.slice(0,15000), 1800);
+      const out=await writeMinutes(src);
       if(!out.trim()) throw new Error("빈 응답");
       tidyBackup=src;
       mn.value=out.trim();
@@ -7349,6 +7345,82 @@ function channelPanel(mid){
       $("chanOut").textContent="신규 "+r.added+"건 추가 (인식 "+r.total+"건)"; }
       catch(e){ $("chanOut").textContent="실패: "+(e.message||e); } };
 }
+
+
+// ==================== v120 회의록 작성 ====================
+// 표준 회의록 구성(머리말 / 요약 / 결정 / 논의 / 액션 / 미해결 / 리서치 / 다음 회의)에 맞춰 쓴다.
+// 토큰은 두 가지로 줄인다 — ① 긴 원문은 저가 모델로 먼저 압축 ② 이미 정리한 부분은 다시 보내지 않음.
+const MINUTES_MAX_IN = 12000;   // 한 번에 모델에 보내는 원문 상한(자)
+const MINUTES_CHEAP_OVER = 6000; // 이 길이를 넘으면 1차 압축을 거친다
+
+const MINUTES_SYS =
+ "회의록 작성 담당자. 아래 원문을 사실 위주로 담백하게 정리한다. "+
+ "짧은 문장, 명사형 종결. 과장·수식어·평가 금지. 원문에 없는 내용을 지어내지 않는다. "+
+ "원문에 있는 항목은 사소해 보여도 빠뜨리지 않는다.\n"+
+ "아래 형식 그대로, 다른 말 없이 출력한다. 내용이 없는 절은 통째로 생략한다.\n\n"+
+ "## 요약\n(3~5줄. 무엇을 다뤘고 무엇이 정해졌는지)\n\n"+
+ "## 결정 사항\n| 결정 | 근거 | 확정 |\n|---|---|---|\n"+
+ "(확정된 것만. 검토·제안 단계는 논의 사항으로)\n\n"+
+ "## 논의 사항\n### <주제>\n- 내용\n- 참조: <언급된 기관·자료·사례>\n"+
+ "(주제별로 묶는다. 한 주제에 3~8줄)\n\n"+
+ "## 다음 액션\n| # | 할 일 | 담당 | 기한 | 상태 |\n|---|---|---|---|---|\n"+
+ "(담당이 원문에 없으면 '미정'. 한 줄에 담당 한 명. 기한 없으면 '미정')\n\n"+
+ "## 미해결·추가 확인\n- (결론이 안 난 쟁점, 확인이 필요한 사실)\n\n"+
+ "## 리서치 필요\n- [주제] 무엇을 왜 조사해야 하는지 한 줄\n"+
+ "(다음 회의 전에 조사가 필요하다고 언급되거나 그렇게 판단되는 항목)\n\n"+
+ "## 다음 회의\n- (일정·안건이 언급되었을 때만)";
+
+function minutesTrim(src){
+  src=String(src||"").trim();
+  if(src.length<=MINUTES_MAX_IN) return {text:src, cut:0};
+  // 최근 내용이 더 중요하므로 뒤쪽을 남긴다
+  const keep=src.slice(-MINUTES_MAX_IN);
+  return {text:keep, cut:src.length-MINUTES_MAX_IN};
+}
+
+// 긴 원문은 먼저 저가 모델로 사실만 압축 — 최종 호출의 입력을 줄인다
+async function minutesCompress(src){
+  const sys="아래 회의 원문에서 사실만 뽑아 불릿으로 압축한다. "+
+    "기관명·수치·고유명사·제안·조사 요청은 반드시 보존한다. 해석·요약문장 금지. 원문 순서 유지. 불릿만 출력.";
+  try{
+    const out=await callClaude(sys, src, 2000, {cheap:true, noPrompt:true});
+    const t=String(out||"").trim();
+    return (t.length>200 && t.length<src.length) ? t : src;   // 압축이 실패하면 원문 그대로
+  }catch(e){ console.warn("1차 압축 실패 — 원문으로 진행:", e.message||e); return src; }
+}
+
+async function writeMinutes(src){
+  const {text, cut}=minutesTrim(src);
+  let body=text;
+  if(body.length>MINUTES_CHEAP_OVER) body=await minutesCompress(body);
+  const out=await callClaude(MINUTES_SYS, body, 2200);
+  let md=String(out||"").trim();
+  if(!md) throw new Error("빈 응답");
+  if(cut>0) md+=`\n\n> 원문 앞부분 ${cut.toLocaleString()}자는 길이 제한으로 이번 정리에서 제외되었습니다.`;
+  try{ harvestResearch(md); }catch(e){}
+  return md;
+}
+
+// 회의록의 '리서치 필요' 항목을 모아 다음 회의로 넘긴다
+function harvestResearch(md){
+  const sec=/##\s*리서치 필요\s*\n([\s\S]*?)(?=\n##\s|\s*$)/.exec(md||"");
+  if(!sec) return 0;
+  const items=sec[1].split("\n").map(s=>s.replace(/^[-*]\s*/,"").trim()).filter(Boolean);
+  if(!items.length) return 0;
+  state.researchQueue=Array.isArray(state.researchQueue)?state.researchQueue:[];
+  const mt=(state.meetings||[]).find(x=>x.id===state.currentMeetingId);
+  const have=new Set(state.researchQueue.map(x=>x.text));
+  let n=0;
+  items.forEach(t=>{
+    if(have.has(t)) return;
+    have.add(t);
+    state.researchQueue.push({ id:"rq_"+Date.now()+"_"+(n++), text:t,
+      from:(mt&&mt.title)||"", at:new Date().toISOString(), done:false, link:"" });
+  });
+  if(n){ try{ saveSession(); }catch(e){} }
+  return n;
+}
+window.writeMinutes=writeMinutes; window.harvestResearch=harvestResearch;
 
 </script>
 </body>
