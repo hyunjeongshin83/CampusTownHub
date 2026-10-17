@@ -387,6 +387,9 @@ body{letter-spacing:-0.015em;}
 /* buttons: crisp startup feel */
 .b-mint,.b-deep,.b-gold,.b-ghost{border-radius:12px;font-weight:700;letter-spacing:-0.01em;transition:transform .12s ease,box-shadow .12s ease;}
 /* (v129) 손가락으로 누르는 화면에서는 버튼을 44px 이상으로 — 고령 사용자 포함 */
+/* 데스크톱에서도 너무 납작한 버튼은 피한다 (28~35px → 40px) */
+button, .at, [role="button"]{min-height:40px;}
+/* 터치 화면·좁은 화면에서는 44px. 미디어 블록은 위 기본값 뒤에 와야 이긴다 */
 @media (pointer:coarse), (max-width:560px){
   .b-mint,.b-deep,.b-gold,.b-ghost{min-height:44px;}
   .mc-acts>button{min-height:44px;}
@@ -395,8 +398,6 @@ body{letter-spacing:-0.015em;}
   button, .at, #opsBtn, #guideBtn, #connBack{min-height:44px;}
   button{font-size:max(13px,1em);}
 }
-/* 데스크톱에서도 너무 납작한 버튼은 피한다 (28~35px → 36px) */
-button, .at{min-height:36px;}
 .b-mint:hover,.b-deep:hover,.b-gold:hover{transform:translateY(-1px);}
 .b-mint:active,.b-deep:active,.b-gold:active{transform:translateY(0);}
 /* tiles: softer, larger radius, subtle lift */
@@ -605,7 +606,7 @@ button, .at{min-height:36px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=130, BUILD_DATE="2026-10-17";
+const BUILD=131, BUILD_DATE="2026-10-17";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
