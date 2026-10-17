@@ -592,7 +592,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=121, BUILD_DATE="2026-10-17";
+const BUILD=122, BUILD_DATE="2026-10-17";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -6520,6 +6520,7 @@ function openMeetingEditor(id){
       ${fld("소속·회사 배지 (쉼표로 여러 개 — 입주기업은 이름 일부만 쳐도 자동 완성)","mt_company",m.company)}
       <div id="mt_company_sug" style="display:flex;gap:5px;flex-wrap:wrap;margin:-3px 0 9px"></div>
       ${fld("카카오톡 오픈채팅 링크 (선택 — 회의 카드에 [카톡방] 버튼이 생깁니다)","mt_kakao",m.kakao,"https://open.kakao.com/o/…")}
+      <button class="b-ghost" style="padding:5px 11px;font-size:12px;margin:-4px 0 9px" onclick="kakaoRoomHelper('mt_')">카톡방 만들기 도우미</button>
       <div class="mini" style="line-height:1.5">참석자 등록·초대는 회의 입장 후 [사전 준비] 탭에서 관리합니다.</div>
     </div>
   </div>`;
@@ -6572,6 +6573,7 @@ function openMeetingCreator(presetCompany){
       ${fld("소속·회사 배지 (쉼표로 여러 개 — 입주기업은 이름 일부만 쳐도 자동 완성)","mn_company",presetCompany||"","예: 메디, 츄구미, ChewGumi …")}
       <div id="mn_company_sug" style="display:flex;gap:5px;flex-wrap:wrap;margin:-3px 0 9px"></div>
       ${fld("카카오톡 오픈채팅 링크 (선택)","mn_kakao","","https://open.kakao.com/o/…")}
+      <button class="b-ghost" style="padding:5px 11px;font-size:12px;margin:-4px 0 9px" onclick="kakaoRoomHelper('mn_')">카톡방 만들기 도우미</button>
       <div class="mini" style="line-height:1.5">참석자 등록·초대는 만들고 입장 후 [사전 준비] 탭에서 합니다. 만든 회의는 즉시 클라우드에 저장됩니다.</div>
     </div>
   </div>`;
@@ -7440,6 +7442,82 @@ function harvestResearch(md){
   return n;
 }
 window.writeMinutes=writeMinutes; window.harvestResearch=harvestResearch;
+
+
+// ==================== v122 카톡방 개설 보조 ====================
+// 카카오는 오픈채팅방을 만드는 API를 제공하지 않는다(제안서 별도 제출).
+// 그래서 손으로 만드는 단계를 최대한 짧게 만든다 —
+// 방 이름·공지를 미리 만들어 복사해 주고, 링크만 붙여넣으면 끝나게 한다.
+function kakaoRoomHelper(prefix){
+  const g=id=>{const e=$(prefix+id);return e?(e.value||"").trim():"";};
+  const title=g("title")||"회의";
+  const date=g("date"), time=g("time"), place=g("place");
+  const when=[date,time].filter(Boolean).join(" ");
+  const roomName=`[${title}]${when?" "+when:""}`.slice(0,45);
+  const notice=[
+    title,
+    when?`일시 ${when}`:"",
+    place?`장소 ${place}`:"",
+    "",
+    "회의록·자료는 캠퍼스타운 허브에서 보실 수 있습니다.",
+    location.origin+location.pathname
+  ].filter(x=>x!=="").join("\n");
+
+  let w=$("kkHelp"); if(w)w.remove();
+  w=document.createElement("div"); w.id="kkHelp";
+  w.style.cssText="position:fixed;inset:0;z-index:10050;background:rgba(20,30,30,.55);display:flex;align-items:center;justify-content:center;padding:16px";
+  const btn="border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 13px;cursor:pointer;font-size:12.5px;font-weight:700;margin:4px 6px 0 0";
+  w.innerHTML=`<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:86vh;overflow:auto;padding:18px 20px;font-size:13px;line-height:1.7">
+    <div style="display:flex;align-items:center;gap:8px">
+      <b style="font-size:15px;color:var(--deep)">카톡방 만들기</b>
+      <button id="kkX" style="margin-left:auto;${btn}">닫기</button>
+    </div>
+    <div class="mini" style="margin-top:4px">카카오는 방을 자동으로 만드는 기능을 제공하지 않습니다. 아래 3단계면 끝납니다.</div>
+
+    <div style="border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:11px">
+      <b style="color:var(--deep)">1단계 — 방 이름 복사</b>
+      <div style="margin-top:5px;padding:7px 9px;background:#f7fbfb;border-radius:7px;font-weight:700">${esc(roomName)}</div>
+      <button id="kkCopyName" style="${btn}">방 이름 복사</button>
+    </div>
+
+    <div style="border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:9px">
+      <b style="color:var(--deep)">2단계 — 카카오톡에서 방 만들기</b>
+      <div class="mini" style="margin-top:4px">카카오톡 → 채팅 탭 → 우측 상단 <b>+</b> → <b>오픈채팅</b> → 그룹채팅방 만들기 →
+        복사한 이름 붙여넣기 → 만들기 → <b>링크 복사</b></div>
+      <button id="kkOpen" style="${btn}">오픈채팅 열기</button>
+      <button id="kkCopyNotice" style="${btn}">공지글 복사</button>
+      <details style="margin-top:7px"><summary class="mini" style="cursor:pointer">공지글 미리보기</summary>
+        <pre style="white-space:pre-wrap;background:#f7fbfb;border-radius:7px;padding:8px;font-size:11.5px;margin:6px 0 0;font-family:inherit">${esc(notice)}</pre></details>
+    </div>
+
+    <div style="border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:9px">
+      <b style="color:var(--deep)">3단계 — 링크 붙여넣기</b>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+        <input id="kkLink" placeholder="https://open.kakao.com/o/…" style="flex:1;min-width:200px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font-size:12.5px">
+        <button id="kkSave" class="b-mint" style="${btn};border-color:var(--mint)">넣기</button>
+      </div>
+      <div class="mini" style="margin-top:5px">넣으면 회의 카드에 <b>[카톡방]</b> 버튼이 생깁니다. 저장은 폼의 [저장]을 눌러야 완료됩니다.</div>
+    </div>
+    <div id="kkMsg" class="mini" style="margin-top:8px"></div>
+  </div>`;
+  document.body.appendChild(w);
+  w.addEventListener("click",e=>{ if(e.target===w) w.remove(); });
+  const msg=t=>{const e=$("kkMsg"); if(e)e.textContent=t;};
+  const copy=(t,label)=>{ try{ navigator.clipboard.writeText(t).then(()=>msg(label+" 복사했습니다"),()=>msg("복사 실패 — 직접 선택해 주세요")); }
+                          catch(e){ msg("복사 실패 — 직접 선택해 주세요"); } };
+  $("kkX").onclick=()=>w.remove();
+  $("kkCopyName").onclick=()=>copy(roomName,"방 이름을");
+  $("kkCopyNotice").onclick=()=>copy(notice,"공지글을");
+  $("kkOpen").onclick=()=>window.open("https://open.kakao.com/","_blank","noopener");
+  $("kkSave").onclick=()=>{
+    const v=($("kkLink").value||"").trim();
+    if(!/open\.kakao\.com/.test(v)) return msg("오픈채팅 링크가 아닙니다 (open.kakao.com/o/… 형태)");
+    const tgt=$(prefix+"kakao"); if(tgt) tgt.value=v;
+    msg("넣었습니다 — 폼의 [저장]을 눌러 마무리하세요");
+    setTimeout(()=>w.remove(),900);
+  };
+}
+window.kakaoRoomHelper=kakaoRoomHelper;
 
 </script>
 </body>
