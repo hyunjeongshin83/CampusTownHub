@@ -616,7 +616,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=134, BUILD_DATE="2026-10-17";
+const BUILD=135, BUILD_DATE="2026-10-17";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -7187,6 +7187,12 @@ async function accessGuard(){
   if(host&&host.parentNode) host.parentNode.insertBefore(box,host);
   else document.body.appendChild(box);
   if(btn){ const b=$("guardBtn"); if(b) b.onclick=btn.f; }
+  // 상태줄이 가드 박스보다 먼저 그려져서 같은 안내가 두 번 보인다 — 아래쪽을 한 줄로 거둔다
+  if(btn) try{
+    const sb=$("sbRelogin"); if(sb) sb.remove();
+    if(host && /로그인/.test(host.textContent||""))
+      host.innerHTML='<span style="color:#8FD9D2">● 비로그인 상태입니다 — 위 안내에서 로그인해 주세요.</span>';
+  }catch(e){}
   try{ OPS.log("guard",title); }catch(e){}
 }
 
