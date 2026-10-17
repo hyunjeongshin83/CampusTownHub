@@ -616,7 +616,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=133, BUILD_DATE="2026-10-17";
+const BUILD=134, BUILD_DATE="2026-10-17";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -7120,8 +7120,8 @@ async function diagStatus(el){
       +(d.token?'로그인됨(authenticated)':'비로그인(anon)')+'</b>. '
       +(d.token
         ? '서버에 회의가 없거나 접근 정책에 막혔습니다.'
-        : '회의록은 로그인한 분에게만 열립니다. 아래 버튼으로 서버 로그인을 해주세요.')
-      +(d.token?'':'<button id="sbRelogin" style="'+btn+'">서버 로그인</button>');
+        : (document.getElementById("guardBox")?'위 안내에서 로그인해 주세요.':'회의록은 로그인한 분에게만 열립니다. 아래 버튼으로 서버 로그인을 해주세요.'))
+      +(d.token||document.getElementById("guardBox")?'':'<button id="sbRelogin" style="'+btn+'">서버 로그인</button>');
     const b=$("sbRelogin");
     if(b) b.onclick=async()=>{ try{ await oauthLogin("Google"); }catch(e){ toast("로그인 실패: "+(e.message||e)); } };
     return;
@@ -7179,10 +7179,10 @@ async function accessGuard(){
   }
   const box=document.createElement("div");
   box.id="guardBox";
-  box.style.cssText="margin:12px 0;padding:13px 15px;border:1px solid #FFB4A2;border-radius:11px;background:rgba(255,180,162,.08);font-size:13px;line-height:1.7";
+  box.style.cssText="margin:12px 0;padding:13px 15px;border:1px solid #FFB4A2;border-radius:11px;background:rgba(255,180,162,.08);font-size:13px;line-height:1.7;color:#DCEFEC";
   box.innerHTML='<b style="color:#FFB4A2">'+esc(title)+'</b><br>'+msg
-    +(btn?'<br><button id="guardBtn" style="margin-top:9px;border:1px solid #5FE3D6;background:transparent;color:#5FE3D6;border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer">'+esc(btn.t)+'</button>':'')
-    +'<br><span style="font-size:11.5px;opacity:.75;margin-top:6px;display:inline-block">문제가 계속되면 <a href="recover.html" style="color:#8FD9D2">복구 도구</a>를 여세요.</span>';
+    +(btn?'<br><button id="guardBtn" style="margin-top:10px;border:1px solid #5FE3D6;background:transparent;color:#5FE3D6;border-radius:9px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer">'+esc(btn.t)+'</button>':'')
+    +'<br><span style="font-size:12.5px;color:#8FD9D2;margin-top:6px;display:inline-block">문제가 계속되면 <a href="recover.html" style="color:#8FD9D2">복구 도구</a>를 여세요.</span>';
   const host=$("storeHint");
   if(host&&host.parentNode) host.parentNode.insertBefore(box,host);
   else document.body.appendChild(box);
