@@ -94,8 +94,10 @@
 .mc-badge{flex:0 0 auto;font-size:10.5px;font-weight:700;color:#fff;background:var(--deep);padding:3px 9px;border-radius:20px;}
 .mc-meta{font-size:12.5px;color:var(--soft);margin-top:5px;}
 /* 회의 카드 액션 버튼 — 개수가 달라도 모두 같은 크기로 (auto-fit은 마지막 줄이 늘어나 어긋남) */
-.mc-acts{display:grid;gap:6px;margin-top:9px;grid-template-columns:repeat(var(--n,5),minmax(0,1fr));}
+/* 입장은 주 동작이라 한 줄 전체로 크게, 보조 버튼은 아래에서 균일하게 */
+.mc-acts{display:grid;gap:6px;margin-top:9px;grid-template-columns:repeat(var(--n,4),minmax(0,1fr));}
 .mc-acts>button{padding:8px 0;font-size:12.5px;line-height:1.2;white-space:nowrap;min-width:0;}
+.mc-enter{grid-column:1/-1;padding:11px 0 !important;font-size:14px !important;font-weight:800;letter-spacing:-0.01em;}
 @media(max-width:420px){ .mc-acts{grid-template-columns:repeat(3,minmax(0,1fr));} }
 .mc-enter{margin-top:11px;width:100%;padding:10px;}
 .home-slide{border-radius:14px;overflow:hidden;min-height:230px;display:flex;position:relative;margin-bottom:10px;}
@@ -592,7 +594,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=122, BUILD_DATE="2026-10-17";
+const BUILD=123, BUILD_DATE="2026-10-17";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -6468,7 +6470,7 @@ function renderMeetingCards(list,emptyMsg){
     </div>
     <div class="mc-meta">${esc(fmtDate(m.date))} ${esc(m.time)} · ${esc(m.place||"")}</div>
     <div class="mc-meta">개최자 ${esc(m.host)} · 참석 ${(m.attendees||[]).length}명</div>
-    <div class="mc-acts" style="--n:${2 + (m.kakao?1:0) + (canManage?2:0) + 1}">
+    <div class="mc-acts" style="--n:${2 + (m.kakao?1:0) + (canManage?2:0)}">
       <button class="b-mint mc-enter" data-id="${m.id}">입장</button>
       <button class="b-ghost" onclick="event.stopPropagation();copyMeetingLink('${m.id}')" title="이 회의로 바로 들어오는 초대 링크를 복사합니다">링크</button>
       <button class="b-ghost" onclick="event.stopPropagation();showMeetingQR('${m.id}')" title="초대 링크를 QR로 만들어 화면·카톡·인쇄물로 공유합니다">QR</button>
