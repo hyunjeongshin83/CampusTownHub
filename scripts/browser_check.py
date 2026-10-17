@@ -42,8 +42,16 @@ with sync_playwright() as p:
 
     bdate = pg.evaluate("typeof BUILD_DATE!=='undefined' ? BUILD_DATE : ''")
     notes.append(f"빌드 표기 v{build} ({bdate or '날짜 없음'})")
-    if bdate and bdate < "2026-09-01":
-        problems.append(f"BUILD_DATE가 낡았습니다: {bdate}")
+    # 고정 날짜로 비교하면 시간이 지나도 영영 걸리지 않는다 — 오늘 기준 상대 비교로 본다
+    if bdate:
+        try:
+            d = datetime.date.fromisoformat(bdate)
+            age = (datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).date() - d).days
+            notes.append(f"빌드 경과 {age}일")
+            if age > 90:
+                problems.append(f"BUILD_DATE가 {age}일 지났습니다 ({bdate}) — 배포 스탬프가 멈췄을 수 있습니다")
+        except ValueError:
+            problems.append(f"BUILD_DATE 형식이 올바르지 않습니다: {bdate}")
 
     if errs:
         problems.append("스크립트 오류 " + str(len(errs)) + "건: " + " | ".join(errs[:3])[:300])

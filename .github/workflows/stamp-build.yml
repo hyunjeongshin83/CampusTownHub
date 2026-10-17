@@ -1,0 +1,44 @@
+name: 빌드 날짜 자동 스탬프
+
+# index.html을 고칠 때마다 BUILD_DATE를 그날 날짜(KST)로 맞춘다.
+# 손으로 날짜를 고칠 일이 없어지고, 화면 표기가 실제 배포일과 어긋나지 않는다.
+on:
+  push:
+    branches: [main]
+    paths: ['index.html']
+
+permissions:
+  contents: write
+
+jobs:
+  stamp:
+    # 이 워크플로가 스스로 만든 커밋에는 다시 반응하지 않는다
+    if: "!contains(github.event.head_commit.message, '[stamp]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: BUILD_DATE 갱신
+        id: s
+        run: |
+          TODAY=$(TZ=Asia/Seoul date +%F)
+          CUR=$(grep -oP 'BUILD_DATE="\K[0-9-]+' index.html | head -1)
+          echo "현재 $CUR → 오늘 $TODAY"
+          if [ "$CUR" = "$TODAY" ]; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            sed -i "s/BUILD_DATE=\"$CUR\"/BUILD_DATE=\"$TODAY\"/" index.html
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "today=$TODAY" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 커밋
+        if: steps.s.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "[stamp] 빌드 날짜 ${{ steps.s.outputs.today }}로 갱신"
+          git push
