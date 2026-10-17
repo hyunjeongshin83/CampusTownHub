@@ -594,7 +594,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=126, BUILD_DATE="2026-10-17";
+const BUILD=127, BUILD_DATE="2026-10-17";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -718,7 +718,11 @@ function canView(m){
   }
   const email=(u.email||"").trim().toLowerCase();
   const name=(u.name||"").replace(/\s|교수님|님/g,"");
-  return (m.attendees||[]).some(a=>{
+  return (m.attendees||[]).some(a0=>{
+    // (v127) 옛 문자열 형식("a@b.com")도 객체처럼 다룬다 (이슈 #9)
+    const a = (typeof a0==="string")
+      ? {name:a0.includes("@")?a0.split("@")[0]:a0, email:a0.includes("@")?a0:""}
+      : (a0||{});
     // 1순위: 이메일 일치 (가장 정확 — 신규 가입자도 매칭됨)
     const ae=(a.email||"").trim().toLowerCase();
     if(email && ae && ae===email)return true;
@@ -2117,7 +2121,9 @@ function renderJobs(){
   const box=$("jobList"); if(!box)return;
   const cm=currentMeeting();
   if(!state.jobs.length){ box.innerHTML='<div class="mini">진행 중인 잡이 없습니다.</div>'; return; }
-  const canManage=state.user.role==="operator"||state.user.role==="host";
+  // (v127) 개최자는 자기가 만든 회의만 관리한다. 운영자는 전체. (이슈 #7)
+  const canManageOf=m=>state.user.role==="operator" ||
+      (state.user.role==="host" && !!m && !!m.host && m.host===state.user.name);
   // 회의별 격리: 이 회의에 연결된 잡만 본 목록에 표시
   const mineJobs=state.jobs.filter(j=>cm&&(j.linkedMeetingIds||[]).includes(cm.id));
   const otherJobs=state.jobs.filter(j=>!(cm&&(j.linkedMeetingIds||[]).includes(cm.id)));
@@ -5983,11 +5989,12 @@ function isInvited(email){
 }
 function onInviteList(email){
   const e=(email||"").trim().toLowerCase(); if(!e)return false;
-  return (state.meetings||[]).some(m=>(m.attendees||[]).some(a=>(a.email||"").trim().toLowerCase()===e));
+  return (state.meetings||[]).some(m=>(m.attendees||[]).some(a=>
+    ((typeof a==="string"?a:(a&&a.email)||"")).trim().toLowerCase()===e));   // (v127) 문자열 참석자 포함 (이슈 #9)
 }
 function invitedRole(email){
   const e=(email||"").trim().toLowerCase();
-  const acc=state.accounts.find(a=>a.email.toLowerCase()===e);
+  const acc=state.accounts.find(a=>(a&&a.email?String(a.email):"").toLowerCase()===e);   // (v127) 이메일 없는 계정 보호 (이슈 #8)
   if(acc)return acc.role;               // 이미 역할이 정해져 있으면 그것을 사용
   if(onInviteList(e))return "guest";    // 초대 명단에 있음 → 자동 입장
   return "pending";                      // 명단에 없음 → 주최자 승인 대기
@@ -6486,12 +6493,12 @@ function renderMeetingCards(list,emptyMsg){
     </div>
     <div class="mc-meta">${esc(fmtDate(m.date))} ${esc(m.time)} · ${esc(m.place||"")}</div>
     <div class="mc-meta">개최자 ${esc(m.host)} · 참석 ${(m.attendees||[]).length}명${m.kakao?' · <span style="color:#8a6d00;font-weight:700">카톡방 있음</span>':''}</div>
-    <div class="mc-acts" style="--n:${2 + (m.kakao?1:0) + (canManage?2:0)}">
+    <div class="mc-acts" style="--n:${2 + (m.kakao?1:0) + (canManageOf(m)?2:0)}">
       <button class="b-mint mc-enter" data-id="${m.id}">입장</button>
       <button class="b-ghost" onclick="event.stopPropagation();copyMeetingLink('${m.id}')" title="이 회의로 바로 들어오는 초대 링크를 복사합니다">링크</button>
       <button class="b-ghost" onclick="event.stopPropagation();showMeetingQR('${m.id}')" title="초대 링크를 QR로 만들어 화면·카톡·인쇄물로 공유합니다">QR</button>
       ${m.kakao?`<button class="b-ghost" style="color:#8a6d00" onclick="event.stopPropagation();window.open('${esc(m.kakao)}','_blank')" title="이 회의의 카카오톡 오픈채팅방을 엽니다">카톡방</button>`:""}
-      ${canManage?`<button class="b-ghost mc-edit" data-id="${m.id}">수정</button><button class="b-ghost mc-del" data-id="${m.id}" style="color:#C24A4A">삭제</button>`:""}
+      ${canManageOf(m)?`<button class="b-ghost mc-edit" data-id="${m.id}">수정</button><button class="b-ghost mc-del" data-id="${m.id}" style="color:#C24A4A">삭제</button>`:""}
     </div>
   </div>`).join("");
   box.querySelectorAll(".mc-enter").forEach(b=>b.onclick=async()=>{
