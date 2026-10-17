@@ -594,7 +594,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=125, BUILD_DATE="2026-10-17";
+const BUILD=126, BUILD_DATE="2026-10-17";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -4030,6 +4030,7 @@ function videoHTML(){
        <div><b>회의 링크</b><div class="mini" id="vLink">${esc(link)}</div></div>
        <div style="display:flex;gap:7px;flex-wrap:wrap">
          <button class="b-mint" id="vStart">화상회의 시작</button>
+         <button class="b-ghost" onclick="window.open('motioncam.html','_blank','noopener')" title="내 사진에 표정·고갯짓만 입혀 내보냅니다 — 지금 모습을 보이고 싶지 않을 때">모션캠</button>
          <button class="b-ghost" id="vCopy">링크 복사</button>
          <button class="b-deep" id="vInvite">이메일로 초대</button>
        </div>

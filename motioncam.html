@@ -1,0 +1,263 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>모션캠 — 캠퍼스타운 허브</title>
+<style>
+ :root{--mint:#12BDB0;--deep:#0E4C4A;--line:#dfe7e6;--bg:#f4f8f8;--soft:#5c7674}
+ *{box-sizing:border-box}
+ body{margin:0;padding:18px;background:var(--bg);color:#14312f;font-size:14px;line-height:1.7;
+      font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Malgun Gothic",sans-serif}
+ .wrap{max-width:900px;margin:0 auto}
+ h1{font-size:18px;color:var(--deep);margin:0 0 3px}
+ .sub{font-size:12.5px;color:var(--soft);margin-bottom:16px}
+ .card{background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin-bottom:12px}
+ .card b{color:var(--deep);font-size:13.5px}
+ .mini{font-size:12px;color:var(--soft)}
+ button{border:1px solid var(--line);background:#fff;color:var(--deep);border-radius:10px;
+        padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;margin:5px 6px 0 0;font-family:inherit}
+ button.p{background:var(--mint);border-color:var(--mint);color:#fff}
+ button:disabled{opacity:.45;cursor:not-allowed}
+ .stage{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+ @media(max-width:700px){.stage{grid-template-columns:1fr}}
+ .panel{border:1px solid var(--line);border-radius:11px;overflow:hidden;background:#0d2220}
+ .panel h4{margin:0;padding:6px 10px;font-size:12px;color:#8FD9D2;background:#0a1a19;font-weight:700}
+ canvas,video{display:block;width:100%;background:#0d2220}
+ #live{transform:scaleX(-1)}
+ .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+ input[type=range]{flex:1;min-width:120px}
+ #out{outline:2px solid var(--mint)}
+ .big #out{position:fixed;inset:0;width:100vw;height:100vh;object-fit:contain;background:#000;z-index:999}
+ .warn{background:rgba(255,180,162,.14);border:1px solid #e6b0a8;border-radius:10px;padding:10px 12px;font-size:12.5px}
+ code{background:#eef5f4;padding:1px 5px;border-radius:5px;font-size:12px}
+ #msg{min-height:20px;font-size:12.5px;color:var(--deep);font-weight:700}
+</style></head><body><div class="wrap">
+
+<h1>모션캠</h1>
+<div class="sub">내 사진 한 장에 지금의 표정·고갯짓만 입혀 내보냅니다. 카메라 영상은 이 브라우저 밖으로 나가지 않습니다.</div>
+
+<div class="card">
+  <b>1. 기준 사진</b>
+  <div class="mini">정면을 보고, 입을 다물고, 눈을 뜬 사진이 가장 잘 맞습니다. 이 사진의 얼굴 생김새가 그대로 유지됩니다.</div>
+  <div class="row" style="margin-top:7px">
+    <input type="file" id="pick" accept="image/*" style="font-size:12.5px">
+    <button id="shot">지금 카메라로 찍기</button>
+  </div>
+</div>
+
+<div class="card">
+  <b>2. 시작</b>
+  <div class="row" style="margin-top:6px">
+    <button class="p" id="go" disabled>모션캠 시작</button>
+    <button id="stop" disabled>정지</button>
+    <button id="full" disabled>전체화면 (공유용)</button>
+  </div>
+  <div id="msg" style="margin-top:7px">기준 사진을 먼저 넣어 주세요.</div>
+  <div class="row" style="margin-top:8px">
+    <span class="mini" style="width:74px">표정 강도</span>
+    <input type="range" id="gain" min="0" max="200" value="100">
+    <span class="mini" id="gainV">100%</span>
+  </div>
+  <div class="row">
+    <span class="mini" style="width:74px">고갯짓</span>
+    <input type="range" id="head" min="0" max="200" value="100">
+    <span class="mini" id="headV">100%</span>
+  </div>
+  <label class="mini" style="display:block;margin-top:6px">
+    <input type="checkbox" id="badge" checked> 화면에 "AI 보정 영상" 표시 (권장)
+  </label>
+</div>
+
+<div class="stage">
+  <div class="panel"><h4>내 카메라 (나만 봅니다)</h4><video id="live" autoplay playsinline muted></video></div>
+  <div class="panel"><h4>내보내는 화면</h4><canvas id="out" width="640" height="480"></canvas></div>
+</div>
+
+<div class="card" style="margin-top:12px">
+  <b>3. 화상회의에 연결하기</b>
+  <div class="mini" style="margin-top:4px">브라우저는 가상 카메라를 만들 수 없습니다. 둘 중 하나를 쓰세요.</div>
+  <div style="margin-top:8px">
+    <b style="font-size:12.5px">방법 A — 화면 공유 (설치 없음, 지금 바로)</b>
+    <div class="mini">[전체화면]을 누르고 → 화상회의에서 <b>화면 공유</b> → 이 창을 선택. 내 카메라는 끕니다.</div>
+  </div>
+  <div style="margin-top:8px">
+    <b style="font-size:12.5px">방법 B — OBS 가상 카메라 (제대로 된 방식)</b>
+    <div class="mini">OBS Studio 설치 → 소스에 <b>윈도우 캡처</b>로 이 창 추가 → <b>가상 카메라 시작</b> →
+      회의 앱 카메라 선택에서 <code>OBS Virtual Camera</code> 선택. Jitsi·Zoom·Teams 모두 됩니다.</div>
+  </div>
+</div>
+
+<div class="card warn">
+  <b style="color:#b4453a">꼭 지켜주세요</b><br>
+  본인 사진만 쓰세요. 남의 얼굴을 쓰면 딥페이크 문제가 됩니다.<br>
+  업무·진료 회의에서는 AI 보정 중임을 상대에게 알리세요. 위 표시를 켜두면 화면에 자동으로 나옵니다.<br>
+  이 기능은 상담·회의용입니다. <b>진단 목적 영상에는 쓰지 마세요.</b>
+</div>
+
+<script type="module">
+import {FaceLandmarker, FilesetResolver} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+const $=id=>document.getElementById(id);
+const out=$("out"), ctx=out.getContext("2d",{willReadFrequently:false});
+const live=$("live");
+let landmarker=null, photo=null, srcPts=null, tris=null, neutral=null;
+let running=false, stream=null, raf=0;
+const msg=t=>{ $("msg").textContent=t; };
+
+$("gain").oninput=()=>$("gainV").textContent=$("gain").value+"%";
+$("head").oninput=()=>$("headV").textContent=$("head").value+"%";
+
+// ── 모델 준비 ─────────────────────────────────────────────
+async function model(){
+  if(landmarker) return landmarker;
+  msg("얼굴 인식 모델을 받는 중…");
+  const files=await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  landmarker=await FaceLandmarker.createFromOptions(files,{
+    baseOptions:{modelAssetPath:
+      "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"},
+    runningMode:"IMAGE", numFaces:1, outputFaceBlendshapes:false});
+  return landmarker;
+}
+
+// ── 들로네 삼각분할 (Bowyer-Watson) ───────────────────────
+function delaunay(pts){
+  const n=pts.length;
+  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
+  for(const p of pts){ minx=Math.min(minx,p.x); miny=Math.min(miny,p.y);
+                       maxx=Math.max(maxx,p.x); maxy=Math.max(maxy,p.y); }
+  const dx=(maxx-minx)*10+10, dy=(maxy-miny)*10+10;
+  const P=pts.concat([{x:minx-dx,y:miny-dy},{x:minx+2*dx,y:miny-dy},{x:minx-dx,y:miny+2*dy}]);
+  let T=[[n,n+1,n+2]];
+  const circum=(a,b,c)=>{
+    const ax=P[a].x,ay=P[a].y,bx=P[b].x,by=P[b].y,cx=P[c].x,cy=P[c].y;
+    const d=2*(ax*(by-cy)+bx*(cy-ay)+cx*(ay-by));
+    if(Math.abs(d)<1e-12) return null;
+    const ux=((ax*ax+ay*ay)*(by-cy)+(bx*bx+by*by)*(cy-ay)+(cx*cx+cy*cy)*(ay-by))/d;
+    const uy=((ax*ax+ay*ay)*(cx-bx)+(bx*bx+by*by)*(ax-cx)+(cx*cx+cy*cy)*(bx-ax))/d;
+    return {x:ux,y:uy,r2:(ax-ux)*(ax-ux)+(ay-uy)*(ay-uy)};
+  };
+  for(let i=0;i<n;i++){
+    const bad=[], edges=[];
+    for(const t of T){
+      const cc=circum(t[0],t[1],t[2]); if(!cc) continue;
+      const d2=(P[i].x-cc.x)**2+(P[i].y-cc.y)**2;
+      if(d2<cc.r2) bad.push(t);
+    }
+    for(const t of bad){ edges.push([t[0],t[1]],[t[1],t[2]],[t[2],t[0]]); }
+    T=T.filter(t=>!bad.includes(t));
+    const uniq=edges.filter((e,ix)=>!edges.some((f,jx)=>jx!==ix &&
+      ((f[0]===e[0]&&f[1]===e[1])||(f[0]===e[1]&&f[1]===e[0]))));
+    for(const e of uniq) T.push([e[0],e[1],i]);
+  }
+  return T.filter(t=>t.every(v=>v<n));
+}
+
+// ── 삼각형 단위 아핀 워프 ─────────────────────────────────
+function warpTri(img,s0,s1,s2,d0,d1,d2){
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(d0.x,d0.y); ctx.lineTo(d1.x,d1.y); ctx.lineTo(d2.x,d2.y);
+  ctx.closePath(); ctx.clip();
+  const sx1=s1.x-s0.x, sy1=s1.y-s0.y, sx2=s2.x-s0.x, sy2=s2.y-s0.y;
+  const det=sx1*sy2-sx2*sy1;
+  if(Math.abs(det)<1e-6){ ctx.restore(); return; }
+  const dx1=d1.x-d0.x, dy1=d1.y-d0.y, dx2=d2.x-d0.x, dy2=d2.y-d0.y;
+  const a=(dx1*sy2-dx2*sy1)/det, b=(dy1*sy2-dy2*sy1)/det;
+  const c=(dx2*sx1-dx1*sx2)/det, d=(dy2*sx1-dy1*sx2)/det;
+  ctx.setTransform(a,b,c,d, d0.x-a*s0.x-c*s0.y, d0.y-b*s0.x-d*s0.y);
+  ctx.drawImage(img,0,0);
+  ctx.restore();
+}
+
+// ── 기준 사진 등록 ────────────────────────────────────────
+async function setPhoto(src){
+  const lm=await model();
+  const img=new Image(); img.crossOrigin="anonymous";
+  await new Promise((ok,ng)=>{ img.onload=ok; img.onerror=()=>ng(new Error("이미지를 열 수 없습니다")); img.src=src; });
+  lm.setOptions({runningMode:"IMAGE"});
+  const r=lm.detect(img);
+  if(!r.faceLandmarks||!r.faceLandmarks.length) throw new Error("사진에서 얼굴을 찾지 못했습니다 — 정면 사진으로 바꿔 주세요");
+  out.width=img.naturalWidth; out.height=img.naturalHeight;
+  photo=img;
+  srcPts=r.faceLandmarks[0].map(p=>({x:p.x*img.naturalWidth, y:p.y*img.naturalHeight}));
+  tris=delaunay(srcPts);
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.drawImage(img,0,0,out.width,out.height);
+  neutral=null;
+  $("go").disabled=false; $("full").disabled=false;
+  msg("사진 등록 완료 ("+srcPts.length+"점 · 삼각형 "+tris.length+"개). [모션캠 시작]을 누르세요.");
+}
+
+$("pick").onchange=e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>setPhoto(rd.result).catch(err=>msg("실패: "+err.message));
+  rd.readAsDataURL(f);
+};
+
+$("shot").onclick=async()=>{
+  try{
+    if(!stream){ stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480}}); live.srcObject=stream; }
+    await new Promise(r=>setTimeout(r,700));
+    const c=document.createElement("canvas");
+    c.width=live.videoWidth||640; c.height=live.videoHeight||480;
+    c.getContext("2d").drawImage(live,0,0);
+    await setPhoto(c.toDataURL("image/png"));
+  }catch(e){ msg("실패: "+(e.message||e)); }
+};
+
+// ── 실행 ──────────────────────────────────────────────────
+$("go").onclick=async()=>{
+  try{
+    const lm=await model();
+    if(!stream){ stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480}}); live.srcObject=stream; }
+    lm.setOptions({runningMode:"VIDEO"});
+    running=true; $("go").disabled=true; $("stop").disabled=false;
+    msg("실행 중 — 카메라 영상은 이 브라우저 안에서만 처리됩니다.");
+    loop();
+  }catch(e){ msg("실패: "+(e.message||e)); }
+};
+$("stop").onclick=()=>{ running=false; cancelAnimationFrame(raf);
+  $("go").disabled=false; $("stop").disabled=true; msg("정지했습니다."); };
+$("full").onclick=()=>{ document.body.classList.toggle("big");
+  if(document.body.classList.contains("big")) out.requestFullscreen&&out.requestFullscreen().catch(()=>{}); };
+
+function loop(){
+  if(!running) return;
+  raf=requestAnimationFrame(loop);
+  if(!photo||!landmarker||live.readyState<2) return;
+  let r; try{ r=landmarker.detectForVideo(live, performance.now()); }catch(e){ return; }
+  if(!r.faceLandmarks||!r.faceLandmarks.length) return;
+  const cur=r.faceLandmarks[0];
+  if(!neutral) neutral=cur.map(p=>({x:p.x,y:p.y}));
+
+  // 사진의 얼굴 크기에 맞춰 움직임의 크기를 환산한다
+  const sw=Math.abs(srcPts[454].x-srcPts[234].x)||1;          // 사진 얼굴 너비(px)
+  const lw=Math.abs(cur[454].x-cur[234].x)||1;                // 현재 얼굴 너비(정규화)
+  const k=sw/lw;
+  const gE=Number($("gain").value)/100, gH=Number($("head").value)/100;
+
+  // 코끝 이동 = 고갯짓, 나머지 = 표정
+  const nd={x:(cur[1].x-neutral[1].x)*k*gH, y:(cur[1].y-neutral[1].y)*k*gH};
+  const dst=srcPts.map((s,i)=>({
+    x:s.x + nd.x + ((cur[i].x-neutral[i].x)-(cur[1].x-neutral[1].x))*k*gE,
+    y:s.y + nd.y + ((cur[i].y-neutral[i].y)-(cur[1].y-neutral[1].y))*k*gE
+  }));
+
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.drawImage(photo,0,0,out.width,out.height);            // 배경·머리카락은 원본 그대로
+  for(const t of tris)
+    warpTri(photo, srcPts[t[0]],srcPts[t[1]],srcPts[t[2]], dst[t[0]],dst[t[1]],dst[t[2]]);
+
+  ctx.setTransform(1,0,0,1,0,0);
+  if($("badge").checked){
+    const h=Math.max(18,out.height*0.045);
+    ctx.font="700 "+Math.round(h*0.62)+"px -apple-system,sans-serif";
+    const txt="AI 보정 영상";
+    const w=ctx.measureText(txt).width+h*0.9;
+    ctx.fillStyle="rgba(14,76,74,.78)";
+    ctx.fillRect(out.width-w-10, out.height-h-10, w, h);
+    ctx.fillStyle="#fff"; ctx.textBaseline="middle";
+    ctx.fillText(txt, out.width-w-10+h*0.45, out.height-h-10+h/2);
+  }
+}
+</script></div></body></html>
