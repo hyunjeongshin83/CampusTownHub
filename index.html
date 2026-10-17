@@ -36,6 +36,9 @@
 .at{flex:1;font-family:inherit;font-size:14px;font-weight:700;padding:10px 0;border-radius:10px;
   border:none;background:transparent;color:#b8e6e1;cursor:pointer;transition:all .18s ease;}
 .at.on{background:#fff;color:var(--deep);box-shadow:0 2px 8px rgba(0,0,0,.14);}
+/* 로그아웃은 탭이 아니라 버튼 — 누를 수 있다는 게 보이게 */
+#logoutBtn{flex:0 0 auto;border:1px solid rgba(255,255,255,.28);border-radius:10px;padding:9px 16px;font-size:13px;}
+#logoutBtn:hover{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.5);}
 .auth-in{width:100%;font-family:inherit;font-size:15px;padding:14px 16px;margin-bottom:11px;border-radius:13px;
   border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.95);outline:none;box-sizing:border-box;transition:border .15s ease;}
 .auth-in:focus{border-color:var(--mint);box-shadow:0 0 0 3px rgba(18,189,176,.18);}
@@ -76,9 +79,13 @@
 .oc-actions{display:flex;gap:7px;margin-top:12px;justify-content:flex-end;}
 .oc-actions button{min-width:118px;padding:9px 14px;font-size:12.5px;}
 .backup-row{display:flex;gap:7px;margin-top:12px;justify-content:flex-end;}
+/* 초기화는 되돌릴 수 없는 동작이라 백업 버튼과 구분한다 */
+#mlReset{color:#C24A4A;border-color:rgba(194,74,74,.45);}
+#mlReset:hover{background:rgba(194,74,74,.08);border-color:#C24A4A;}
 .backup-row button{min-width:112px;}
 .backup-row button{flex:1;font-size:12.5px;padding:9px;}
-.backup-hint{font-size:12.5px;color:#8FD9D2;margin-top:9px;line-height:1.5;text-align:center;}
+.backup-hint{font-size:12.5px;color:#8FD9D2;margin-top:9px;line-height:1.6;text-align:left;}
+.backup-hint button{display:block;margin:9px 0 0 0 !important;}
 .invite-notice{font-size:12.5px;color:#cfeeeb;background:rgba(255,255,255,.08);border-radius:11px;padding:11px 13px;margin-bottom:14px;line-height:1.55;}
 .privacy-note{font-size:12px;color:var(--deep);background:var(--mist);border-radius:9px;padding:9px 12px;margin-bottom:10px;line-height:1.5;}
 .purge-badge{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--deep);padding:3px 9px;border-radius:20px;margin-left:6px;}
@@ -472,8 +479,11 @@ button, .at, [role="button"]{min-height:40px;}
 .note-box b{color:var(--deep);}
 
 @media(max-width:600px){
-  .job-actions,.p-acts,.oc-actions,.pf-acts,.backup-row{flex-direction:column;}
-  .job-actions button,.p-acts button,.oc-actions button,.pf-acts button,.backup-row button{width:100%;min-width:0;}
+  .job-actions,.p-acts,.oc-actions,.pf-acts{flex-direction:column;}
+  .job-actions button,.p-acts button,.oc-actions button,.pf-acts button{width:100%;min-width:0;}
+  /* 백업·초기화는 보조 기능 — 좁은 화면에서도 한 줄로 작게 둔다 */
+  .backup-row{flex-wrap:wrap;}
+  .backup-row button{min-width:0;flex:1 1 30%;font-size:12px;padding:9px 4px;}
   .f-acts{flex-wrap:wrap;}
 }
 
@@ -606,7 +616,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=132, BUILD_DATE="2026-10-17";
+const BUILD=133, BUILD_DATE="2026-10-17";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -7099,7 +7109,7 @@ async function diagStatus(el){
   if(!cloud.enabled()){ el.innerHTML='<span style="color:#8FD9D2">● 로컬 모드</span> — 이 브라우저에만 저장됩니다.'; return; }
   el.innerHTML='<span style="color:#8FD9D2">● 서버 확인 중…</span>';
   const d=await diagProbe();
-  const btn='border:1px solid #5FE3D6;background:transparent;color:#5FE3D6;border-radius:7px;padding:3px 10px;font-size:11.5px;cursor:pointer;margin-left:8px';
+  const btn='border:1px solid #5FE3D6;background:transparent;color:#5FE3D6;border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;';
   if(d.err){
     el.innerHTML='<span style="color:#FFB4A2">● 서버 오류</span> — '+esc(d.err.slice(0,110));
     return;
