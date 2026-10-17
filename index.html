@@ -592,7 +592,7 @@ body{letter-spacing:-0.015em;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=120, BUILD_DATE="2026-10-17";
+const BUILD=121, BUILD_DATE="2026-10-17";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -5354,7 +5354,26 @@ function renderRecords(){const list=$("reclist");if(!list)return;
   const groups=groupRecords(true);                             // 이 회의의 회차만 (다른 회의와 섞이지 않음)
   const cmName=(currentMeeting()||{}).title||"";
   const scopeLabel=`<div class="mini" style="margin-bottom:6px;color:var(--deep);font-weight:700">'${esc(cmName)}'의 회차만 표시 중 <span style="font-weight:500;color:var(--gray)">(전체 기록은 아카이브)</span></div>`;
-  if(!groups.length){list.innerHTML=scopeLabel+'<div class="glass tile"><div class="mini">이 회의의 저장된 회차가 아직 없습니다. 회의를 시작하고 종료하면 여기에 쌓입니다.</div></div>';return;}
+  if(!groups.length){
+    // (v121) 0건일 때 "어디에 있는지"를 알려준다 — 다른 회의에 붙어 있는 경우가 대부분이다
+    const all=state.records||[];
+    let extra="";
+    if(all.length){
+      const cm=currentMeeting()||{};
+      const byMeeting={};
+      all.forEach(r=>{
+        const mm=(state.meetings||[]).find(x=>x.id===r.mid);
+        const nm=mm?mm.title:(r.mid?"(삭제된 회의)":"(소속 미지정)");
+        byMeeting[nm]=(byMeeting[nm]||0)+1;
+      });
+      extra=`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
+        <b style="color:var(--deep);font-size:12.5px">전체 기록 ${all.length}건은 여기에 있습니다</b>
+        <ul style="margin:5px 0 0;padding-left:18px">`
+        +Object.keys(byMeeting).map(k=>`<li>${esc(k)} — ${byMeeting[k]}건</li>`).join("")
+        +`</ul><div class="mini" style="margin-top:6px">해당 회의로 입장하시거나, 기록의 [수정]에서 소속 회의를 바꿔 이 회의로 옮길 수 있습니다.</div></div>`;
+    }
+    list.innerHTML=scopeLabel+'<div class="glass tile"><div class="mini">이 회의의 저장된 회차가 아직 없습니다. 회의를 시작하고 종료하면 여기에 쌓입니다.</div>'+extra+'</div>';
+    return;}
   list.innerHTML=scopeLabel+groups.map(g=>`
     <div class="glass tile" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px">
