@@ -1,0 +1,13 @@
+# 점검 스크립트가 실행할 때마다 새로 만드는 결과물 — 저장소에 넣지 않는다
+watch-report.md
+browser-report.md
+handler-report.md
+report.md
+qa-*.txt
+hub.png
+*.y4m
+
+# 임시·캐시
+__pycache__/
+*.pyc
+.DS_Store
