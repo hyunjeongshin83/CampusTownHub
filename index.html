@@ -616,7 +616,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=136, BUILD_DATE="2026-10-18";
+const BUILD=137, BUILD_DATE="2026-10-18";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -755,6 +755,32 @@ function canView(m){
 }
 const $=id=>document.getElementById(id);
 const esc=s=>(s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));   // 속성 안전 — 따옴표 포함 내용이 입력칸을 깨뜨리지 않게
+// (v137) 복사는 권한이 막히면 조용히 실패합니다. 휴대폰·비활성 탭에서 흔합니다.
+// 한 군데로 모아, 막히면 옛 방식으로 한 번 더 해보고, 그래도 안 되면 사실대로 알립니다.
+function copyText(s, okMsg){
+  s = String(s==null?"":s);
+  const fallback = ()=>{
+    try{
+      const ta=document.createElement("textarea");
+      ta.value=s; ta.setAttribute("readonly","");
+      ta.style.cssText="position:fixed;top:-1000px;left:-1000px;opacity:0";
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, s.length);
+      const ok=document.execCommand&&document.execCommand("copy");
+      document.body.removeChild(ta);
+      return !!ok;
+    }catch(e){ return false; }
+  };
+  const done = ok => { try{ toast(ok ? (okMsg||"복사했습니다")
+      : "복사가 막혔습니다 — 글자를 길게 눌러 직접 복사해 주세요"); }catch(e){} return ok; };
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      return navigator.clipboard.writeText(s).then(()=>done(true), ()=>done(fallback()));
+    }
+  }catch(e){}
+  return Promise.resolve(done(fallback()));
+}
+window.copyText=copyText;
+
 function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2400);}
 setInterval(()=>{$("clock").textContent=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});},1000);
 function initials(s){s=(s||"").trim();return s?s.slice(0,2):"?";}
@@ -1361,7 +1387,7 @@ function openInviteeGuide(){
     document.body.appendChild(modal);
     $("guideClose").onclick=()=>{modal.style.display="none";};
     modal.onclick=e=>{if(e.target===modal)modal.style.display="none";};
-    $("guideCopy").onclick=()=>{ if(navigator.clipboard){navigator.clipboard.writeText(INVITEE_GUIDE_TEXT);toast("안내문을 복사했습니다 — 초대 메일에 붙여넣어 보내세요");} };
+    $("guideCopy").onclick=()=>{ copyText(INVITEE_GUIDE_TEXT,"안내문을 복사했습니다 — 초대 메일에 붙여넣어 보내세요"); };
   }
   modal.style.display="flex";
 }
@@ -3355,7 +3381,7 @@ function bindToday(){
     const prev=state.currentMeetingId; state.currentMeetingId=m.id;
     const txt=buildInvite((m.attendees||[]).map(a=>a.name).filter(Boolean).join(", ")||"참석자님");
     state.currentMeetingId=prev;
-    if(navigator.clipboard){ navigator.clipboard.writeText(txt); toast("초대문을 복사했습니다 — 메일에 붙여넣어 보내세요"); }
+    copyText(txt,"초대문을 복사했습니다 — 메일에 붙여넣어 보내세요");
   });
   renderOutreach();
 }
@@ -4090,7 +4116,7 @@ function bindVideo(){
   const link="https://meet.jit.si/"+jitsiRoom();
   const s1=$("vStart"),s2=$("vStart2");
   if(s1)s1.onclick=startJitsi; if(s2)s2.onclick=startJitsi;
-  const cp=$("vCopy");if(cp)cp.onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(link);toast("링크를 복사했습니다");};
+  const cp=$("vCopy");if(cp)cp.onclick=()=>{copyText(link,"링크를 복사했습니다");};
   const inv=$("vInvite");if(inv)inv.onclick=()=>inviteByEmail(link);
 }
 // 이메일 초대 (초대장 생성 + 메일앱 열기)
