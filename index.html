@@ -616,7 +616,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=139, BUILD_DATE="2026-10-18";
+const BUILD=140, BUILD_DATE="2026-10-18";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -1208,7 +1208,9 @@ function refreshApiKeyStatus(){
 //  ① 공유 프록시 — Supabase Edge Function "claude-proxy". 운영자의 키를 서버에 두고,
 //     로그인한 사용자는 각자 키 없이 사용. (배포 안 되어 있으면 자동으로 ②로 넘어감)
 //  ② 개인 키 — 이 브라우저에 등록한 본인 키
-const AI_PROXY_NAMES=["claude-proxy","super-processor","quick-service","rapid-service"];   // 순서대로 시도
+// (v140) claude-proxy 는 배포돼 있지 않습니다(404). 맨 앞에 있어서 AI 를 쓸 때마다
+// 헛걸음을 한 번씩 했습니다. 살아 있는 셋만 남깁니다 — 2026-10-18 확인.
+const AI_PROXY_NAMES=["super-processor","quick-service","rapid-service"];   // 순서대로 시도
 let proxyDownUntil=0;   // 프록시 전체 실패 시 45초 쿨다운 — 배경 호출(번역·문단)이 실패를 반복 타격하지 않게
 async function callViaProxy(system,user,maxTokens,opts){
   opts=opts||{};
