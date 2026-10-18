@@ -51,17 +51,25 @@ def controls(page):
                 label:e.getAttribute('aria-label')||'', title:e.getAttribute('title')||''};
       });}""")
 
+INSIDE = os.environ.get("CRAWL_INSIDE") == "1"
+
 def seed(page):
     """로그인한 운영자 상태를 흉내 냅니다 — 서버는 건드리지 않습니다."""
-    page.evaluate("""()=>{
+    page.evaluate("""(inside)=>{
       try{
         state.user={name:'QA점검',role:'operator',email:'qa-crawl@example.invalid'};
         state.meetings=[{id:'qa1',title:'QA 점검용 회의',date:'2026-10-20',time:'14:00',
           place:'온라인',host:'QA점검',
           attendees:[{name:'QA점검',email:'qa-crawl@example.invalid'}]}];
         if(typeof showMeetingList==='function') showMeetingList();
+        // 회의 안쪽(회의록·파일·조사·주석)까지 훑으려면 들어갑니다 — 교수님이 실제로 쓰실 화면입니다
+        if(inside && typeof enterHub==='function'){
+          state.currentMeetingId='qa1';
+          if(typeof syncCurrentMeeting==='function') syncCurrentMeeting();
+          enterHub();
+        }
       }catch(e){}
-    }""")
+    }""", INSIDE)
 
 findings, notes = [], []
 seen, edges, dead, nameless = {}, [], [], []

@@ -616,7 +616,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=138, BUILD_DATE="2026-10-18";
+const BUILD=139, BUILD_DATE="2026-10-18";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -2695,17 +2695,22 @@ function bindPrep(){
   const ns=$("ntcSend"); if(ns)ns.onclick=openNoticeForm;
   renderNoticeList();
   $("atEmail").addEventListener("keydown",e=>{if(e.key==='Enter')$("atAdd").click();});
+  // (v139) 끌어놓기 영역(drop)은 지금 이 탭에 그려지지 않습니다. 그런데 없는 것에
+  // 이벤트를 걸다 여기서 터져, 아래의 [저장] 단추와 AI 자동수정 토글이 아예 연결되지
+  // 않았습니다 — 제목·목적을 고치고 저장을 눌러도 아무 일이 없었습니다. (기능 훑기로 발견)
   const drop=$("drop"),fi=$("fileInput");
-  drop.onclick=()=>fi.click();
-  drop.ondragover=e=>{e.preventDefault();drop.classList.add("over");};
-  drop.ondragleave=()=>drop.classList.remove("over");
-  drop.ondrop=e=>{e.preventDefault();drop.classList.remove("over");handleFiles(e.dataTransfer.files);};
-  fi.onchange=e=>handleFiles(e.target.files);
+  if(drop){
+    drop.onclick=()=>{ if(fi) fi.click(); };
+    drop.ondragover=e=>{e.preventDefault();drop.classList.add("over");};
+    drop.ondragleave=()=>drop.classList.remove("over");
+    drop.ondrop=e=>{e.preventDefault();drop.classList.remove("over");handleFiles(e.dataTransfer.files);};
+  }
+  if(fi) fi.onchange=e=>handleFiles(e.target.files);
   const fb=$("aiFixBadge"),fl=$("aiFixLabel");
   const paintFix=()=>{const on=aiFixOn(); if(fl)fl.textContent="AI 자동 수정: "+(on?"켜짐":"꺼짐"); if(fb)fb.style.opacity=on?"1":"0.55";};
   if(fb){ paintFix(); fb.onclick=()=>{ localStorage.setItem("medit:aifix",aiFixOn()?"off":"on"); paintFix();
     toast(aiFixOn()?"AI 자동 수정 켜짐 — [AI 반영] 시 제목·목적을 AI가 다듬습니다":"AI 자동 수정 꺼짐 — 제목·목적은 직접 입력한 값만 유지됩니다"); }; }
-  $("mSave").onclick=()=>{state.meeting.title=$("mTitle").value.trim()||state.meeting.title;
+  const _ms=$("mSave"); if(_ms) _ms.onclick=()=>{state.meeting.title=$("mTitle").value.trim()||state.meeting.title;
     state.meeting.purpose=$("mPurpose").value.trim()||state.meeting.purpose;scheduleSave();toast("회의 정보 저장됨");};
 }
 function renderAtList(){const box=$("atList");if(!box)return;
