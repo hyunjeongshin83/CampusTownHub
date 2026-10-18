@@ -616,7 +616,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=135, BUILD_DATE="2026-10-17";
+const BUILD=136, BUILD_DATE="2026-10-17";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -5995,8 +5995,14 @@ const ICON={
 // ==================== 가입 정책 ====================
 // OPEN_SIGNUP=true  : 누구나 본인 이메일로 가입 가능 (기본 역할: 초대자)
 // OPEN_SIGNUP=false : 초대 명단(참석자로 등록된 이메일)에 있는 사람만 가입 가능
-// 기밀 회의로 전환하려면 아래를 false로 바꾸세요.
-let OPEN_SIGNUP = true;
+// (v136) 기본을 false 로 둡니다. true 였을 때는 아무 구글 계정이나 로그인이 되었고,
+// 화면에서 회의만 가려질 뿐 로그인 자체는 막히지 않았습니다.
+// false 일 때 들어올 수 있는 사람:
+//   · @sookmyung.ac.kr 계정
+//   · 이미 계정 목록에 있는 사람
+//   · 어느 회의든 참석자로 이메일이 등록된 사람
+// 아무나 들어와서 승인을 요청하게 하려면 true 로 되돌리세요.
+let OPEN_SIGNUP = false;
 
 function isInvited(email){
   const e=(email||"").trim().toLowerCase();
