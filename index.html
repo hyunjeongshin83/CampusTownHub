@@ -616,7 +616,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=137, BUILD_DATE="2026-10-18";
+const BUILD=138, BUILD_DATE="2026-10-18";
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
@@ -905,6 +905,10 @@ function merge3Array(base,mine,theirs){
   mine.forEach(x=>{
     const id=x&&x.id;
     if(id!==undefined&&(id in B)&&!(id in T)&&_same(x,B[id])) return;   // 상대가 삭제 · 나는 미변경 → 삭제 반영
+    // (v138) 양쪽에 다 있는 항목은 안쪽까지 합칩니다. 전에는 통째로 내 것을 밀어 넣어,
+    // 상대가 제목을 고치고 내가 안 고쳤어도 내 화면의 옛 값이 덮어썼습니다.
+    // 참석자 목록도 같은 이유로 상대가 더한 사람이 사라졌습니다. (동시 저장 검사 2건 실패로 발견)
+    if(id!==undefined&&(id in T)){ out.push(merge3(B[id], x, T[id])); return; }
     out.push(x);
   });
   theirs.forEach(x=>{
