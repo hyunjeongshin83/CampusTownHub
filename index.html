@@ -628,7 +628,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=146, BUILD_DATE="2026-10-19";
+const BUILD=147, BUILD_DATE="2026-10-19";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -4264,6 +4264,8 @@ function videoHTML(){
      </div>
    </div>
 
+   <div id="vAfter"></div>
+
    <div class="glass tile" style="padding:0;overflow:hidden">
      <div id="vFrame" class="vframe-empty">
        <div>
@@ -4273,19 +4275,133 @@ function videoHTML(){
        </div>
      </div>
    </div>
-   <div class="mini" style="margin-top:10px">※ 브라우저에서 파일을 직접 열면 임베드가 제한될 수 있습니다. 그럴 땐 ‘링크 복사’로 새 탭에서 여세요.</div>
+   <div class="mini" style="margin-top:10px;line-height:1.7">
+     ※ 화상회의를 시작하면 <b>회의가 열린 것으로 기록</b>되고, 들어온 분이 참석자에 자동으로 더해집니다.
+     끝내시면 이 자리에 <b>[회의록 만들기]</b>가 나타납니다 — 누르시면 AI가 회의록·스크립트·이메일 초안까지 만들어 회차 기록으로 남깁니다.<br>
+     ※ 말소리 받아쓰기는 브라우저가 화상회의와 마이크를 함께 쓸 수 있을 때만 됩니다(Chrome 권장).
+     안 되면 <b>[AI 회의록]</b> 탭에 타이핑해 두시면 그 내용으로 만듭니다.<br>
+     ※ 브라우저에서 파일을 직접 열면 임베드가 제한될 수 있습니다. 그럴 땐 ‘링크 복사’로 새 탭에서 여세요.
+   </div>
   </div>`;
 }
-let jitsiApi=null;
-function startJitsi(){
-  const box=$("vFrame"); if(!box)return;
-  const room=jitsiRoom();
-  box.classList.remove("vframe-empty");
+let jitsiApi=null, jitsiJoinedAt=0, jitsiNames=[];
+
+// (v147) 화상회의와 회의록을 잇습니다.
+//   예전에는 iframe 만 띄워서, 회의가 끝나도 앱은 아무것도 몰랐습니다.
+//   끝내고 다른 탭으로 가서 [회의 종료]를 눌러야만 기록이 남았고, 그걸 모르면 그냥 사라졌습니다.
+//   이제 Jitsi 의 바깥 API 로 「들어왔다·나갔다·누가 있었다」를 받아 회의록으로 잇습니다.
+//   API 가 안 열리면(차단·오프라인) 예전처럼 iframe 으로 돌아갑니다 — 화상회의 자체는 막지 않습니다.
+function loadJitsiApi(){
+  if(window.JitsiMeetExternalAPI) return Promise.resolve(true);
+  return new Promise(res=>{
+    const s=document.createElement("script");
+    s.src="https://meet.jit.si/external_api.js";
+    s.onload=()=>res(!!window.JitsiMeetExternalAPI);
+    s.onerror=()=>res(false);
+    setTimeout(()=>res(!!window.JitsiMeetExternalAPI), 6000);   // 느리면 그냥 iframe 으로
+    document.head.appendChild(s);
+  });
+}
+
+function jitsiFallbackIframe(box,room){
   box.innerHTML='<iframe allow="camera; microphone; fullscreen; display-capture; autoplay" '+
     'src="https://meet.jit.si/'+room+'#config.prejoinPageEnabled=false" '+
     'style="width:100%;height:520px;border:0;border-radius:16px;"></iframe>';
-  toast("화상회의를 시작합니다 · 카메라·마이크를 허용해 주세요");
+  showAfterCallBox("manual");
 }
+
+async function startJitsi(){
+  const box=$("vFrame"); if(!box)return;
+  const room=jitsiRoom();
+  box.classList.remove("vframe-empty");
+  box.innerHTML='<div class="mini" style="padding:24px">화상회의를 여는 중…</div>';
+  toast("화상회의를 시작합니다 · 카메라·마이크를 허용해 주세요");
+
+  const ok=await loadJitsiApi();
+  if(!ok){ jitsiFallbackIframe(box,room); return; }
+
+  box.innerHTML="";
+  try{
+    jitsiApi=new window.JitsiMeetExternalAPI("meet.jit.si",{
+      roomName:room, parentNode:box, width:"100%", height:520,
+      configOverwrite:{prejoinPageEnabled:false},
+      userInfo:{displayName:(state.user&&state.user.name)||"", email:(state.user&&state.user.email)||""}
+    });
+  }catch(e){ jitsiFallbackIframe(box,room); return; }
+
+  jitsiNames=[];
+  jitsiApi.addListener("videoConferenceJoined", ()=>{
+    jitsiJoinedAt=Date.now();
+    // 회의가 아직 안 열렸으면 여기서 엽니다 — 받아쓰기도 같이 켜집니다.
+    // startMeeting() 은 콘솔 탭으로 옮겨 가므로 여기서는 쓰지 않습니다 (화면이 바뀌면 화상회의가 끊깁니다).
+    if(!state.meeting.started){
+      state.meeting.started=Date.now(); state.meeting.ended=null; state.meetingStart=Date.now();
+      state.meeting.when=Date.now();
+      setPill("live","회의 진행 중");
+      scheduleSave();
+      toast("회의를 시작한 것으로 기록합니다");
+      setTimeout(()=>{ if(typeof startMic==="function") startMic(); },600);
+    }
+    showAfterCallBox("live");
+  });
+  jitsiApi.addListener("participantJoined", e=>{
+    const nm=(e&&e.displayName||"").trim(); if(!nm) return;
+    if(jitsiNames.indexOf(nm)<0) jitsiNames.push(nm);
+    addVideoAttendee(nm);
+  });
+  jitsiApi.addListener("videoConferenceLeft", ()=>{ showAfterCallBox("left"); });
+  jitsiApi.addListener("readyToClose", ()=>{
+    try{ jitsiApi.dispose(); }catch(_){}
+    jitsiApi=null;
+    const b=$("vFrame"); if(b){ b.classList.add("vframe-empty");
+      b.innerHTML='<div><div style="font-size:15px;font-weight:700;color:var(--deep);margin-bottom:6px">화상회의가 끝났습니다</div>'
+        +'<div class="mini" style="margin-bottom:12px">회의록을 만드시려면 위의 [회의록 만들기]를 눌러 주세요.</div>'
+        +'<button class="b-mint" id="vStart2">다시 시작</button></div>';
+      const s2=$("vStart2"); if(s2) s2.onclick=startJitsi; }
+    showAfterCallBox("left");
+  });
+}
+
+// 화상회의로 들어온 사람을 참석자에 더합니다 (이름이 같으면 더하지 않습니다)
+function addVideoAttendee(name){
+  const m=currentMeeting(); if(!m) return;
+  m.attendees=m.attendees||[];
+  if(m.attendees.some(a=>(a.name||"").trim()===name)) return;
+  m.attendees.push({name:name, email:"", via:"video"});
+  state.attendees=m.attendees;
+  try{ refreshBadges&&refreshBadges(); }catch(_){}
+  scheduleSave();
+}
+
+// 회의 중·회의 뒤에 [회의록 만들기]를 띄웁니다
+function showAfterCallBox(mode){
+  const box=$("vAfter"); if(!box) return;
+  const mins=jitsiJoinedAt?Math.max(1,Math.round((Date.now()-jitsiJoinedAt)/60000)):0;
+  const segs=(state.segments||[]).length;
+  const typed=(((state.liveDoc&&state.liveDoc.paras)||[]).length)+(((currentMeeting()||{}).rawNote||"").trim()?1:0);
+  const 재료=segs+typed;
+  const 안내 = 재료
+    ? `받아쓴 발언 ${segs}건${typed?" · 적어 두신 내용 있음":""} — 이걸로 회의록을 만듭니다.`
+    : `아직 적힌 내용이 없습니다. <b>[AI 회의록]</b> 탭에 몇 줄 적어 두시면 그 내용으로 만듭니다.`;
+  const 제목 = mode==="left" ? "화상회의가 끝났습니다" : (mode==="live" ? "회의 진행 중" : "화상회의 중");
+  box.innerHTML=`<div class="glass tile" style="margin-bottom:14px;border-left:3px solid var(--mint,#12BDB0)">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <b style="color:var(--deep)">${제목}</b>${mins?` <span class="mini">· ${mins}분 진행</span>`:""}
+        <div class="mini" style="margin-top:4px;line-height:1.6">${안내}</div>
+      </div>
+      <button class="b-ghost" onclick="switchTab('console')">AI 회의록 탭</button>
+      <button class="b-mint" id="vMakeMinutes">회의록 만들기</button>
+    </div>
+  </div>`;
+  const mk=$("vMakeMinutes");
+  if(mk) mk.onclick=async()=>{
+    mk.disabled=true; mk.textContent="만드는 중…";
+    try{ await endMeeting(); }                       // 기존 흐름 그대로 — AI 정리·스크립트·이메일·회차 저장
+    finally{ mk.disabled=false; mk.textContent="회의록 만들기"; }
+  };
+}
+window.startJitsi=startJitsi; window.showAfterCallBox=showAfterCallBox;
 function bindVideo(){
   const m=currentMeeting()||{};
   const link="https://meet.jit.si/"+jitsiRoom();
