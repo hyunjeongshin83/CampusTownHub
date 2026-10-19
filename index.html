@@ -631,7 +631,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=150, BUILD_DATE="2026-10-19";
+const BUILD=151, BUILD_DATE="2026-10-19";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -4298,12 +4298,28 @@ function videoHTML(){
        </div>
        <div id="vTranscript" style="flex:1;overflow-y:auto;max-height:392px;background:var(--mist);
             border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.65"></div>
+       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:9px">
+         <button class="b-mint" id="vMicBtn" style="flex:0 0 auto">녹취 시작</button>
+         <select id="vMicWho" title="마이크 입력의 발화자 — 음성인식은 목소리로 사람을 구분하지 못하므로 여기서 지정합니다"
+                 style="flex:1;min-width:92px;max-width:150px;padding:7px 9px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px;color:var(--ink);background:#fff"></select>
+         <span class="mini" id="vMicHint" style="flex:1 1 100%">브라우저 음성인식</span>
+       </div>
+       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">
+         <button class="b-ghost" id="vKakao" style="padding:4px 9px;font-size:11.5px" title="카카오톡 '대화 내보내기(.txt)' 를 이 회의의 발언으로 가져옵니다">카카오톡 가져오기</button>
+         <button class="b-ghost" id="vGuess" style="padding:4px 9px;font-size:11.5px" title="발언 내용으로 화자를 추정합니다 (목소리 구분이 아닌 내용 기반 — 점선 표시, 클릭해 확정)">AI 화자 추정</button>
+         <button class="b-ghost" id="vClear" style="padding:4px 9px;font-size:11.5px">지우기</button>
+         <span class="mini" title="발언 언어를 자동 감지해 인식을 전환하고, 외국어 발언은 한국어 번역이 회의록에 등록됩니다"
+               style="border:1px solid var(--line);border-radius:9px;padding:3px 8px;background:var(--mist);font-size:11px">언어 자동 감지·번역</span>
+       </div>
        <div style="display:flex;gap:6px;margin-top:8px">
          <input id="vTypeInput" placeholder="여기에 적으면 바로 기록됩니다 · Enter"
                 style="flex:1;min-width:0;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px">
          <button class="b-mint" id="vTypeAdd" style="flex:0 0 auto">추가</button>
        </div>
-       <div class="mini" style="margin-top:6px">말소리가 안 잡혀도 여기에 적으시면 그대로 회의록 재료가 됩니다.</div>
+       <div class="mini" style="margin-top:6px;line-height:1.6">
+         마이크 입력은 선택한 발화자로 기록됩니다. 말소리가 안 잡혀도 여기에 적으시면 그대로 회의록 재료가 됩니다.<br>
+         <span style="color:var(--soft)">음성은 저장되지 않고 텍스트로만 변환됩니다. 회의 종료 시 녹취 원문은 자동 파기되고, 회의록과 정리된 스크립트만 남습니다.</span>
+       </div>
      </div>
    </div>
    <div class="mini" style="margin-top:10px;line-height:1.7">
@@ -4472,6 +4488,16 @@ function bindVideo(){
   const add=()=>{ const v=(ti&&ti.value||"").trim(); if(!v)return; addSegment(v,(state.user&&state.user.name)||"나"); ti.value=""; };
   if(ta) ta.onclick=add;
   if(ti) ti.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); add(); } });
+  // 녹취 조작 — 콘솔 탭과 같은 함수를 부릅니다 (두 화면이 한 상태를 봅니다)
+  MIC_BTNS.forEach(id=>{ const b=$(id); if(b) b.onclick=()=>listening?stopMic():startMic(); });
+  fillMicWho(); micBtnState(!!listening);
+  const kk=$("vKakao"); if(kk && typeof openKakaoImport==="function") kk.onclick=openKakaoImport;
+  const gs=$("vGuess"); if(gs && typeof guessSpeakers==="function") gs.onclick=guessSpeakers;
+  const cl=$("vClear"); if(cl) cl.onclick=()=>{
+    if(!confirm("녹취를 모두 지울까요? (이미 정리된 문단은 실시간 회의록에 남습니다)")) return;
+    state.segments=[]; if(state.liveDoc)state.liveDoc.cursor=0;
+    renderTranscript(); renderLiveDoc&&renderLiveDoc(); refreshBadges(); scheduleSave();
+  };
   renderVideoLive();
 }
 // 이메일 초대 (초대장 생성 + 메일앱 열기)
@@ -4593,7 +4619,7 @@ function consoleHTML(){
 function bindConsole(){
   renderTranscript();renderNotes();renderResearch();fillMicWho();renderLiveDoc();
   const chip=$("langChip"); if(chip&&autoLang!=="ko-KR")chip.textContent="자동 감지: "+micLangLabel(autoLang);
-  $("micBtn").onclick=()=>listening?stopMic():startMic();
+  MIC_BTNS.forEach(id=>{const b=$(id); if(b) b.onclick=()=>listening?stopMic():startMic();});
   if($("guessBtn"))$("guessBtn").onclick=guessSpeakers;
   if($("kakaoBtn"))$("kakaoBtn").onclick=openKakaoImport;
   if($("redoLive"))$("redoLive").onclick=redoLiveDoc;
@@ -4663,7 +4689,7 @@ function bindConsole(){
     mn.addEventListener("drop",e=>{e.preventDefault();mn.style.borderColor="";readNoteFile(e.dataTransfer.files[0]);});
   }
   $("autoSync").onchange=e=>{if(e.target.checked){autoTimer=setInterval(()=>{if(state.segments.length)syncNotes(true);},30000);toast("30초마다 자동 반영 (실패 시 조용히 건너뜀)");}else clearInterval(autoTimer);};
-  if(listening){$("micBtn").classList.add("on");$("micBtn").textContent="⏹ 녹취 중지";}
+  if(listening){micBtnState(true);}
 }
 function renderTranscript(interim){const box=$("transcript");
   // (v148) 화상회의 탭에는 #transcript 가 없습니다. 예전처럼 여기서 끝내 버리면
@@ -4965,21 +4991,44 @@ async function _translateSegment(seg){
   renderTranscript(); renderLiveDoc(); scheduleSave();
   maybeCondense();
 }
-function micWhoVal(){ const s=$("micWho"); return (s&&s.value)||((state.user&&state.user.name)||"참석자"); }
+// (v151) 녹취 기능은 콘솔 탭과 화상회의 탭 두 곳에 같은 모습으로 있습니다.
+//   둘이 따로 놀면 「어느 쪽에서 눌렀는지」에 따라 결과가 달라집니다 — 한 쌍으로 다룹니다.
+const MIC_SELECTS=["micWho","vMicWho"], MIC_BTNS=["micBtn","vMicBtn"], MIC_HINTS=["micHint","vMicHint"];
+let MIC_WHO="";
+function micWhoVal(){
+  for(const id of MIC_SELECTS){ const s=$(id); if(s&&s.value) return s.value; }
+  return MIC_WHO||((state.user&&state.user.name)||"참석자");
+}
+function setMicWho(v){
+  MIC_WHO=v||"";
+  MIC_SELECTS.forEach(id=>{ const s=$(id); if(s&&s.value!==MIC_WHO) s.value=MIC_WHO; });
+}
 function fillMicWho(){
-  const s=$("micWho"); if(!s) return;
-  const prev=s.value;
   // 이 회의의 참석자 명단만 — 명단이 비어 있으면 로그인 사용자
   const names=[]; (state.attendees||[]).forEach(a=>{ if(a.name&&names.indexOf(a.name)<0) names.push(a.name); });
   const me=(state.user&&state.user.name)||"";
   if(!names.length&&me) names.push(me);
-  s.innerHTML=names.map(n=>`<option${n===prev?" selected":""}>${esc(n)}</option>`).join("");
-  if(!prev||names.indexOf(prev)<0){ s.value=(me&&names.indexOf(me)>=0)?me:(names[0]||""); }   // 기본값: 로그인한 나
+  let prev=MIC_WHO;
+  MIC_SELECTS.forEach(id=>{ const s=$(id); if(s&&s.value) prev=prev||s.value; });
+  if(!prev||names.indexOf(prev)<0) prev=(me&&names.indexOf(me)>=0)?me:(names[0]||"");
+  MIC_WHO=prev;
+  MIC_SELECTS.forEach(id=>{
+    const s=$(id); if(!s) return;
+    s.innerHTML=names.map(n=>`<option${n===prev?" selected":""}>${esc(n)}</option>`).join("");
+    s.value=prev;
+    s.onchange=()=>setMicWho(s.value);
+  });
 }
-function micStatus(msg,bad){const el=$("micHint");if(el){el.textContent=msg;el.style.color=bad?"#C24A4A":"";}}
+function micStatus(msg,bad){ MIC_HINTS.forEach(id=>{ const el=$(id); if(el){ el.textContent=msg; el.style.color=bad?"#C24A4A":""; } }); }
+// 녹취 단추 두 개의 겉모습을 함께 맞춥니다
+function micBtnState(on){
+  MIC_BTNS.forEach(id=>{ const b=$(id); if(!b) return;
+    if(on){ b.classList.add("on"); b.textContent="⏹ 녹취 중지"; }
+    else  { b.classList.remove("on"); b.textContent="녹취 시작"; } });
+}
 const MIC_BLOCK_HELP="마이크 권한이 차단되어 있습니다 — 주소창 왼쪽 자물쇠(사이트 정보) → 마이크 [허용] 후 새로고침해 주세요";
 function initRecog(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){micStatus("이 브라우저는 음성인식을 지원하지 않습니다 — Chrome·Edge에서 열거나, 타이핑·휴대폰 키보드의 마이크(받아쓰기)로 입력해 주세요",true);const b=$("micBtn");if(b)b.disabled=true;return;}
+  if(!SR){micStatus("이 브라우저는 음성인식을 지원하지 않습니다 — Chrome·Edge에서 열거나, 타이핑·휴대폰 키보드의 마이크(받아쓰기)로 입력해 주세요",true);MIC_BTNS.forEach(id=>{const b=$(id);if(b)b.disabled=true;});return;}
   recog=new SR();recog.lang=micLangVal();recog.continuous=true;recog.interimResults=true;
   recog.onstart=()=>micStatus("듣는 중… 말씀하시면 텍스트로 기록됩니다");
   recog.onresult=e=>{let it="";for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];
@@ -5008,11 +5057,11 @@ async function startMic(){
   // ② 음성인식 시작
   listening=true;
   try{recog.start();}catch(_){/* 이미 시작된 경우 무시 */}
-  const b=$("micBtn");if(b){b.classList.add("on");b.textContent="⏹ 녹취 중지";}
+  micBtnState(true);
   setPill("live","녹취 중"); micStatus("듣는 중…");
 }
 function stopMic(){listening=false;if(recog){try{recog.stop();}catch(_){}}
-  const b=$("micBtn");if(b){b.classList.remove("on");b.textContent="녹취 시작";}
+  micBtnState(false);
   micStatus("브라우저 음성인식 · "+micLangLabel(micLangVal()));
   if(!(state.meeting.started&&!state.meeting.ended))setPill("idle","회의 대기");}
 

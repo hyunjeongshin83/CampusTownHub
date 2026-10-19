@@ -42,7 +42,9 @@ with sync_playwright() as p:
       document.body.insertAdjacentHTML('beforeend',
         '<div id="vFrame"></div><div id="vAfter"></div>'
         +'<div id="vTranscript"></div><span id="vSegCount"></span><span id="vMicState"></span>'
-        +'<input id="vTypeInput"><button id="vTypeAdd"></button>');
+        +'<input id="vTypeInput"><button id="vTypeAdd"></button>'
+        +'<button id="vMicBtn"></button><select id="vMicWho"></select><span id="vMicHint"></span>'
+        +'<button id="vKakao"></button><button id="vGuess"></button><button id="vClear"></button>');
 
       await startJitsi();
       log.listeners=Object.keys(H).sort().join(",");
@@ -90,6 +92,33 @@ with sync_playwright() as p:
     if not live.get("shown"): fails.append("적은 내용이 오른쪽 칸에 안 보입니다")
     if live.get("count") != "2": fails.append(f"기록 건수가 안 맞습니다 ({live.get('count')})")
 
+    # 녹취 조작이 화상회의 탭에도 있는가 (콘솔 탭과 같은 상태를 보는가)
+    mic = pg.evaluate("""()=>{
+      const out={};
+      out.btn   = !!document.getElementById('vMicBtn');
+      out.who   = !!document.getElementById('vMicWho');
+      out.kakao = !!document.getElementById('vKakao');
+      out.guess = !!document.getElementById('vGuess');
+      out.clear = !!document.getElementById('vClear');
+      if(!out.who) return out;
+      state.attendees=[{name:'박지현'},{name:'방준석 교수님'},{name:'신현정'}];
+      fillMicWho();
+      const s=document.getElementById('vMicWho');
+      out.names = [...s.options].map(o=>o.text).join("/");
+      s.value='방준석 교수님'; setMicWho(s.value);
+      out.picked = micWhoVal();                 // 고른 발화자가 녹취에 쓰이는가
+      micBtnState(true);  out.on  = document.getElementById('vMicBtn').textContent;
+      micBtnState(false); out.off = document.getElementById('vMicBtn').textContent;
+      return out;
+    }""")
+    print("녹취 조작:", mic)
+    for k, label in [("btn","[녹취 시작]"),("who","발화자 고르기"),("kakao","[카카오톡 가져오기]"),
+                     ("guess","[AI 화자 추정]"),("clear","[지우기]")]:
+        if not mic.get(k): fails.append(f"화상회의 탭에 {label} 가 없습니다")
+    if "방준석 교수님" not in (mic.get("names") or ""): fails.append("참석자가 발화자 목록에 안 들어갑니다")
+    if mic.get("picked") != "방준석 교수님": fails.append(f"고른 발화자가 녹취에 안 쓰입니다 ({mic.get('picked')})")
+    if "중지" not in (mic.get("on") or ""): fails.append("녹취 중에 단추가 [중지]로 안 바뀝니다")
+
     # 회의록이 등록된 뒤 안내 — 파일 저장·보고서 단추까지
     done = pg.evaluate(r"""()=>{
       showMinutesDone({id:'rx',title:'화상 테스트',dt:'2026.10.19',purged:{count:2}});
@@ -124,6 +153,8 @@ lines += ["<details><summary>본 것</summary>","",
           "- 들어온 사람이 참석자에 더해지는가 (중복 없이)",
           "- 나가면 [회의록 만들기] 가 뜨는가",
           "- 화상 화면 옆에서 실시간으로 기록되는가",
+          "- 녹취 시작·발화자 고르기·화자 추정·카카오톡 가져오기·지우기가 있는가",
+          "- 고른 발화자가 실제 녹취에 쓰이는가",
           "- 회의록이 등록된 뒤 [파일로 저장]·[AI 보고서]가 나오는가",
           "- Jitsi API 가 막혀도 화상회의는 뜨는가",
           "","</details>"]
