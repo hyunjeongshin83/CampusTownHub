@@ -628,7 +628,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=145, BUILD_DATE="2026-10-19";
+const BUILD=146, BUILD_DATE="2026-10-19";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -5601,6 +5601,7 @@ function sessionRow(r,pvPrefix){
         <button class="b-deep" onclick="exportRecord('${r.id}')">MD</button>
         ${r.report
           ? `<button class="b-ghost" disabled title="이미 AI 보고서가 작성되어 있습니다 (${esc(r.reportAt||"")}) — 다시 만들려면 [보고서 보기] 안의 [재생성]">AI 보고서 ✓</button>
+             <button class="b-ghost" onclick="reportDigestBox('${r.id}','dg${pvPrefix}${r.id}')" title="보고서의 한눈에·개요만 펼쳐 봅니다">요약 보기</button>
              <button class="b-mint" onclick="aiReportRecord('${r.id}')" title="작성된 보고서를 엽니다 (인쇄·PDF 저장·MD 복사 가능)">보고서 보기</button>`
           : `<button class="b-mint" onclick="aiReportRecord('${r.id}')" title="이 회차를 구조화 보고서(한눈에→큰 그림→서비스→데이터→법률→사업화→다음 할 일)로 정리합니다">AI 보고서</button>`}
         ${r.regReport
@@ -5611,9 +5612,27 @@ function sessionRow(r,pvPrefix){
         <button class="b-ghost" style="padding:4px 10px;font-size:12px;color:#C24A4A" onclick="deleteRecord('${r.id}')" title="이 회차 기록을 삭제합니다">삭제</button>`:""}
       </div>
     </div>
+    <div id="dg${pvPrefix}${r.id}"></div>
     <div id="${pvPrefix}${r.id}"></div>
   </div>`;
 }
+// 보고서 축약본을 그 자리에서 폈다 접습니다 — 미리보기와 같은 방식입니다
+function reportDigestBox(id,boxId){
+  const r=(state.records||[]).find(x=>x.id===id); if(!r||!r.report) return;
+  const box=$(boxId); if(!box) return;
+  if(box.innerHTML){ box.innerHTML=""; return; }
+  box.innerHTML=`<div style="margin-top:10px;background:var(--mist);border:1px solid var(--line);
+    border-left:3px solid var(--mint,#12BDB0);border-radius:0 12px 12px 0;padding:12px 16px;
+    max-height:360px;overflow-y:auto;font-size:13px;color:var(--ink)">
+      <div class="mini" style="margin-bottom:6px">AI 보고서 요약 · ${esc(r.reportAt||"")}</div>
+      ${mdToHtml(reportDigest(r.report))}
+      <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:10px">
+        <button class="b-mint" onclick="aiReportRecord('${id}')">전체 보고서</button>
+        <button class="b-ghost" onclick="reportDigestBox('${id}','${boxId}')">접기</button>
+      </div>
+    </div>`;
+}
+window.reportDigestBox=reportDigestBox;
 function renderArchive(){const box=$("archive");if(!box)return;
   const groups=groupRecords(true);                            // 이 회의의 회차만
   box.innerHTML=groups.length?groups.map(g=>`
@@ -5633,9 +5652,12 @@ function previewRecord(id,boxId){
   const box=$(bid); if(!box) return;
   if(box.innerHTML){ box.innerHTML=""; return; }   // 토글
   let md=""; try{ md=recordToMD(r); }catch(e){ md="(미리보기 생성 오류: "+e.message+")\n\n새로고침(Ctrl+Shift+R) 후 다시 시도해 주세요."; }
-  box.innerHTML=`<div style="margin-top:12px;background:var(--mist);border-radius:12px;padding:14px 16px;
-    max-height:420px;overflow-y:auto;font-size:13px;line-height:1.7;color:var(--gray);white-space:pre-wrap;
-    border:1px solid var(--line)">${esc(md)}</div>
+  // (v146) 예전에는 마크다운 원문을 글자 그대로 보여줬습니다 — 표를 쓰면 | 기호가 그대로 보였습니다.
+  //   보고서 창과 같은 서식으로 그립니다. <details> 는 그냥 제목으로 풀어 둡니다.
+  const shown=md.replace(/<details>\s*<summary>([^<]*)<\/summary>/g,"\n### $1\n").replace(/<\/details>/g,"");
+  box.innerHTML=`<div style="margin-top:12px;background:var(--mist);border-radius:12px;padding:14px 18px;
+    max-height:460px;overflow-y:auto;font-size:13px;line-height:1.7;color:var(--ink);
+    border:1px solid var(--line)">${mdToHtml(shown)}</div>
     <div style="display:flex;gap:7px;justify-content:flex-end;margin-top:8px">
       <button class="b-ghost" onclick="copyRecord('${id}')">본문 복사</button>
       <button class="b-ghost" onclick="previewRecord('${id}','${bid}')">닫기</button>
@@ -5767,6 +5789,26 @@ function moodLine(r){
 // 보고서 본문에서 「## 개요」 아래 첫 문장만 꺼냅니다 (표·제목·빈 줄은 건너뜀)
 // 창·인쇄 페이지는 이미 제목을 달고 있으므로 본문의 첫 「# 제목」 줄은 뺍니다
 function reportBody(md){ return String(md||"").replace(/^\s*#\s+[^\n]*\n+/, ""); }
+// 보고서의 「한눈에」 표와 「개요」만 떼어 냅니다 — 목록에서 접었다 펴는 축약본
+function reportDigest(md){
+  const src=String(md||"");
+  const pick=(head)=>{
+    const re=new RegExp("^##\\s*"+head+"\\s*$","m");
+    const m=src.match(re); if(!m) return "";
+    const from=m.index+m[0].length;
+    const next=src.slice(from).search(/^##\s+/m);
+    return src.slice(from, next<0?undefined:from+next).trim();
+  };
+  const g=pick("한눈에"), o=pick("개요");
+  let out="";
+  if(g) out+=g+"\n\n";
+  if(o) out+=(g?"":"")+o+"\n";
+  if(!out){
+    // 옛 보고서는 「한눈에」가 없습니다 — 맨 앞 15줄로 대신합니다
+    out=src.replace(/^\s*#\s+[^\n]*\n+/,"").split("\n").slice(0,15).join("\n");
+  }
+  return out.trim();
+}
 function reportSummary(md){
   const lines=String(md||"").split("\n");
   const at=lines.findIndex(l=>/^##\s*개요/.test(l.trim()));

@@ -32,7 +32,23 @@ with sync_playwright() as p:
     if names.get("AI 보고서") is not False: fails.append("보고서 없는 회차의 [AI 보고서] 가 꺼져 있습니다")
     if names.get("AI 보고서 ✓") is not True: fails.append("보고서 있는 회차의 [AI 보고서 ✓] 가 안 꺼졌습니다")
     if "보고서 보기" not in names: fails.append("[보고서 보기] 가 없습니다 — 열 길이 없습니다")
+    if "요약 보기" not in names: fails.append("[요약 보기] 가 없습니다 — 목록에서 축약본을 못 봅니다")
     if names.get("규제 리포트 ✓") is not True: fails.append("규제 리포트가 있는데 단추가 안 꺼졌습니다")
+    # 축약 상자가 실제로 펴지고 「한눈에」 표가 그려지는지
+    dg = pg.evaluate("""()=>{
+      state.records=[{id:'B',title:'회의 B',dt:'2026.10.19',attendees:[],
+        report:'# 제목\\n\\n## 한눈에\\n\\n| | |\\n|---|---|\\n| 결정된 방향 | 한 줄 |\\n\\n## 개요\\n개요 문장입니다.',
+        reportAt:'10/19'}];
+      try{ reportDigestBox('B','dgpv_B'); }catch(e){ return 'ERR:'+e.message; }
+      const d=document.getElementById('dgpv_B');
+      return d ? {len:(d.innerText||'').length, table:d.querySelectorAll('table').length} : null;
+    }""")
+    print("축약 상자:", dg)
+    if not isinstance(dg, dict): fails.append("축약 상자가 안 열립니다: "+str(dg))
+    else:
+        if dg["table"] < 1: fails.append("축약 상자에 「한눈에」 표가 없습니다")
+        if dg["len"] < 20: fails.append("축약 상자가 비어 있습니다")
+
     if errs: fails.append("스크립트 오류: "+errs[0])
     b.close()
 import datetime
@@ -43,6 +59,7 @@ lines += ["<details><summary>본 것</summary>","",
           "- 보고서 없는 회차: [AI 보고서] 켜짐",
           "- 보고서 있는 회차: [AI 보고서 ✓] 꺼짐 · [보고서 보기] 켜짐",
           "- 규제 리포트도 같은 방식",
+          "- [요약 보기]로 「한눈에」 표가 그 자리에서 펴지는가",
           "","</details>"]
 open("buttons-report.md","w",encoding="utf-8").write("\n".join(lines))
 print(); print("\n".join(lines))
