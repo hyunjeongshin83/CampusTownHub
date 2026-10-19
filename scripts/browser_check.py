@@ -77,6 +77,8 @@ lines = [f"### 브라우저 점검 {kst:%Y-%m-%d %H:%M} KST", ""]
 lines += (["**확인이 필요합니다**", ""] + [f"- {x}" for x in problems] + [""]) if problems else ["이상 없음", ""]
 lines += ["<details><summary>점검 내역</summary>", ""] + [f"- {n}" for n in notes] + ["", "</details>"]
 open("browser-report.md", "w", encoding="utf-8").write("\n".join(lines))
-with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-    f.write("bstatus=" + ("ok" if not problems else "ng") + "\n")
 print("\n".join(lines))
+# 손으로 돌릴 때는 GITHUB_OUTPUT 이 없습니다 — 그때 죽지 않게 (리포트는 위에서 이미 썼습니다)
+if os.environ.get("GITHUB_OUTPUT"):
+    with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+        f.write("bstatus=" + ("ok" if not problems else "ng") + "\n")
