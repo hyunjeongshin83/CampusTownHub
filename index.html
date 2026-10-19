@@ -631,7 +631,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=148, BUILD_DATE="2026-10-19";
+const BUILD=149, BUILD_DATE="2026-10-19";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -1279,7 +1279,10 @@ async function callViaProxy(system,user,maxTokens,opts){
   const cached=localStorage.getItem("medit:proxyfn");
   const names=cached?[cached,...AI_PROXY_NAMES.filter(n=>n!==cached)]:AI_PROXY_NAMES;
   const fails=[];
-  const timeout=opts.timeout||(opts.search?150000:60000);   // 검색 150초, 일반 60초 — 무한 대기 방지
+  // (v149) 긴 보고서는 60초로 모자랍니다. 토큰이 많을수록 더 기다립니다.
+  //   2026-10-19 「보고서 생성 실패/무응답」의 원인이 여기였습니다 — 3,800토큰짜리 구조화
+  //   보고서가 60초를 넘겨 AbortError 가 났고, 화면에는 이유 없이 실패만 떴습니다.
+  const timeout=opts.timeout||(opts.search?180000:Math.max(60000, Math.min(150000, (maxTokens||1000)*40)));
   for(const fn of names){
     const ctrl=new AbortController();
     const tm=setTimeout(()=>ctrl.abort(),timeout);
@@ -1298,7 +1301,13 @@ async function callViaProxy(system,user,maxTokens,opts){
       localStorage.setItem("medit:proxyfn",fn);                          // 작동한 이름 기억
       proxyDownUntil=0;
       return d.text||"";
-    }catch(e){ fails.push(fn+": "+(e.name==="AbortError"?"응답 시간 초과("+Math.round(timeout/1000)+"초)":(e.message||"연결 실패"))); }
+    }catch(e){
+      const aborted = e.name==="AbortError";
+      fails.push(fn+": "+(aborted?"응답 시간 초과("+Math.round(timeout/1000)+"초)":(e.message||"연결 실패")));
+      // (v149) 세 프록시는 같은 열쇠·같은 서버를 씁니다. 하나가 시간 초과면 나머지도 같습니다 —
+      //   세 번 기다리면 사람은 10분을 보고 「무응답」이라고 느낍니다. 한 번에 끝냅니다.
+      if(aborted){ clearTimeout(tm); break; }
+    }
     finally{ clearTimeout(tm); }
   }
   proxyDownUntil=Date.now()+45000;
@@ -5606,7 +5615,10 @@ async function aiReportRecord(id){
     r.notes?("[회의록 요약 JSON]\n"+JSON.stringify(r.notes)):""
   ].filter(Boolean).join("\n\n").slice(0,45000);
   if(!src){ toast("정리할 내용이 없는 회차입니다"); return; }
-  reportBusy=true; toast("AI가 구조화 보고서를 작성하는 중… (20~60초)");
+  reportBusy=true;
+  toast("AI가 보고서를 쓰는 중… 길면 2분까지 걸립니다 (창을 닫지 마세요)");
+  // 잠잠해 보이면 멈춘 줄 아십니다 — 15초마다 살아 있다고 알립니다
+  let _t=0; const _beat=setInterval(()=>{ _t+=15; try{ toast("보고서 작성 중… "+_t+"초 경과"); }catch(e){} }, 15000);
   try{
     // (v144) 읽기 쉬운 보고서 — 위에서 아래로 「무엇이 정해졌나 → 왜 → 무엇을 할까」 순서.
     //   예전 지시는 표를 금지하고 6개 절을 목록으로만 채우게 해서, 길어지면 글자 벽이 됐습니다.
@@ -5652,14 +5664,36 @@ async function aiReportRecord(id){
 "## 더 알아볼 것",
 "회의에서 답이 안 난 질문만 목록으로. 없으면 이 절은 생략."
 ].join("\n");
-    let md=await callClaude(sys,"회의: "+r.title+" ("+r.dt+")\n\n"+src,3800,{noPrompt:false});
+    // (v149) 긴 회의는 값싼 모델로 먼저 줄입니다. 한 번에 밀어 넣으면 느려져 시간 초과가 납니다.
+    //   줄이는 단계가 실패해도 원문으로 그냥 진행합니다 — 보고서를 못 만드는 것보다 낫습니다.
+    let body=src;
+    if(src.length>12000){
+      try{
+        toast("회의가 길어 먼저 요약합니다… ("+Math.round(src.length/1000)+"천 자)");
+        const 압축=await callClaude(
+          "회의 녹취·메모를 줄이는 담당. 사실만 남기고 중복·군말을 지운다. 발언 순서와 고유명사(기관·법령·제품·사람)는 그대로 둔다. "+
+          "숫자·날짜·제약 조건은 하나도 빼지 않는다. 목록으로. 순수 텍스트.",
+          src, 3000, {cheap:true, noPrompt:true, timeout:120000});
+        if(압축 && 압축.trim().length>400) body=압축.trim();
+      }catch(e){ console.warn("1차 요약 실패 — 원문으로 진행:", e.message||e); }
+    }
+    let md=await callClaude(sys,"회의: "+r.title+" ("+r.dt+")\n\n"+body,3800,{noPrompt:false,timeout:155000});
     md=String(md||"").replace(/```(markdown)?/g,"").trim();
     if(!md) throw new Error("빈 응답");
     r.report=md; r.reportAt=new Date().toLocaleString('ko-KR');
     saveRecords(); renderRecords&&renderRecords(); renderArchive&&renderArchive();
     showReport(id);
-  }catch(e){ toast("보고서 생성 실패: "+(e.message||e)); }
-  finally{ reportBusy=false; }
+  }catch(e){
+    const why=String(e&&e.message||e);
+    let 안내="보고서 생성 실패 — "+why;
+    if(/시간 초과|Abort/i.test(why))      안내="보고서가 시간 안에 안 왔습니다 — 회의가 길면 한 번 더 눌러 주세요 (이어서 받습니다)";
+    else if(/로그인/.test(why))           안내="서버 로그인이 필요합니다 — 화면 위 [서버 로그인] 뒤 다시 눌러 주세요";
+    else if(/429|rate|overload/i.test(why)) 안내="AI 서버가 잠시 붐빕니다 — 1~2분 뒤 다시 눌러 주세요";
+    else if(/빈 응답/.test(why))          안내="AI 가 빈 답을 보냈습니다 — 한 번 더 눌러 주세요";
+    toast(안내);
+    console.warn("AI 보고서 실패:", why);
+  }
+  finally{ reportBusy=false; clearInterval(_beat); }
 }
 function showReport(id){
   const r=(state.records||[]).find(x=>x.id===id); if(!r||!r.report)return;
