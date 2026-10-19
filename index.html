@@ -628,7 +628,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=144, BUILD_DATE="2026-10-19";
+const BUILD=145, BUILD_DATE="2026-10-19";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -5599,8 +5599,14 @@ function sessionRow(r,pvPrefix){
         <button class="b-mint" onclick="previewRecord('${r.id}','${pvPrefix}${r.id}')">미리보기</button>
         <button class="b-ghost" onclick="emailRecordGmail('${r.id}')" title="이 회차 회의록을 Gmail 작성 창으로 엽니다 (수정해 보내려면 이메일 탭 → 회의록)">Gmail</button>
         <button class="b-deep" onclick="exportRecord('${r.id}')">MD</button>
-        <button class="b-mint" onclick="aiReportRecord('${r.id}')" title="이 회차를 구조화 보고서(큰 그림→서비스→데이터→법률→사업화→후속 과제)로 정리해 HTML 페이지로 남깁니다">${r.report?"보고서 보기":"AI 보고서"}</button>
-        <button class="b-ghost" onclick="aiRegReport('${r.id}')" style="color:#7a4c00" title="이 회차 내용에서 규제(약사법·의료법·개인정보보호법 등) 관련 항목을 AI가 찾아 근거 법령과 대응 방향으로 정리합니다">규제 리포트</button>
+        ${r.report
+          ? `<button class="b-ghost" disabled title="이미 AI 보고서가 작성되어 있습니다 (${esc(r.reportAt||"")}) — 다시 만들려면 [보고서 보기] 안의 [재생성]">AI 보고서 ✓</button>
+             <button class="b-mint" onclick="aiReportRecord('${r.id}')" title="작성된 보고서를 엽니다 (인쇄·PDF 저장·MD 복사 가능)">보고서 보기</button>`
+          : `<button class="b-mint" onclick="aiReportRecord('${r.id}')" title="이 회차를 구조화 보고서(한눈에→큰 그림→서비스→데이터→법률→사업화→다음 할 일)로 정리합니다">AI 보고서</button>`}
+        ${r.regReport
+          ? `<button class="b-ghost" disabled title="이미 규제 리포트가 작성되어 있습니다">규제 리포트 ✓</button>
+             <button class="b-ghost" onclick="aiRegReport('${r.id}')" style="color:#7a4c00" title="작성된 규제 리포트를 엽니다">리포트 보기</button>`
+          : `<button class="b-ghost" onclick="aiRegReport('${r.id}')" style="color:#7a4c00" title="이 회차 내용에서 규제(약사법·의료법·개인정보보호법 등) 관련 항목을 AI가 찾아 근거 법령과 대응 방향으로 정리합니다">규제 리포트</button>`}
         ${canEdit?`<button class="b-ghost" style="padding:4px 10px;font-size:12px" onclick="openRecordEditor('${r.id}')" title="이 회차의 제목·요약·회의록·스크립트를 직접 수정합니다">수정</button>
         <button class="b-ghost" style="padding:4px 10px;font-size:12px;color:#C24A4A" onclick="deleteRecord('${r.id}')" title="이 회차 기록을 삭제합니다">삭제</button>`:""}
       </div>
