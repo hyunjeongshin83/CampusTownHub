@@ -628,7 +628,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=143, BUILD_DATE="2026-10-19";
+const BUILD=144, BUILD_DATE="2026-10-19";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -2404,13 +2404,88 @@ async function viewFile(name){
 }
 // ---------- 앱 내 텍스트·MD 미리보기 ----------
 function mdToHtml(text){
-  // 간단 표시용 — 제목·목록만 가볍게 꾸미고 나머지는 원문 그대로 (esc 후 처리라 안전)
-  return esc(text).split("\n").map(line=>{
-    const m=line.match(/^(#{1,4})\s+(.*)$/);
-    if(m) return '<div style="font-weight:800;color:var(--deep);font-size:'+(16-m[1].length)+'px;margin:10px 0 4px">'+m[2]+'</div>';
-    if(/^(-|\*|·)\s+/.test(line)) return '<div style="padding-left:14px">· '+line.replace(/^(-|\*|·)\s+/,"")+'</div>';
-    return line?('<div>'+line+'</div>'):'<div style="height:8px"></div>';
-  }).join("");
+  // (v144) 보고서를 읽기 쉽게 — 표·굵게·중첩 목록·강조 상자·우선순위 칩까지 그립니다.
+  //   예전에는 제목과 「· 」만 그려서, 보고서가 길면 글자 벽이 됐습니다.
+  //   esc() 를 먼저 걸고 그 뒤에 서식을 입히므로 남의 글이 섞여도 안전합니다.
+  const PRI={ "최우선":"#C24A4A", "높음":"#C24A4A", "긴급":"#C24A4A",
+              "보통":"#8a6d00", "중간":"#8a6d00",
+              "낮음":"#5B7F7A", "참고":"#5B7F7A" };
+  const inline = s => {
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<b style="color:var(--deep)">$1</b>')
+         .replace(/`([^`]+)`/g, '<code style="background:rgba(18,189,176,.10);padding:1px 5px;border-radius:5px;font-size:.93em">$1</code>');
+    // [최우선] 같은 표시는 눈에 띄는 알약으로
+    return s.replace(/\[([^\]]{1,6})\]/g, (m0,w)=>{
+      const c=PRI[w]; if(!c) return m0;
+      return '<span style="display:inline-block;background:'+c+';color:#fff;border-radius:999px;'
+           + 'padding:1px 9px;font-size:11px;font-weight:800;margin-right:5px;vertical-align:1px">'+w+'</span>';
+    });
+  };
+  const lines = esc(text).replace(/\r/g,"").split("\n");
+  const out=[]; let i=0;
+  const TD='padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top';
+
+  while(i<lines.length){
+    const raw=lines[i], line=raw.trim();
+
+    // 가로줄
+    if(/^(-{3,}|_{3,}|\*{3,})$/.test(line)){
+      out.push('<div style="height:1px;background:var(--line);margin:18px 0"></div>'); i++; continue; }
+
+    // 제목 — 큰 제목에는 밑줄을 둬서 구획이 눈에 보이게
+    const h=line.match(/^(#{1,4})\s+(.*)$/);
+    if(h){
+      const lv=h[1].length, size=[20,16.5,14.5,13.5][lv-1];
+      const top=lv<=2?18:13;
+      const bd=lv<=2?';border-bottom:1px solid var(--line);padding-bottom:5px':'';
+      out.push('<div style="font-weight:800;color:var(--deep);font-size:'+size+'px;margin:'+top+'px 0 7px'+bd+'">'+inline(h[2])+'</div>');
+      i++; continue; }
+
+    // 표 — | 머리 | 칸 |  다음 줄이 |---|
+    if(/^\|.*\|$/.test(line) && i+1<lines.length && /^\|[\s:|-]+\|$/.test(lines[i+1].trim())){
+      const cell=s=>s.replace(/^\||\|$/g,"").split("|").map(x=>x.trim());
+      const head=cell(line); i+=2;
+      const rows=[];
+      while(i<lines.length && /^\|.*\|$/.test(lines[i].trim())){ rows.push(cell(lines[i].trim())); i++; }
+      // 머리글이 비어 있는 표(| | |)는 「항목 — 설명」 꼴이므로 머리줄을 그리지 않고
+      // 왼쪽 칸만 굵게·좁게 둡니다. 비워 둔 띠가 보이면 더 지저분합니다.
+      const noHead = head.every(c=>!c);
+      const two = head.length===2;
+      out.push('<div style="overflow-x:auto;margin:10px 0 14px"><table style="border-collapse:collapse;width:100%;font-size:12.5px">'
+        +(noHead?'':'<thead><tr>'+head.map(c=>'<th style="'+TD+';background:rgba(18,189,176,.09);color:var(--deep);'
+            +'font-weight:800;text-align:left;white-space:nowrap">'+inline(c)+'</th>').join("")+'</tr></thead>')
+        +'<tbody>'
+        +rows.map(rw=>'<tr>'+rw.map((c,ci)=>'<td style="'+TD
+            +((noHead&&two&&ci===0)?';width:30%;font-weight:800;color:var(--deep)':'')
+            +'">'+inline(c)+'</td>').join("")+'</tr>').join("")
+        +'</tbody></table></div>');
+      continue; }
+
+    // 강조 상자 (> 로 시작하는 줄들)
+    if(/^&gt;\s?/.test(line)){
+      const buf=[];
+      while(i<lines.length && /^\s*&gt;\s?/.test(lines[i])){ buf.push(lines[i].replace(/^\s*&gt;\s?/,"")); i++; }
+      out.push('<div style="border-left:3px solid var(--mint,#12BDB0);background:rgba(18,189,176,.07);'
+        +'padding:10px 14px;margin:10px 0;border-radius:0 9px 9px 0">'+buf.map(inline).join("<br>")+'</div>');
+      continue; }
+
+    // 목록 — 들여쓰기만큼 안으로 넣습니다 (두 단계까지)
+    if(/^(\s*)([-*·]|\d+\.)\s+/.test(raw)){
+      const items=[];
+      while(i<lines.length && /^(\s*)([-*·]|\d+\.)\s+/.test(lines[i])){
+        const m2=lines[i].match(/^(\s*)([-*·]|\d+\.)\s+([\s\S]*)$/);
+        items.push({depth:Math.min(2,Math.floor(m2[1].replace(/\t/g,"  ").length/2)),
+                    num:/\d/.test(m2[2])?m2[2]:"", text:m2[3]});
+        i++; }
+      out.push('<div style="margin:4px 0 10px">'+items.map(it=>
+        '<div style="display:flex;gap:7px;padding:2.5px 0 2.5px '+(it.depth*18)+'px;line-height:1.7">'
+        +'<span style="color:var(--mint,#12BDB0);flex:0 0 auto;font-weight:700">'+(it.num||"·")+'</span>'
+        +'<span style="flex:1">'+inline(it.text)+'</span></div>').join("")+'</div>');
+      continue; }
+
+    out.push(line?('<div style="margin:5px 0;line-height:1.8">'+inline(line)+'</div>'):'<div style="height:7px"></div>');
+    i++;
+  }
+  return out.join("");
 }
 async function openTextViewer(storedName){
   if(!sb){ toast("클라우드에 연결되지 않았습니다"); return; }
@@ -5331,11 +5406,50 @@ async function aiReportRecord(id){
   if(!src){ toast("정리할 내용이 없는 회차입니다"); return; }
   reportBusy=true; toast("AI가 구조화 보고서를 작성하는 중… (20~60초)");
   try{
-    const sys="회의 브레인스토밍·녹취를 구조화 보고서로 재편성하는 담당. 문체는 사실형 — 감정·인상·추측 표현 금지, 원문 아이디어는 하나도 누락하지 말 것. "+
-      "순수 마크다운만 출력(코드펜스 금지). 표는 쓰지 말고 목록 사용. 구조: "+
-      "# (보고서 제목)\n## 개요 (3문장 이내)\n## 0. 논의의 큰 그림 (합의된 방향·경계 원칙)\n## 1. 서비스·기능\n## 2. 데이터 (출처/모이는 곳/표준화의 벽/생성·정제)\n"+
-      "## 3. 법률 검토 (원문에 강조된 항목은 줄 앞에 [최우선] 표기)\n## 4. 사업화·제휴·정부과제\n## 5. 후속 과제 (각 줄: [우선순위] 항목 — 비고)\n"+
-      "관련 조항 표기는 '제○○조' 형식. 흩어진 제약 조건(예: 정제만·액제 제외)은 해당 항목 옆에 붙일 것.";
+    // (v144) 읽기 쉬운 보고서 — 위에서 아래로 「무엇이 정해졌나 → 왜 → 무엇을 할까」 순서.
+    //   예전 지시는 표를 금지하고 6개 절을 목록으로만 채우게 해서, 길어지면 글자 벽이 됐습니다.
+    const sys=[
+"회의 브레인스토밍·녹취를 읽기 쉬운 보고서로 재편성하는 담당.",
+"",
+"문체",
+"· 사실형. 감정·인상·추측 표현 금지. 원문 아이디어는 하나도 누락하지 말 것.",
+"· 한 항목은 한 줄. 두 줄이 넘으면 쪼갠다.",
+"· 절마다 맨 앞에 그 절을 한 문장으로 요약한 리드문을 둔다(굵게 하지 않음).",
+"· 전문용어는 처음 나올 때 괄호로 짧게 풀어 쓴다.",
+"",
+"형식",
+"· 순수 마크다운만. 코드펜스 금지.",
+"· 나란히 비교되는 것(항목·기관·데이터 출처·우선순위)은 표로. 그 외는 목록으로.",
+"· 중요한 낱말은 **굵게**. 한 줄에 두 개까지.",
+"· 반드시 짚어야 할 경계·제약은 > 인용 줄로 따로 뺀다.",
+"· 우선순위는 [최우선] [높음] [보통] [낮음] 중 하나를 줄 맨 앞에.",
+"· 관련 조항은 '제○○조' 형식. 흩어진 제약(예: 정제만·액제 제외)은 해당 항목 옆에 붙인다.",
+"",
+"구조 — 이 순서와 제목을 그대로",
+"# (보고서 제목)",
+"",
+"## 한눈에",
+"표 하나. 행은 3~5개. 왼쪽 칸은 「결정된 방향」「서비스의 핵심」「데이터의 벽」「법률 쟁점」「가장 급한 다음 일」 중에서 이 회의에 해당하는 것만.",
+"오른쪽 칸은 각 한 문장.",
+"",
+"## 개요",
+"3문장 이내.",
+"",
+"## 0. 논의의 큰 그림",
+"합의된 방향과 넘지 않기로 한 경계. 경계는 > 인용 줄로.",
+"",
+"## 1. 서비스·기능",
+"## 2. 데이터",
+"출처 / 모이는 곳 / 표준화의 벽 / 스스로 만들기 — 네 가지를 표로.",
+"## 3. 법률 검토",
+"쟁점 / 왜 걸리는가 / 확인할 곳 — 표로. 원문에서 강조된 항목은 [최우선].",
+"## 4. 사업화·제휴·정부과제",
+"## 5. 다음 할 일",
+"표로. 칸은 우선순위 / 할 일 / 왜 / 누가·어디.",
+"",
+"## 더 알아볼 것",
+"회의에서 답이 안 난 질문만 목록으로. 없으면 이 절은 생략."
+].join("\n");
     let md=await callClaude(sys,"회의: "+r.title+" ("+r.dt+")\n\n"+src,3800,{noPrompt:false});
     md=String(md||"").replace(/```(markdown)?/g,"").trim();
     if(!md) throw new Error("빈 응답");
@@ -5359,7 +5473,7 @@ function showReport(id){
       <button class="b-ghost" id="rpRedo">재생성</button>
       <button class="b-deep" id="rpClose">닫기</button>
     </div>
-    <div style="overflow:auto;background:#fff;padding:18px 24px;font-size:13px;line-height:1.75;color:var(--ink)">${annotateHTML(mdToHtml(r.report))}</div>
+    <div style="overflow:auto;background:#fff;padding:18px 24px;font-size:13px;line-height:1.75;color:var(--ink)">${annotateHTML(mdToHtml(reportBody(r.report)))}</div>
   </div>`;
   document.body.appendChild(modal);
   modal.onclick=e=>{if(e.target===modal)modal.remove();};
@@ -5372,16 +5486,34 @@ function openReportPage(id){
   const r=(state.records||[]).find(x=>x.id===id); if(!r||!r.report)return;
   const w=window.open("","_blank");
   if(!w){ toast("팝업이 차단되었습니다 — 허용 후 다시 시도해 주세요"); return; }
-  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>${esc(r.title)} — 보고서</title>
-  <style>body{font-family:'Pretendard','Malgun Gothic',sans-serif;max-width:820px;margin:0 auto;padding:36px 26px;color:#20312E;line-height:1.8;font-size:14px}
-  h1{font-size:22px;color:#0E5A52;border-bottom:2px solid #12BDB0;padding-bottom:8px} 
-  .meta{color:#6C7F7B;font-size:12.5px;margin-bottom:20px}
-  .noprint{position:fixed;top:12px;right:12px} .noprint button{background:#12BDB0;color:#fff;border:0;border-radius:9px;padding:9px 16px;font-weight:700;cursor:pointer;font-family:inherit}
-  @media print{.noprint{display:none}}</style></head><body>
+  // (v144) 인쇄·공유용 페이지 — 화면과 같은 서식(표·칩·강조 상자)으로 그립니다.
+  //   mdToHtml 이 var(--…) 색을 쓰므로 이 페이지에도 같은 변수를 정의해 둡니다.
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${esc(r.title)} — 보고서</title>
+  <style>
+  :root{--deep:#0E5A52;--mint:#12BDB0;--line:#DCE7E5;--ink:#20312E;--gray:#6C7F7B;--soft:#5B7F7A}
+  *{box-sizing:border-box}
+  body{font-family:'Pretendard','Malgun Gothic',sans-serif;max-width:860px;margin:0 auto;
+       padding:40px 28px 72px;color:var(--ink);line-height:1.8;font-size:14px;background:#fff}
+  h1{font-size:23px;color:var(--deep);border-bottom:2px solid var(--mint);padding-bottom:9px;margin:0 0 10px;line-height:1.35}
+  .meta{color:var(--gray);font-size:12.5px;margin-bottom:6px}
+  .by{display:inline-block;background:rgba(18,189,176,.14);color:var(--deep);border-radius:999px;
+      padding:2px 10px;font-size:11px;font-weight:800;margin-bottom:22px}
+  table{page-break-inside:avoid}
+  .noprint{position:fixed;top:14px;right:14px;display:flex;gap:8px}
+  .noprint button{background:var(--mint);color:#fff;border:0;border-radius:9px;padding:9px 16px;
+                  font-weight:700;cursor:pointer;font-family:inherit;font-size:13px}
+  .foot{margin-top:40px;padding-top:12px;border-top:1px solid var(--line);color:var(--gray);font-size:11.5px}
+  @media print{.noprint{display:none} body{padding:0;font-size:11.5pt} h1{font-size:18pt}}
+  @media (max-width:560px){body{padding:24px 16px 56px} .noprint{position:static;margin-bottom:16px}}
+  </style></head><body>
   <div class="noprint"><button onclick="window.print()">인쇄 · PDF 저장</button></div>
   <h1>${esc(r.title)}</h1>
-  <div class="meta">${esc(r.dt)}${r.place?" · "+esc(r.place):""} · 참석 ${(r.attendees||[]).length}명 · AI 보고서 (${esc(r.reportAt||"")}) — 캠퍼스타운 허브</div>
-  ${mdToHtml(r.report)}
+  <div class="meta">${esc(r.dt)}${r.place?" · "+esc(r.place):""} · 참석 ${(r.attendees||[]).length}명</div>
+  <div class="by">AI 보고서 · ${esc(r.reportAt||"")}</div>
+  ${mdToHtml(reportBody(r.report))}
+  <div class="foot">회의 기록을 AI가 재편성한 보고서입니다. 원문 회의록은 캠퍼스타운 허브의 해당 회차에 있습니다.</div>
   </body></html>`);
   w.document.close();
 }
@@ -5461,7 +5593,7 @@ function sessionRow(r,pvPrefix){
     <div style="display:flex;gap:10px;align-items:flex-start">
       <div style="flex:1;cursor:pointer" onclick="previewRecord('${r.id}','${pvPrefix}${r.id}')" title="이 회차 회의록 미리보기">
         <div style="font-size:13px;font-weight:700;color:var(--deep)"><span ${canEdit?`onclick="event.stopPropagation();editRecordDT('${r.id}')" style="cursor:pointer;border-bottom:1px dotted var(--gray)" title="클릭해 이 회차의 일시 수정"`:""}>${esc(r.dt)}</span> <span class="mini" style="font-weight:500">${r.place?` · ${esc(r.place)}`:""} · ${durLabel(r)}${(r.stats&&r.stats.segs>0)?` · 발언 ${r.stats.segs}건`:""} · 참석 ${(r.attendees||[]).length}명</span></div>
-        <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${esc(moodLine(r))}</div>
+        <div style="font-size:12.5px;color:var(--gray);line-height:1.5">${r.report?`<span style="display:inline-block;background:rgba(18,189,176,.14);color:var(--deep);border-radius:999px;padding:1px 8px;font-size:10.5px;font-weight:800;margin-right:6px">AI 보고서</span>`:""}${esc(moodLine(r))}</div>
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
         <button class="b-mint" onclick="previewRecord('${r.id}','${pvPrefix}${r.id}')">미리보기</button>
@@ -5614,10 +5746,31 @@ function recordSnippet(r){
   return src?src.slice(0,220)+(src.length>220?"…":""):"";
 }
 function moodLine(r){
+  // (v144) AI 보고서가 있으면 그 「개요」를 한 줄 요약으로 씁니다.
+  //   예전에는 보고서를 만들어도 목록에는 수기 원문 첫 줄만 보여서,
+  //   「직접 남긴 것」처럼 보였습니다.
+  if(r.report){
+    const s=reportSummary(r.report);
+    if(s) return s;
+  }
   if(r.mood && r.mood!=="(분위기 요약 없음)") return r.mood;
   if(r.notes&&r.notes.summary) return r.notes.summary;
   if(r.rawNote) return r.rawNote.replace(/\s+/g," ").slice(0,90)+(r.rawNote.length>90?"…":"");
   return r.mood||"";
+}
+// 보고서 본문에서 「## 개요」 아래 첫 문장만 꺼냅니다 (표·제목·빈 줄은 건너뜀)
+// 창·인쇄 페이지는 이미 제목을 달고 있으므로 본문의 첫 「# 제목」 줄은 뺍니다
+function reportBody(md){ return String(md||"").replace(/^\s*#\s+[^\n]*\n+/, ""); }
+function reportSummary(md){
+  const lines=String(md||"").split("\n");
+  const at=lines.findIndex(l=>/^##\s*개요/.test(l.trim()));
+  const from=at>=0?at+1:0;
+  for(let i=from;i<lines.length;i++){
+    const t=lines[i].trim();
+    if(!t||/^[#|>]/.test(t)||/^[-*·]\s/.test(t)) continue;
+    return t.replace(/\*\*/g,"").slice(0,110)+(t.length>110?"…":"");
+  }
+  return "";
 }
 function recordToMD(r){
   // 기록에 노트가 없으면 같은 제목의 회의에서 즉시 가져옴 (저장 여부와 무관하게 표시 보장)
@@ -5629,6 +5782,12 @@ function recordToMD(r){
   }
   let md=`# MedIT 회의록 — ${r.dt}\n\n**${r.title}**\n\n`;
   md+=`- 목적: ${r.purpose||"—"}\n${r.place?`- 장소: ${r.place}\n`:""}- 소요: ${durLabel(r)} · 참석: ${(r.attendees||[]).map(a=>a.name+(a.email?`(${a.email})`:"")).join(", ")||"—"}\n${(r.tags&&r.tags.length)?`- 태그: ${r.tags.map(t=>"#"+t).join(" ")}\n`:""}\n`;
+  // (v144) AI 보고서가 있으면 맨 앞에 둡니다. 미리보기·MD 내보내기·Gmail 이 모두 이 함수를 씁니다 —
+  //   예전에는 보고서를 만들어도 여기에 안 들어가서 수기 원문만 나갔습니다.
+  if(r.report){
+    md+=`> AI 보고서 (${r.reportAt||""}) — 아래 내용은 회의 기록을 AI가 재편성한 것입니다.\n\n`;
+    md+=r.report.replace(/^#\s+/m,"## ").trim()+`\n\n---\n\n`;
+  }
   if(r.annos&&r.annos.length) md+=`## 용어 주석\n`+r.annos.map(a=>`- **${a.term}**: ${a.note||""}${a.url?` (${a.url})`:""}`).join("\n")+"\n\n";
   if(r.mood&&r.mood!=="(분위기 요약 없음)") md+=`## 회의 분위기\n${r.mood}\n\n`;
   if(r.notes){const n=r.notes,sec=(t,a)=>a&&a.length?`## ${t}\n`+a.map(x=>"- "+x).join("\n")+"\n\n":"";
