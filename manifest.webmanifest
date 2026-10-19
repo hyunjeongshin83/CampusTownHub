@@ -1,0 +1,27 @@
+{
+  "name": "캠퍼스타운 허브",
+  "short_name": "캠퍼스허브",
+  "description": "숙명 스타트업 캠퍼스 입점기업·거래처·기관·교수·학생을 위한 회의 운영 사이트",
+  "lang": "ko",
+  "dir": "ltr",
+  "start_url": "./index.html?src=app",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0E7C74",
+  "theme_color": "#0E7C74",
+  "categories": ["productivity", "business"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "회의 목록",
+      "short_name": "회의",
+      "url": "./index.html?src=app",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

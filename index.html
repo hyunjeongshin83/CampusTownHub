@@ -4,6 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>캠퍼스타운 허브 · CampusTown Hub</title>
+
+<!-- (v141) 안드로이드 설치용 — 크롬 메뉴의 [앱 설치]로 홈 화면에 올리면 앱처럼 전체화면으로 열립니다.
+     스토어 등록 없이 주소만 열면 되고, 사이트를 고치면 앱도 같이 바뀝니다. -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0E7C74">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="캠퍼스허브">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -616,7 +628,17 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=140, BUILD_DATE="2026-10-18";
+const BUILD=141, BUILD_DATE="2026-10-18";
+
+// (v141) 안드로이드 설치용 서비스워커 등록.
+// 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
+// 실패해도 사이트는 그대로 돌아갑니다 (http:// 로 열었거나 브라우저가 지원하지 않는 경우).
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js")
+      .catch(e => console.warn("앱 설치 기능 준비 실패(사이트 이용에는 지장 없음):", e && e.message));
+  });
+}
 // 배포된 파일의 BUILD 번호를 주기적으로 확인 — 새 버전이면 상단 배너로 안내 (캐시 혼선 방지)
 function checkForUpdate(){
   try{
