@@ -33,9 +33,11 @@ def sig(page):
       const vis = e => { const r=e.getBoundingClientRect();
         return r.width>0 && r.height>0 && getComputedStyle(e).visibility!=='hidden'; };
       const t = (document.body.innerText||'').replace(/\\s+/g,' ').slice(0,400);
+      // 알림 띠(토스트)도 지문에 넣습니다 — 화면이 안 바뀌어도 "알려 주는" 단추는 정상입니다
+      const tt = (document.getElementById('toast')||{}).textContent||'';
       const b = [...document.querySelectorAll('button,[role=button],a[href]')]
         .filter(vis).map(e=>(e.innerText||e.getAttribute('aria-label')||'').trim()).join('|');
-      return t+'##'+b; }""")
+      return t+'##'+tt+'##'+b; }""")
     return hashlib.sha1(s.encode()).hexdigest()[:10]
 
 def controls(page):
@@ -73,6 +75,7 @@ def seed(page):
 
 findings, notes = [], []
 seen, edges, dead, nameless = {}, [], [], []
+changed = set()        # 한 번이라도 화면을 바꾼 단추 — 두 번째로 눌러 그대로인 건 정상입니다
 t0 = time.time()
 
 with sync_playwright() as p:
@@ -140,6 +143,7 @@ with sync_playwright() as p:
             elif after == before:
                 dead.append(name)
             else:
+                changed.add(name)
                 edges.append((here, name, seen.get(after, after[:8])))
                 if after not in seen:
                     seen[after] = f"[{name}] 뒤 화면"
@@ -149,9 +153,14 @@ with sync_playwright() as p:
     notes.append(f"걸린 시간 {int(time.time()-t0)}초")
     b.close()
 
-if dead:
-    uniq = sorted(set(dead))
-    findings.append("눌러도 화면이 바뀌지 않는 단추 %d개: %s" % (len(uniq), ", ".join(uniq[:12])))
+# 같은 단추를 두 번 눌러 결과가 같은 것은 정상입니다 —
+# 어느 길에서도 한 번도 반응하지 않은 단추만 보고합니다.
+again = sorted(set(dead) & changed)
+if again:
+    notes.append("다시 눌러도 같은 결과인 단추(정상): " + ", ".join(again))
+uniq = sorted(set(dead) - changed)
+if uniq:
+    findings.append("눌러도 아무 반응이 없는 단추 %d개: %s" % (len(uniq), ", ".join(uniq[:12])))
 if nameless:
     findings.append(f"글자도 설명도 없는 단추 {len(nameless)}개 — 무엇인지 알 수 없습니다")
 

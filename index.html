@@ -623,12 +623,12 @@ button, .at, [role="button"]{min-height:40px;}
   </div>
 </div>
 </div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=141, BUILD_DATE="2026-10-19";
+const BUILD=142, BUILD_DATE="2026-10-19";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -792,7 +792,7 @@ function copyText(s, okMsg){
       return !!ok;
     }catch(e){ return false; }
   };
-  const done = ok => { try{ toast(ok ? (okMsg||"복사했습니다")
+  const done = ok => { try{ if(okMsg!==false) toast(ok ? (okMsg||"복사했습니다")
       : "복사가 막혔습니다 — 글자를 길게 눌러 직접 복사해 주세요"); }catch(e){} return ok; };
   try{
     if(navigator.clipboard && navigator.clipboard.writeText){
@@ -1255,7 +1255,8 @@ async function callViaProxy(system,user,maxTokens,opts){
           "Authorization":"Bearer "+SUPABASE_ANON_KEY,   // 관문 통과용 (프로젝트 공개키)
           "apikey":SUPABASE_ANON_KEY,
           "x-user-token":session.access_token},          // 로그인 확인용 — 함수 코드가 직접 검증
-        body:JSON.stringify({system,user,maxTokens:maxTokens||1000,search:!!opts.search})});
+        body:JSON.stringify({system,user,maxTokens:maxTokens||1000,search:!!opts.search,
+          model:(opts.cheap?AI_MODEL_CHEAP:AI_MODEL)})});
       if(res.status===404){ fails.push(fn+": 미배포"); continue; }
       const d=await res.json().catch(()=>({}));
       if(!res.ok){ fails.push(fn+": "+res.status+(d.error?"("+d.error+")":"")); continue; }
@@ -1312,6 +1313,14 @@ async function callClaude(system,user,maxTokens,opts){
   let key=getApiKey();
   if(!key){
     if(opts.noPrompt) throw new Error(proxyWhy);   // 자동·배경 호출에서는 키 입력창을 절대 띄우지 않음
+    // (v142) 원인이 "로그인 안 됨"이면 키를 묻는 게 아니라 로그인하라고 알려 줍니다.
+    //   교수님께 sk-ant-… 키를 입력하라고 띄우던 창이 여기였습니다.
+    if(/로그인/.test(proxyWhy)){
+      const _go=await formModalP("서버 로그인이 필요합니다",[],{saveLabel:"지금 로그인",
+        note:"AI 회의록·AI 정리는 서버에 로그인한 뒤에 됩니다. [지금 로그인]을 누르면 구글 로그인 창이 열립니다."});
+      if(_go){ try{ await oauthLogin("Google"); }catch(e){ toast("로그인 실패: "+(e.message||e)); } }
+      throw new Error("서버 로그인 필요 — 로그인한 뒤 다시 눌러 주세요");
+    }
     const _fm=await formModalP("AI 키 필요 — 공유 프록시 사용 불가",[
       {id:"k",label:"Anthropic API 키 (sk-ant-…) — 이 브라우저에만 저장",type:"password",ph:"비워두고 [저장]하면 AI 없이 진행"}],
       {note:"사유: "+esc(proxyWhy)});
@@ -1355,7 +1364,34 @@ async function testAI(){
       return;
     }catch(e2){}
   }
-  if(el){el.textContent="✖ AI 사용 불가 — 공유 프록시: "+why+" · 운영자는 Supabase Edge Function(claude-proxy)에 새 Anthropic 키를 넣어 재배포해 주세요. 또는 [키 등록·교체]로 개인 키를 등록하면 바로 사용할 수 있습니다."; el.style.color="#C24A4A";}
+  // ③ 왜 안 되는지 서버에 직접 물어봅니다 — 로그인 전에도 답하는 상태 확인 통로입니다.
+  //    여기서 "열쇠 있음"이 나오면 남은 원인은 로그인 하나뿐입니다.
+  let srv="";
+  try{
+    const base=SUPABASE_URL.replace(/\/$/,"")+"/functions/v1/";
+    for(const fn of AI_PROXY_NAMES){
+      const r=await fetch(base+fn,{method:"POST",
+        headers:{"Content-Type":"application/json",
+          "Authorization":"Bearer "+SUPABASE_ANON_KEY,"apikey":SUPABASE_ANON_KEY},
+        body:JSON.stringify({ping:true})});
+      if(!r.ok) continue;
+      const d=await r.json().catch(()=>({}));
+      if(d && d.ok){ srv=d.hasKey?"key-ok":"key-missing"; break; }
+    }
+  }catch(_){}
+
+  if(el){
+    if(srv==="key-ok"){
+      el.textContent="서버 준비는 끝났습니다 (AI 열쇠 등록됨). 남은 것은 로그인 하나입니다 — 화면 위 [서버 로그인]으로 구글 로그인 뒤 다시 점검해 주세요. (프록시 응답: "+why+")";
+      el.style.color="#8a6d00";
+    }else if(srv==="key-missing"){
+      el.textContent="✖ 서버에 AI 열쇠가 없습니다 — Supabase → Edge Functions → Secrets 에 ANTHROPIC_API_KEY 를 넣어 주세요. 그 전까지는 [키 등록·교체]로 개인 키를 쓰실 수 있습니다.";
+      el.style.color="#C24A4A";
+    }else{
+      el.textContent="✖ AI 사용 불가 — 공유 프록시: "+why+" · 서버 상태도 확인되지 않습니다. [키 등록·교체]로 개인 키를 등록하면 바로 쓸 수 있습니다.";
+      el.style.color="#C24A4A";
+    }
+  }
 }
 window.testAI=testAI;
 
@@ -1954,7 +1990,7 @@ function bindLit(){
   const stamp=()=>new Date().toISOString().slice(0,10).replace(/-/g,"");
   const md=$("litMD"); if(md)md.onclick=()=>{const s=litSelected(); if(!s.length){toast("선택된 항목이 없습니다");return;} litDownload("문헌정리_"+stamp()+".md","text/markdown",litToMD(s)); toast(s.length+"건 MD로 내보냈습니다");};
   const cv=$("litCSV"); if(cv)cv.onclick=()=>{const s=litSelected(); if(!s.length){toast("선택된 항목이 없습니다");return;} litDownload("문헌정리_"+stamp()+".csv","text/csv",litToCSV(s)); toast(s.length+"건 CSV로 내보냈습니다");};
-  const cp=$("litCopy"); if(cp)cp.onclick=()=>{const s=litSelected(); if(!s.length){toast("선택된 항목이 없습니다");return;} navigator.clipboard&&navigator.clipboard.writeText(litToMD(s)); toast("복사했습니다");};
+  const cp=$("litCopy"); if(cp)cp.onclick=()=>{const s=litSelected(); if(!s.length){toast("선택된 항목이 없습니다");return;} copyText(litToMD(s)); toast("복사했습니다");};
 }
 
 // ==================== RAIL ====================
@@ -2779,7 +2815,7 @@ function openGmail(to,subj,body){
   const base="https://mail.google.com/mail/?view=cm&fs=1";
   let url=base+"&to="+encodeURIComponent(to||"")+"&su="+encodeURIComponent(subj||"")+"&body="+encodeURIComponent(body||"");
   if(url.length>7500){
-    if(navigator.clipboard) navigator.clipboard.writeText(body||"");
+    copyText(body||"","본문이 길어 메일 본문을 복사했습니다 — 메일 창에 붙여넣어 주세요");
     url=base+"&to="+encodeURIComponent(to||"")+"&su="+encodeURIComponent(subj||"");
     const w1=window.open(url,"_blank");
     if(!w1) location.href=url;            // 팝업 차단 시 현재 탭에서 열기
@@ -3783,7 +3819,7 @@ function issueMailCopy(num,title){
   ${F}?op=new&k=${q(key)}
 
 ※ 버튼(링크)만 누르면 로그인 없이 바로 처리됩니다.`;
-  (navigator.clipboard?navigator.clipboard.writeText(text):Promise.reject()).then(
+  (copyText(text)).then(
     ()=>toast("#"+num+" 처리 메일 문구를 복사했습니다 — 〈 〉 부분만 채워 보내세요"),
     ()=>viewInlineDoc("처리 메일 문구 — #"+num,"<pre style='white-space:pre-wrap;font-size:12px'>"+esc(text)+"</pre>"));
 }
@@ -5115,7 +5151,7 @@ function bindEmail(){
   $("emCopy").onclick=()=>{
     const bo=$("emBody").value;
     if(!bo.trim()){ $("emMsg").textContent="복사할 내용이 없습니다."; return; }
-    navigator.clipboard && navigator.clipboard.writeText(bo);
+    copyText(bo);
     $("emMsg").textContent="본문을 복사했습니다.";
   };
   $("emClear").onclick=()=>{
@@ -5240,7 +5276,7 @@ function viewInlineDoc(title,html){
   modal.innerHTML=`<div style="background:#fff;border-radius:16px;max-width:min(760px,96vw);width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden">
     <div style="display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)">
       <b style="flex:1;font-size:14px;color:var(--deep)">${esc(title)}</b>
-      <button class="b-ghost" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('regBody').innerText).then(()=>toast('복사했습니다'))">복사</button>
+      <button class="b-ghost" onclick="copyText(document.getElementById('regBody').innerText)">복사</button>
       <button class="b-deep" onclick="document.getElementById('regModal').remove()">닫기</button>
     </div>
     <div id="regBody" style="padding:16px 20px;overflow:auto;font-size:13px;line-height:1.8;color:var(--ink)">${html}</div>
@@ -5297,7 +5333,7 @@ function showReport(id){
   document.body.appendChild(modal);
   modal.onclick=e=>{if(e.target===modal)modal.remove();};
   $("rpClose").onclick=()=>modal.remove();
-  $("rpCopy").onclick=()=>{ if(navigator.clipboard){navigator.clipboard.writeText(r.report);toast("보고서 MD를 복사했습니다");} };
+  $("rpCopy").onclick=()=>copyText(r.report,"보고서 MD를 복사했습니다");
   $("rpRedo").onclick=()=>{ if(!confirm("보고서를 다시 생성할까요? (현재 보고서는 대체됩니다)"))return; r.report=""; modal.remove(); aiReportRecord(id); };
 }
 // 인쇄·PDF 저장이 가능한 독립 HTML 페이지로 열기
@@ -5440,7 +5476,7 @@ function previewRecord(id,boxId){
 window.previewRecord=previewRecord;
 function copyRecord(id){
   const r=state.records.find(x=>x.id===id); if(!r) return;
-  navigator.clipboard && navigator.clipboard.writeText(recordToMD(r));
+  copyText(recordToMD(r));
   toast("회의록을 복사했습니다");
 }
 window.copyRecord=copyRecord;
@@ -6375,8 +6411,9 @@ function connGroups(list){
 function meetingLink(id){ return location.origin+location.pathname+"?m="+encodeURIComponent(id); }
 function copyMeetingLink(id){
   const url=meetingLink(id);
-  if(navigator.clipboard){ navigator.clipboard.writeText(url); toast("회의 입장 링크를 복사했습니다 — 초대 메일·카톡에 붙여넣으세요"); }
-  else formModal("회의 입장 링크",[{id:"u",label:"아래 주소를 길게 눌러 복사하세요",value:url}],()=>{},{saveLabel:"닫기"});
+  copyText(url,"회의 입장 링크를 복사했습니다 — 초대 메일·카톡에 붙여넣으세요").then(ok=>{
+    if(!ok) formModal("회의 입장 링크",[{id:"u",label:"아래 주소를 길게 눌러 복사하세요",value:url}],()=>{},{saveLabel:"닫기"});
+  });
 }
 window.copyMeetingLink=copyMeetingLink;
 // 회의 초대 QR — 링크를 QR로 (화면 스캔·이미지 저장·인쇄)
@@ -6415,8 +6452,7 @@ async function showMeetingQR(id){
   $("qrShare").onclick=async()=>{
     const text="["+m.title+"] 회의 초대\n"+(m.date||"")+" "+(m.time||"")+(m.place?" · "+m.place:"")+"\n아래 링크로 입장하세요:\n"+url;
     if(navigator.share){ try{ await navigator.share({title:m.title,text}); return; }catch(_){/* 취소 */} }
-    try{ await navigator.clipboard.writeText(text); toast("초대 문구+링크를 복사했습니다 — 카톡 대화방에 붙여넣으세요"); }
-    catch(_){ toast("복사가 안 되면 [링크 복사]를 사용하세요"); }
+    await copyText(text,"초대 문구+링크를 복사했습니다 — 카톡 대화방에 붙여넣으세요");
   };
   $("qrCopy").onclick=()=>copyMeetingLink(id);
   $("qrSave").onclick=()=>{
@@ -6531,7 +6567,13 @@ function showMeetingList(){
     state.accounts=(state.accounts||[]).filter(x=>(x.email||"").toLowerCase()!==b.dataset.apno.toLowerCase());
     await saveNow(); showMeetingList(); toast("요청을 거절했습니다");
   });
-  $("mlSearch").onclick=async()=>{ const r=await searchMeetings($("mlQuery").value); renderMeetingCards(r.length?r:[], r.length?"":"검색 결과가 없습니다."); };
+  $("mlSearch").onclick=async()=>{
+    const q=($("mlQuery").value||"").trim();
+    if(!q){ toast("찾을 말을 먼저 적어 주세요 — 회의 이름·회사·날짜로 찾습니다"); $("mlQuery").focus(); return; }
+    const r=await searchMeetings(q);
+    renderMeetingCards(r.length?r:[], r.length?"":"검색 결과가 없습니다.");
+    toast(r.length?("검색 결과 "+r.length+"건"):"검색 결과가 없습니다");
+  };
   $("mlQuery").addEventListener("keydown",async e=>{if(e.key==='Enter'){const r=await searchMeetings($("mlQuery").value);renderMeetingCards(r.length?r:[],r.length?"":"검색 결과가 없습니다.");}});
   $("mlVoice").onclick=()=>voiceSearch(async t=>{$("mlQuery").value=t;const r=await searchMeetings(t);renderMeetingCards(r.length?r:[],r.length?"":"검색 결과가 없습니다.");});
   if(canCreate&&$("mlCreate"))$("mlCreate").onclick=()=>{
@@ -7111,7 +7153,7 @@ function opsRender(){
       <div id="opsSess" style="margin-top:6px" class="mini">불러오는 중…</div>
     </div>`;
   $("opsFix").onclick=async()=>{ await OPS.runAudit(true); opsRender(); };
-  $("opsRe").onclick=()=>opsRender();
+  $("opsRe").onclick=()=>{ opsRender(); toast("다시 점검했습니다"); };
   $("opsSync").onclick=()=>{ try{ forceResync(); }catch(e){ toast("실패: "+(e.message||e)); } };
   renderResearchQueue();
   $("opsKkSave").onclick=()=>{ OPS.setKakaoKey($("opsKk").value); toast("카카오 키 저장됨"); };
@@ -7627,8 +7669,8 @@ function kakaoRoomHelper(prefix){
   document.body.appendChild(w);
   w.addEventListener("click",e=>{ if(e.target===w) w.remove(); });
   const msg=t=>{const e=$("kkMsg"); if(e)e.textContent=t;};
-  const copy=(t,label)=>{ try{ navigator.clipboard.writeText(t).then(()=>msg(label+" 복사했습니다"),()=>msg("복사 실패 — 직접 선택해 주세요")); }
-                          catch(e){ msg("복사 실패 — 직접 선택해 주세요"); } };
+  const copy=(t,label)=>copyText(t,false).then(ok=>msg(ok ? label+" 복사했습니다"
+                          : "복사가 막혔습니다 — 글자를 길게 눌러 직접 복사해 주세요"));
   $("kkX").onclick=()=>w.remove();
   $("kkCopyName").onclick=()=>copy(roomName,"방 이름을");
   $("kkCopyNotice").onclick=()=>copy(notice,"공지글을");
