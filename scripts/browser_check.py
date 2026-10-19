@@ -61,6 +61,26 @@ with sync_playwright() as p:
     if real:
         notes.append("콘솔 경고 " + str(len(real)) + "건: " + real[0][:120])
 
+    # 로그인 안 된 채 AI 를 부르면 무엇을 묻는지 — 2026-10-19
+    #   고치기 전에는 "AI 키 필요 (sk-ant-…)" 입력창이 떴습니다. 교수님께 API 키를
+    #   입력하라고 요구하던 창입니다. 원인은 서버가 아니라 로그인이었습니다.
+    pg.evaluate("""()=>{ try{ localStorage.removeItem('medit:apikey');
+                              localStorage.removeItem('medit:proxyfn'); }catch(e){}
+      // 창이 뜨면 거기서 사람 입력을 기다립니다 — await 하지 않고 띄워만 둡니다
+      try{ callClaude("한 단어로 답하세요.","확인",16).catch(()=>{}); }catch(e){} }""")
+    pg.wait_for_timeout(6000)
+    ai = pg.evaluate("""()=>{ const m=document.getElementById('fmModal');
+      return m ? {t:(m.innerText||'').replace(/\\s+/g,' ').slice(0,200),
+                  k:!!m.querySelector('input[type=password]')} : null; }""")
+    if ai is None:
+        problems.append("로그인 없이 AI 를 불렀는데 아무 안내도 없습니다 — 왜 안 되는지 알 수 없습니다")
+    elif ai["k"]:
+        problems.append("로그인이 없을 때 API 키(sk-ant-) 입력창이 뜹니다 — 로그인 안내여야 합니다")
+    elif "서버 로그인" not in ai["t"]:
+        problems.append("AI 안내가 로그인을 가리키지 않습니다: " + ai["t"][:90])
+    else:
+        notes.append("로그인 없이 AI 호출 → 로그인 안내 확인 (키를 묻지 않음)")
+
     # 복구 도구도 실제로 열어본다
     pg.goto(SITE + "/recover.html?ci=1", wait_until="networkidle", timeout=45000)
     pg.wait_for_timeout(3000)
