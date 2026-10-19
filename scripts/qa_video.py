@@ -40,7 +40,9 @@ with sync_playwright() as p:
         this.dispose=()=>{};
       };
       document.body.insertAdjacentHTML('beforeend',
-        '<div id="vFrame"></div><div id="vAfter"></div>');
+        '<div id="vFrame"></div><div id="vAfter"></div>'
+        +'<div id="vTranscript"></div><span id="vSegCount"></span><span id="vMicState"></span>'
+        +'<input id="vTypeInput"><button id="vTypeAdd"></button>');
 
       await startJitsi();
       log.listeners=Object.keys(H).sort().join(",");
@@ -69,6 +71,37 @@ with sync_playwright() as p:
     if not res.get("hasBtn"): fails.append("[회의록 만들기] 단추가 없습니다")
     if "회의록" not in (res.get("afterLeft") or ""): fails.append("끝난 뒤 안내가 안 나옵니다")
 
+    # 오른쪽 실시간 기록 칸 — 적으면 바로 쌓이는가
+    live = pg.evaluate("""()=>{
+      const out={};
+      out.panel = !!document.getElementById('vTranscript');
+      out.input = !!document.getElementById('vTypeInput');
+      if(!out.panel) return out;
+      addSegment('첫 번째로 적은 줄','나');
+      addSegment('두 번째로 적은 줄','방 교수님');
+      const t=document.getElementById('vTranscript');
+      out.shown = (t.innerText||'').indexOf('두 번째로 적은 줄')>=0;
+      out.count = (document.getElementById('vSegCount')||{}).textContent;
+      return out;
+    }""")
+    print("실시간 칸:", live)
+    if not live.get("panel"): fails.append("화상 화면 옆 실시간 기록 칸이 없습니다")
+    if not live.get("input"): fails.append("회의 중 적는 칸이 없습니다")
+    if not live.get("shown"): fails.append("적은 내용이 오른쪽 칸에 안 보입니다")
+    if live.get("count") != "2": fails.append(f"기록 건수가 안 맞습니다 ({live.get('count')})")
+
+    # 회의록이 등록된 뒤 안내 — 파일 저장·보고서 단추까지
+    done = pg.evaluate(r"""()=>{
+      showMinutesDone({id:'rx',title:'화상 테스트',dt:'2026.10.19',purged:{count:2}});
+      const b=document.getElementById('vAfter');
+      const t=(b.innerText||'').replace(/\s+/g,' ');
+      return {text:t.slice(0,120), save:t.indexOf('파일로 저장')>=0, rep:t.indexOf('AI 보고서')>=0};
+    }""")
+    print("등록 안내:", done)
+    if not done.get("save"): fails.append("[파일로 저장] 이 없습니다 — 최종 파일을 못 받습니다")
+    if not done.get("rep"): fails.append("[AI 보고서 만들기] 가 없습니다")
+    if "등록" not in (done.get("text") or ""): fails.append("등록되었다는 안내가 없습니다")
+
     # Jitsi API 가 막혀도 화상회의는 떠야 합니다
     fb = pg.evaluate("""async ()=>{
       delete window.JitsiMeetExternalAPI;
@@ -90,6 +123,8 @@ lines += ["<details><summary>본 것</summary>","",
           "- 들어가면 회의가 열린 것으로 기록되는가",
           "- 들어온 사람이 참석자에 더해지는가 (중복 없이)",
           "- 나가면 [회의록 만들기] 가 뜨는가",
+          "- 화상 화면 옆에서 실시간으로 기록되는가",
+          "- 회의록이 등록된 뒤 [파일로 저장]·[AI 보고서]가 나오는가",
           "- Jitsi API 가 막혀도 화상회의는 뜨는가",
           "","</details>"]
 open("video-report.md","w",encoding="utf-8").write("\n".join(lines))

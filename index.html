@@ -229,6 +229,9 @@ button{font-family:inherit;font-size:14px;font-weight:700;border:none;border-rad
 button:hover{filter:brightness(1.05);transform:translateY(-1px);}
 button:active{transform:translateY(0);}
 button:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+/* (v148) 화상 화면과 실시간 기록을 나란히. 좁은 화면에서는 기록이 아래로 내려갑니다. */
+.vsplit{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:14px;align-items:start;}
+@media (max-width:980px){ .vsplit{grid-template-columns:1fr;} }
 
 /* ===== cards / glass ===== */
 .glass{background:var(--glass);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.6);
@@ -628,7 +631,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=147, BUILD_DATE="2026-10-19";
+const BUILD=148, BUILD_DATE="2026-10-19";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -4266,13 +4269,32 @@ function videoHTML(){
 
    <div id="vAfter"></div>
 
-   <div class="glass tile" style="padding:0;overflow:hidden">
-     <div id="vFrame" class="vframe-empty">
-       <div>
-         <div style="font-size:15px;font-weight:700;color:var(--deep);margin-bottom:6px">화상회의 준비됨</div>
-         <div class="mini" style="margin-bottom:12px">‘화상회의 시작’을 누르면 이 자리에 화상 화면이 나타납니다.<br>카메라·마이크 권한을 허용해 주세요. (Chrome/Edge 권장)</div>
-         <button class="b-mint" id="vStart2">화상회의 시작</button>
+   <div class="vsplit">
+     <div class="glass tile" style="padding:0;overflow:hidden">
+       <div id="vFrame" class="vframe-empty">
+         <div>
+           <div style="font-size:15px;font-weight:700;color:var(--deep);margin-bottom:6px">화상회의 준비됨</div>
+           <div class="mini" style="margin-bottom:12px">‘화상회의 시작’을 누르면 이 자리에 화상 화면이 나타납니다.<br>카메라·마이크 권한을 허용해 주세요. (Chrome/Edge 권장)</div>
+           <button class="b-mint" id="vStart2">화상회의 시작</button>
+         </div>
        </div>
+     </div>
+
+     <div class="glass tile" id="vLive" style="display:flex;flex-direction:column;min-height:300px">
+       <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+         <b style="color:var(--deep);font-size:14px">실시간 기록</b>
+         <span class="tag" id="vSegCount">0</span>
+         <span style="flex:1"></span>
+         <span class="mini" id="vMicState">마이크 꺼짐</span>
+       </div>
+       <div id="vTranscript" style="flex:1;overflow-y:auto;max-height:392px;background:var(--mist);
+            border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.65"></div>
+       <div style="display:flex;gap:6px;margin-top:8px">
+         <input id="vTypeInput" placeholder="여기에 적으면 바로 기록됩니다 · Enter"
+                style="flex:1;min-width:0;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px">
+         <button class="b-mint" id="vTypeAdd" style="flex:0 0 auto">추가</button>
+       </div>
+       <div class="mini" style="margin-top:6px">말소리가 안 잡혀도 여기에 적으시면 그대로 회의록 재료가 됩니다.</div>
      </div>
    </div>
    <div class="mini" style="margin-top:10px;line-height:1.7">
@@ -4284,7 +4306,7 @@ function videoHTML(){
    </div>
   </div>`;
 }
-let jitsiApi=null, jitsiJoinedAt=0, jitsiNames=[];
+let jitsiApi=null, jitsiJoinedAt=0, jitsiNames=[], vAfterMode="";
 
 // (v147) 화상회의와 회의록을 잇습니다.
 //   예전에는 iframe 만 띄워서, 회의가 끝나도 앱은 아무것도 몰랐습니다.
@@ -4376,6 +4398,9 @@ function addVideoAttendee(name){
 // 회의 중·회의 뒤에 [회의록 만들기]를 띄웁니다
 function showAfterCallBox(mode){
   const box=$("vAfter"); if(!box) return;
+  if(vAfterMode==="done") return;            // 회의록을 이미 만들었으면 그 안내를 지키세요
+  if(vAfterMode==="left" && mode==="live") mode="left";   // 끝난 화면이 「진행 중」으로 덮이지 않게
+  vAfterMode=mode;
   const mins=jitsiJoinedAt?Math.max(1,Math.round((Date.now()-jitsiJoinedAt)/60000)):0;
   const segs=(state.segments||[]).length;
   const typed=(((state.liveDoc&&state.liveDoc.paras)||[]).length)+(((currentMeeting()||{}).rawNote||"").trim()?1:0);
@@ -4396,11 +4421,35 @@ function showAfterCallBox(mode){
   </div>`;
   const mk=$("vMakeMinutes");
   if(mk) mk.onclick=async()=>{
-    mk.disabled=true; mk.textContent="만드는 중…";
-    try{ await endMeeting(); }                       // 기존 흐름 그대로 — AI 정리·스크립트·이메일·회차 저장
+    mk.disabled=true; mk.textContent="만드는 중… (20~60초)";
+    let rec=null;
+    try{ rec=await endMeeting({stay:true}); }        // 기존 흐름 그대로 — AI 정리·스크립트·이메일·회차 저장
+    catch(e){ toast("회의록 만들기 실패: "+(e.message||e)); }
     finally{ mk.disabled=false; mk.textContent="회의록 만들기"; }
+    if(rec) showMinutesDone(rec);
   };
 }
+// (v148) 회의록이 회차로 등록된 뒤 — 어디에 생겼는지, 파일로 어떻게 받는지 그 자리에서.
+function showMinutesDone(rec){
+  const box=$("vAfter"); if(!box) return;
+  vAfterMode="done";
+  const segs=(rec.purged&&rec.purged.count)||0;
+  box.innerHTML=`<div class="glass tile" style="margin-bottom:14px;border-left:3px solid var(--mint,#12BDB0)">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px">
+        <b style="color:var(--deep)">회의록이 등록되었습니다</b>
+        <div class="mini" style="margin-top:4px;line-height:1.6">
+          <b>${esc(rec.title||"")}</b> · ${esc(rec.dt||"")}${segs?` · 발언 ${segs}건`:""}<br>
+          [기록] 탭의 회차 목록에 들어갔습니다. 녹취 원문은 파기되고 회의록·스크립트만 남습니다.
+        </div>
+      </div>
+      <button class="b-ghost" onclick="exportRecord('${rec.id}')" title="이 회의록을 .md 파일로 내려받습니다">파일로 저장</button>
+      <button class="b-ghost" onclick="switchTab('email')" title="참석자에게 보낼 이메일 초안">이메일 초안</button>
+      <button class="b-mint" onclick="aiReportRecord('${rec.id}')" title="회의록을 구조화 보고서로 정리합니다">AI 보고서 만들기</button>
+    </div>
+  </div>`;
+}
+window.showMinutesDone=showMinutesDone;
 window.startJitsi=startJitsi; window.showAfterCallBox=showAfterCallBox;
 function bindVideo(){
   const m=currentMeeting()||{};
@@ -4409,6 +4458,12 @@ function bindVideo(){
   if(s1)s1.onclick=startJitsi; if(s2)s2.onclick=startJitsi;
   const cp=$("vCopy");if(cp)cp.onclick=()=>{copyText(link,"링크를 복사했습니다");};
   const inv=$("vInvite");if(inv)inv.onclick=()=>inviteByEmail(link);
+  // 오른쪽 기록 칸 — 적은 것이 바로 녹취에 들어갑니다 (콘솔 탭과 같은 저장소)
+  const ti=$("vTypeInput"), ta=$("vTypeAdd");
+  const add=()=>{ const v=(ti&&ti.value||"").trim(); if(!v)return; addSegment(v,(state.user&&state.user.name)||"나"); ti.value=""; };
+  if(ta) ta.onclick=add;
+  if(ti) ti.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); add(); } });
+  renderVideoLive();
 }
 // 이메일 초대 (초대장 생성 + 메일앱 열기)
 function inviteByEmail(link){
@@ -4601,12 +4656,40 @@ function bindConsole(){
   $("autoSync").onchange=e=>{if(e.target.checked){autoTimer=setInterval(()=>{if(state.segments.length)syncNotes(true);},30000);toast("30초마다 자동 반영 (실패 시 조용히 건너뜀)");}else clearInterval(autoTimer);};
   if(listening){$("micBtn").classList.add("on");$("micBtn").textContent="⏹ 녹취 중지";}
 }
-function renderTranscript(interim){const box=$("transcript");if(!box)return;
-  if(!state.segments.length&&!interim){box.innerHTML='<div class="mini" style="font-style:italic">회의를 시작하면 자동으로 녹취됩니다. 타이핑도 가능합니다.</div>';return;}
+function renderTranscript(interim){const box=$("transcript");
+  // (v148) 화상회의 탭에는 #transcript 가 없습니다. 예전처럼 여기서 끝내 버리면
+  //   오른쪽 실시간 기록이 영영 안 그려집니다 — 콘솔 칸이 없어도 옆칸은 그립니다.
+  if(!box){ renderVideoLive(interim); return; }
+  if(!state.segments.length&&!interim){box.innerHTML='<div class="mini" style="font-style:italic">회의를 시작하면 자동으로 녹취됩니다. 타이핑도 가능합니다.</div>';renderVideoLive(interim);return;}
   let h=state.segments.map((s,i)=>`<div class="note ${(state.user&&s.who===state.user.name)?'me':''}"><span class="who" style="cursor:pointer;${s.guessed?'border-bottom:1px dotted var(--gray);':''}" title="${s.guessed?'AI 추정 화자 — 클릭해 확정·수정':'클릭해 발화자 이름 수정'}" onclick="editSegWho(${i})">${esc(s.who)}${s.guessed?'˟':''} · ${s.time}${s.lang&&s.lang!=="ko"?" · "+micLangLabel(SCRIPT2LANG[s.lang]||s.lang):""}</span><span style="cursor:pointer" title="클릭해 발언 내용 수정 (비우면 삭제)" onclick="editSegText(${i})">${esc(s.text)}</span>${s.needKo?'<div class="mini" style="margin-top:3px;font-style:italic">한국어로 번역 중…</div>':(s.ko?`<div style="margin-top:3px;padding-top:3px;border-top:1px dashed var(--line);color:var(--deep)">→ ${esc(s.ko)}</div>`:"")}</div>`).join("");
   if(interim)h+=`<div class="note" style="opacity:.5;font-style:italic"><span class="who">발화 (인식중…)</span>${esc(interim)}</div>`;
   box.innerHTML=h;box.scrollTop=box.scrollHeight;const sc=$("segCount");if(sc)sc.textContent=state.segments.length;
-  if(typeof renderLiveWho==="function")renderLiveWho();}
+  if(typeof renderLiveWho==="function")renderLiveWho();
+  renderVideoLive(interim);}
+// (v148) 화상회의 탭 오른쪽의 실시간 기록 — 콘솔 탭과 같은 내용을 옆에서 봅니다.
+//   화상 화면을 떠나지 않고 적을 수 있어야 회의 중에 실제로 쓰입니다.
+function renderVideoLive(interim){
+  const box=$("vTranscript"); if(!box) return;
+  const segs=state.segments||[];
+  if(!segs.length && !interim){
+    box.innerHTML='<div class="mini" style="font-style:italic">아직 기록이 없습니다. 말소리가 잡히면 여기에 쌓이고, 아래 칸에 적으셔도 됩니다.</div>';
+  }else{
+    box.innerHTML=segs.map(s=>'<div style="padding:5px 0;border-bottom:1px dashed var(--line)">'
+      +'<span style="color:var(--deep);font-weight:700">'+esc(s.who)+'</span>'
+      +' <span class="mini">'+esc(s.time||"")+'</span><br>'+esc(s.text||"")
+      +(s.ko?'<div style="color:var(--deep);margin-top:2px">→ '+esc(s.ko)+'</div>':'')
+      +'</div>').join("")
+      +(interim?'<div style="opacity:.5;font-style:italic;padding:5px 0">'+esc(interim)+'</div>':"");
+    box.scrollTop=box.scrollHeight;
+  }
+  const c=$("vSegCount"); if(c) c.textContent=segs.length;
+  const ms=$("vMicState"); if(ms){
+    ms.textContent = (typeof listening!=="undefined" && listening) ? "● 듣는 중" : "마이크 꺼짐";
+    ms.style.color = (typeof listening!=="undefined" && listening) ? "var(--deep)" : "";
+  }
+  if(typeof showAfterCallBox==="function" && $("vAfter") && $("vAfter").innerHTML) showAfterCallBox("live");
+}
+window.renderVideoLive=renderVideoLive;
 function addSegment(text,who,auto){if(!text.trim())return;
   const seg={text:text.trim(),who:who||((state.user&&state.user.name)||"참석자"),time:new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}),auto:!!auto};
   const d=detectLang(seg.text);
@@ -5123,7 +5206,8 @@ function discardMeeting(){
   renderTranscript&&renderTranscript(); renderNotes&&renderNotes(); renderLiveDoc&&renderLiveDoc();
   toast("기록을 저장하지 않고 회의를 종료했습니다 — 이번 회차 내용은 파기되었습니다");
 }
-async function endMeeting(){
+async function endMeeting(opts){
+  opts=opts||{};
   if(listening)stopMic();
   // 저장 여부 선택: 확인=기록 저장 / 취소 → '저장 없이 종료' 재확인
   if(!confirm("회의를 종료하고 기록을 저장할까요?\n\n[확인] 기록 저장 후 종료\n[취소] 저장 여부를 다시 선택")){
@@ -5185,7 +5269,9 @@ async function endMeeting(){
   setPill("idle","회의 대기");
   if(b2){b2.disabled=false;b2.textContent="종료·정리";}
   toast("회의 종료 · 회의록·스크립트 저장, 녹취 원문은 파기되었습니다");
+  if(opts && opts.stay) return rec;     // (v148) 화상회의에서 부를 때는 화면을 떠나지 않습니다
   switchTab("email");
+  return rec;
 }
 async function buildEmailDraft(mood,stats){
   const n=state.notes||{};
