@@ -142,7 +142,12 @@
 .cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;}
 .ccard{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;}
 .c-name{font-size:16px;font-weight:800;color:var(--deep);}
-.c-role{font-size:11px;font-weight:700;color:#fff;background:var(--mint);display:inline-block;padding:2px 9px;border-radius:20px;margin-top:5px;}
+/* (v156) 대표님 결정: 바탕(민트)은 그대로 두고 글자를 진하게.
+   함정이 하나 있었습니다 — 그라데이션이 민트(#12BDB0)에서 딥틸(#0E7C74)까지 가서,
+   진한 글자가 어두운 끝에서 3.16:1 로 떨어집니다. 그래서 바탕을 밝은 쪽으로 고르게
+   맞췄습니다(#12BDB0 → #0FAEA3). 오히려 전보다 밝아집니다.
+   WCAG 상대휘도 실측 — 글자 #0C2622 on 바탕 양 끝: 6.79:1 ~ 5.78:1 (기준 4.5:1) */
+.c-role{font-size:11px;font-weight:700;color:var(--ink);background:var(--mint);display:inline-block;padding:2px 9px;border-radius:20px;margin-top:5px;}
 .c-desc{font-size:12.5px;color:var(--soft);margin-top:7px;line-height:1.45;}
 .docdl{display:block;text-decoration:none;transition:.15s;cursor:pointer;}
 .docdl:hover{transform:translateY(-2px);box-shadow:0 12px 34px rgba(12,38,34,.16);}
@@ -155,7 +160,10 @@
 .caption-box .cap-line{font-size:16px;font-weight:700;color:#fff;line-height:1.5;}
 .caption-box .cap-terms{font-size:12.5px;color:var(--mint2);margin-top:6px;}
 :root{
-  --mint:#12BDB0;--mint2:#0FD6C6;--deep:#0E7C74;--ink:#0C2622;--ink2:#123430;
+  /* (v156) --deep 을 한 단계만 진하게 (#0E7C74 → #0C7069).
+     본문 바탕의 민트 기운(알파 .18) 위에서 4.14:1 이라 제목·굵은 글자가 기준에 못 미쳤습니다.
+     색 계열은 그대로, 명도만 낮춰 4.87:1 (흰 바탕에서는 5.94:1). 새 색을 만들지 않았습니다. */
+  --mint:#12BDB0;--mint2:#0FD6C6;--deep:#0C7069;--ink:#0C2622;--ink2:#123430;
   --gray:#41504D;--soft:#586865;--light:#E7F7F5;--mist:#F4FBFA;--gold:#0B5F59;
   --line:#DCEEEB;--glass:rgba(255,255,255,.72);--shadow:0 8px 30px rgba(12,38,34,.10);
 }
@@ -213,7 +221,7 @@ header{backdrop-filter:blur(14px);background:rgba(12,38,34,.86);color:#fff;
 .tab{padding:11px 18px;font-size:15.5px;font-weight:700;color:var(--soft);cursor:pointer;
   border-radius:11px;white-space:nowrap;display:flex;align-items:center;gap:7px;transition:.15s;}
 .tab:hover{background:#fff;color:var(--deep);}
-.tab.active{background:linear-gradient(135deg,var(--mint),var(--deep));color:#fff;
+.tab.active{background:linear-gradient(135deg,#12BDB0,#0FAEA3);color:var(--ink);
   box-shadow:0 4px 14px rgba(18,189,176,.35);}
 .tab .badge{font-size:10px;background:rgba(255,255,255,.28);color:#fff;border-radius:9px;padding:1px 7px;}
 .tab:not(.active) .badge{background:var(--mint);color:#fff;}
@@ -230,9 +238,10 @@ header{backdrop-filter:blur(14px);background:rgba(12,38,34,.86);color:#fff;
 .body.with-rail .rail{display:flex;}
 .rail h3{font-size:12px;font-weight:800;color:var(--deep);padding:12px 15px;
   border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;}
-.rail h3 .tag{margin-left:auto;font-size:10px;color:#fff;background:var(--mint);padding:2px 8px;border-radius:9px;}
+.rail h3 .tag{margin-left:auto;font-size:10px;color:var(--ink);background:var(--mint);padding:2px 8px;border-radius:9px;}
 .notelist{flex:1;overflow-y:auto;padding:11px 13px;}
-.notelist .empty{color:#9fb3b0;font-size:12px;font-style:italic;padding:6px 2px;}
+/* (v156) #9fb3b0 은 2.09:1 — 「없습니다」가 안 읽혔습니다. --soft 로 4.81:1 */
+.notelist .empty{color:var(--soft);font-size:12px;font-style:italic;padding:6px 2px;}
 .note{background:#fff;border-left:3px solid var(--mint);border-radius:9px;padding:9px 11px;
   margin-bottom:7px;font-size:13.5px;line-height:1.5;box-shadow:0 2px 6px rgba(12,38,34,.05);}
 .note.me{border-left-color:var(--gold);background:#FBF8EF;}
@@ -244,11 +253,12 @@ header{backdrop-filter:blur(14px);background:rgba(12,38,34,.86);color:#fff;
 
 button{font-family:inherit;font-size:14px;font-weight:700;border:none;border-radius:10px;
   padding:9px 15px;cursor:pointer;transition:.15s;letter-spacing:.2px;}
-.b-mint{background:linear-gradient(135deg,var(--mint),var(--deep));color:#fff;box-shadow:0 4px 14px rgba(18,189,176,.3);}
+.b-mint{background:linear-gradient(135deg,#12BDB0,#0FAEA3);color:var(--ink);box-shadow:0 4px 14px rgba(18,189,176,.3);}
 .b-mint.on{background:linear-gradient(135deg,#ff6b6b,#e03131);box-shadow:0 4px 14px rgba(224,49,49,.3);}
 .b-ghost{background:#fff;color:var(--deep);border:1px solid var(--line);}
 .b-deep{background:var(--ink2);color:#fff;}
-.b-gold{background:linear-gradient(135deg,#0f8f85,var(--gold));color:#fff;}
+/* (v156) 흰 글자 기준 3.97:1 이라 밝은 끝을 낮췄습니다 → 5.19:1 ~ 7.51:1 */
+.b-gold{background:linear-gradient(135deg,#0C7A72,var(--gold));color:#fff;}
 button:hover{filter:brightness(1.05);transform:translateY(-1px);}
 button:active{transform:translateY(0);}
 button:disabled{opacity:.5;cursor:not-allowed;transform:none;}
@@ -298,15 +308,15 @@ button:disabled{opacity:.5;cursor:not-allowed;transform:none;}
 /* attendees & uploads */
 .chip{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);
   border-radius:20px;padding:5px 10px 5px 12px;font-size:12px;margin:3px;box-shadow:0 1px 4px rgba(0,0,0,.04);}
-.chip .x{cursor:pointer;color:#b9c;font-weight:700;}
-.chip .av{width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--mint),var(--deep));
-  color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+.chip .x{cursor:pointer;color:#8E5FA8;font-weight:700;}   /* #b9c 는 2.46:1 — 4.82:1 로 */
+.chip .av{width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#12BDB0,#0FAEA3);
+  color:var(--ink);font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;}
 .uprow{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);
   border-radius:11px;padding:9px 12px;margin-bottom:7px;font-size:12.5px;}
 .uprow .ic{font-size:18px;}
 .uprow .nm{font-weight:700;color:var(--ink);}
 .uprow .mt{font-size:11px;color:var(--soft);}
-.uprow .x{margin-left:auto;cursor:pointer;color:#c9a;font-weight:700;}
+.uprow .x{margin-left:auto;cursor:pointer;color:#8E5FA8;font-weight:700;}
 .dropzone{border:2px dashed var(--line);border-radius:14px;padding:20px;text-align:center;
   color:var(--soft);font-size:12.5px;background:rgba(255,255,255,.5);cursor:pointer;transition:.15s;}
 .dropzone:hover,.dropzone.over{border-color:var(--mint);background:var(--light);color:var(--deep);}
@@ -374,7 +384,7 @@ button:disabled{opacity:.5;cursor:not-allowed;transform:none;}
 .cpanel{border-radius:16px;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
 .cpanel h3{font-size:12px;font-weight:800;color:var(--deep);padding:11px 14px;
   border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;}
-.cpanel h3 .tag{margin-left:auto;font-size:10px;color:#fff;background:var(--mint);padding:2px 8px;border-radius:9px;}
+.cpanel h3 .tag{margin-left:auto;font-size:10px;color:var(--ink);background:var(--mint);padding:2px 8px;border-radius:9px;}
 .cscroll{flex:1;overflow-y:auto;padding:12px 14px;min-height:80px;}
 .crow{padding:10px 14px;border-top:1px solid var(--line);display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
 .crow input{flex:1;font-family:inherit;font-size:12.5px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;outline:none;}
@@ -562,8 +572,8 @@ button, .at, [role="button"]{min-height:40px;}
   border:6px solid transparent;border-bottom-color:rgba(12,38,34,.97);}
 .tip-h{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#5FE3D6;margin-bottom:8px;}
 .tip-r{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12.5px;color:#EAFFFB;}
-.tip-r .av{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#12BDB0,#0E7C74);
-  display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex:0 0 auto;}
+.tip-r .av{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#12BDB0,#0FAEA3);
+  color:var(--ink);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex:0 0 auto;}
 .tip-r .em{font-size:11px;color:#8FD9D2;margin-left:auto;}
 .tip-e{font-size:12px;color:#8FD9D2;padding:4px 0;}
 
@@ -586,7 +596,7 @@ button, .at, [role="button"]{min-height:40px;}
 .hdr-user{display:flex;align-items:center;gap:10px;margin-left:16px;padding-left:16px;
   border-left:1px solid rgba(255,255,255,.14);}
 .hu-av{width:34px;height:34px;border-radius:11px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
-  font-size:12px;font-weight:800;color:#fff;background:linear-gradient(135deg,#12BDB0,#0E7C74);
+  font-size:12px;font-weight:800;color:var(--ink);background:linear-gradient(135deg,#12BDB0,#0FAEA3);
   box-shadow:0 4px 12px rgba(18,189,176,.35);}
 .hu-info{line-height:1.3;}
 .hu-name{font-size:13.5px;font-weight:700;color:#fff;}
@@ -682,7 +692,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=155, BUILD_DATE="2026-10-20";
+const BUILD=156, BUILD_DATE="2026-10-20";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
