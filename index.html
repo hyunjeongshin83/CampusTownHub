@@ -401,9 +401,15 @@ header{box-shadow:0 2px 20px rgba(0,0,0,.25);}
 .ct-logo:focus-visible{outline:2px solid #8FD9D2;outline-offset:2px;}
 .ct-logo:active{transform:scale(.985);}
 .ct-mark svg{display:block}
+/* (v154) 허브 표시 — 가운데에서 네 갈래로 이어지는 모양.
+   색 점이 보이려면 바탕이 밝아야 합니다. 민트 그라데이션 위에서는 어떤 색도
+   3:1 을 못 넘겨(가장 밝은 끝 기준 1.2~2.4) 글자처럼 뭉개집니다. 그래서 흰 타일입니다.
+   WCAG 상대휘도로 잰 값 (흰 타일 기준):
+     가운데 딥틸 #0E7C74 5.06 · 블루 #2F72C4 4.86 · 퍼플 #6B4FC4 5.93
+     코랄 #D2604A 3.81 · 앰버 #C8860D 3.06 · 잇는 선 #5E9A94 3.22   — 모두 3:1 이상
+     흰 타일 vs 머리글 바탕 #0C2622 = 15.96 */
 .ct-mark{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;
-  font-weight:900;font-size:18px;color:#fff;letter-spacing:.5px;
-  background:linear-gradient(135deg,#12BDB0,#0E7C74);box-shadow:0 6px 18px rgba(18,189,176,.4);}
+  background:#fff;box-shadow:0 6px 18px rgba(12,38,34,.28);}
 
 /* ===== Startup style layer (Stage 7) ===== */
 body{letter-spacing:-0.015em;}
@@ -411,7 +417,6 @@ body{letter-spacing:-0.015em;}
 .section-title{font-family:'Space Grotesk','Pretendard',sans-serif;text-transform:uppercase;letter-spacing:2px;font-size:12px;font-weight:700;}
 .kick{font-family:'Space Grotesk','Pretendard',sans-serif;}
 .home-num,.job-status,.c-role,.mc-badge,.badge{font-family:'Space Grotesk','Pretendard',sans-serif;font-feature-settings:'tnum';}
-.ct-mark{font-family:'Space Grotesk',sans-serif;}
 /* buttons: crisp startup feel */
 .b-mint,.b-deep,.b-gold,.b-ghost{border-radius:12px;font-weight:700;letter-spacing:-0.01em;transition:transform .12s ease,box-shadow .12s ease;}
 /* (v129) 손가락으로 누르는 화면에서는 버튼을 44px 이상으로 — 고령 사용자 포함 */
@@ -580,6 +585,7 @@ button, .at, [role="button"]{min-height:40px;}
 <div class="gate" id="gate">
   <div class="gate-inner">
     <div class="gate-brand">
+      <span class="ct-mark" style="width:52px;height:52px;border-radius:15px;flex:0 0 auto"><svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true" focusable="false"><g stroke="#5E9A94" stroke-width="2.6" stroke-linecap="round"><line x1="24" y1="24" x2="12" y2="12"/><line x1="24" y1="24" x2="36" y2="12"/><line x1="24" y1="24" x2="12" y2="36"/><line x1="24" y1="24" x2="36" y2="36"/></g><circle cx="12" cy="12" r="5.4" fill="#2F72C4"/><circle cx="36" cy="12" r="5.4" fill="#C8860D"/><circle cx="12" cy="36" r="5.4" fill="#6B4FC4"/><circle cx="36" cy="36" r="5.4" fill="#D2604A"/><circle cx="24" cy="24" r="8.2" fill="#FFFFFF"/><circle cx="24" cy="24" r="7" fill="#0E7C74"/></svg></span>
       <div><div class="gate-title">캠퍼스타운 허브</div><div class="gate-sub">CampusTown Hub · 회의 협업 플랫폼</div></div>
     </div>
     <div id="authArea"></div>
@@ -590,7 +596,7 @@ button, .at, [role="button"]{min-height:40px;}
 <div class="app" id="appMain" style="display:none;">
 <header>
   <div class="brand">
-    <div class="ct-logo" id="ctHome" role="button" tabindex="0" title="첫 화면(회의 목록)으로 돌아갑니다" aria-label="캠퍼스타운 허브 — 회의 목록으로"><span class="ct-mark"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false"><g fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6.6" r="2.5" fill="#fff" stroke="none"/><path d="M7.6 14.2c0-2.4 2-4 4.4-4s4.4 1.6 4.4 4"/><circle cx="4.9" cy="11.6" r="2" fill="#fff" stroke="none"/><path d="M1.6 18c0-2 1.5-3.3 3.3-3.3 .7 0 1.3.2 1.9.5"/><circle cx="19.1" cy="11.6" r="2" fill="#fff" stroke="none"/><path d="M22.4 18c0-2-1.5-3.3-3.3-3.3-.7 0-1.3.2-1.9.5"/></g></svg></span><div><div class="name">캠퍼스타운 허브</div><div class="sub">CampusTown Hub · 회의 협업 플랫폼</div></div></div>
+    <div class="ct-logo" id="ctHome" role="button" tabindex="0" title="첫 화면(회의 목록)으로 돌아갑니다" aria-label="캠퍼스타운 허브 — 회의 목록으로"><span class="ct-mark"><svg viewBox="0 0 48 48" width="30" height="30" aria-hidden="true" focusable="false"><g stroke="#5E9A94" stroke-width="2.6" stroke-linecap="round"><line x1="24" y1="24" x2="12" y2="12"/><line x1="24" y1="24" x2="36" y2="12"/><line x1="24" y1="24" x2="12" y2="36"/><line x1="24" y1="24" x2="36" y2="36"/></g><circle cx="12" cy="12" r="5.4" fill="#2F72C4"/><circle cx="36" cy="12" r="5.4" fill="#C8860D"/><circle cx="12" cy="36" r="5.4" fill="#6B4FC4"/><circle cx="36" cy="36" r="5.4" fill="#D2604A"/><circle cx="24" cy="24" r="8.2" fill="#FFFFFF"/><circle cx="24" cy="24" r="7" fill="#0E7C74"/></svg></span><div><div class="name">캠퍼스타운 허브</div><div class="sub">CampusTown Hub · 회의 협업 플랫폼</div></div></div>
   </div>
   <div class="hspace"></div>
   <button class="at" id="hdrHome" title="첫 화면(회의 목록)으로 돌아갑니다" style="white-space:nowrap" onclick="goMeetingList()">회의 목록</button>
@@ -637,7 +643,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=153, BUILD_DATE="2026-10-20";
+const BUILD=154, BUILD_DATE="2026-10-20";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
