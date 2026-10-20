@@ -394,7 +394,13 @@ button:disabled{opacity:.5;cursor:not-allowed;transform:none;}
 header{box-shadow:0 2px 20px rgba(0,0,0,.25);}
 .slide{box-shadow:0 16px 46px rgba(12,38,34,.22);}
 
-.ct-logo{display:flex;align-items:center;gap:12px;}
+/* (v153) 로고를 누르면 첫 화면으로 — 누를 수 있다는 것이 보이게 합니다 */
+.ct-logo{display:flex;align-items:center;gap:12px;cursor:pointer;border-radius:14px;
+  padding:3px 8px 3px 3px;margin-left:-3px;transition:background .14s ease;}
+.ct-logo:hover{background:rgba(255,255,255,.09);}
+.ct-logo:focus-visible{outline:2px solid #8FD9D2;outline-offset:2px;}
+.ct-logo:active{transform:scale(.985);}
+.ct-mark svg{display:block}
 .ct-mark{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;
   font-weight:900;font-size:18px;color:#fff;letter-spacing:.5px;
   background:linear-gradient(135deg,#12BDB0,#0E7C74);box-shadow:0 6px 18px rgba(18,189,176,.4);}
@@ -584,7 +590,7 @@ button, .at, [role="button"]{min-height:40px;}
 <div class="app" id="appMain" style="display:none;">
 <header>
   <div class="brand">
-    <div class="ct-logo"><span class="ct-mark">CT</span><div><div class="name">캠퍼스타운 허브</div><div class="sub">CampusTown Hub · 회의 협업 플랫폼</div></div></div>
+    <div class="ct-logo" id="ctHome" role="button" tabindex="0" title="첫 화면(회의 목록)으로 돌아갑니다" aria-label="캠퍼스타운 허브 — 회의 목록으로"><span class="ct-mark"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false"><g fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6.6" r="2.5" fill="#fff" stroke="none"/><path d="M7.6 14.2c0-2.4 2-4 4.4-4s4.4 1.6 4.4 4"/><circle cx="4.9" cy="11.6" r="2" fill="#fff" stroke="none"/><path d="M1.6 18c0-2 1.5-3.3 3.3-3.3 .7 0 1.3.2 1.9.5"/><circle cx="19.1" cy="11.6" r="2" fill="#fff" stroke="none"/><path d="M22.4 18c0-2-1.5-3.3-3.3-3.3-.7 0-1.3.2-1.9.5"/></g></svg></span><div><div class="name">캠퍼스타운 허브</div><div class="sub">CampusTown Hub · 회의 협업 플랫폼</div></div></div>
   </div>
   <div class="hspace"></div>
   <button class="at" id="hdrHome" title="첫 화면(회의 목록)으로 돌아갑니다" style="white-space:nowrap" onclick="goMeetingList()">회의 목록</button>
@@ -631,7 +637,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=152, BUILD_DATE="2026-10-20";
+const BUILD=153, BUILD_DATE="2026-10-20";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -7376,6 +7382,15 @@ function renderHdrUser(){
   };
 }
 
+// (v153) 머리글 로고를 눌러도 첫 화면으로. 마우스·키보드 둘 다.
+function bindCtHome(){
+  const el=$("ctHome"); if(!el || el.dataset.bound) return;
+  el.dataset.bound="1";
+  const go=()=>{ try{ goMeetingList(); }catch(e){} };
+  el.onclick=go;
+  el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } };
+}
+window.bindCtHome=bindCtHome;
 function goMeetingList(){
   try{ if(typeof listening!=="undefined"&&listening&&typeof stopMic==="function")stopMic(); }catch(_){}
   const app=$("appMain"); if(app)app.style.display="none";
@@ -7384,6 +7399,7 @@ function goMeetingList(){
 }
 window.goMeetingList=goMeetingList;
 function enterHub(){
+  bindCtHome();
   $("gate").style.display="none";
   renderTabs();
   refreshBadges();          // 참석자 배지·말풍선 즉시 반영
@@ -7792,6 +7808,8 @@ function opsRender(){
     b.onclick=opsPanel; document.body.appendChild(b);
   }
   if(document.readyState!=="loading") mount(); else document.addEventListener("DOMContentLoaded",mount);
+  // 머리글 로고는 로그인 전에도 눌리게 — 로그인 화면에서 길을 잃었을 때의 출구입니다
+  try{ bindCtHome(); }catch(e){}
   setTimeout(()=>{ try{ OPS.runAudit(true,true); }catch(e){ console.warn("자동 점검 실패:",e); } },4000);
 })();
 

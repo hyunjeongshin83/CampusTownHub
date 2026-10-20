@@ -55,6 +55,25 @@ with sync_playwright() as p:
     if saved != "m2":
         fails.append(f"회의 선택이 이 브라우저에 안 적혔습니다 (값 {saved})")
 
+    # 머리글 로고를 누르면 첫 화면(회의 목록)으로 — 길을 잃었을 때의 출구
+    logo = pg.evaluate("""()=>{
+      state.meetings=[{id:'mL',title:'로고 시험',date:'2026-10-20',time:'10:00',attendees:[{name:'나'}]}];
+      state.currentMeetingId='mL'; syncCurrentMeeting();
+      if(typeof enterHub==='function') enterHub();
+      const el=document.getElementById('ctHome');
+      if(!el) return {found:false};
+      const before=getComputedStyle(document.getElementById('appMain')).display;
+      el.click();
+      return {found:true, before, after:getComputedStyle(document.getElementById('appMain')).display,
+              clickable:getComputedStyle(el).cursor};
+    }""")
+    print("로고:", logo)
+    if not logo.get("found"): fails.append("머리글 로고(ctHome)가 없습니다")
+    else:
+        if logo.get("before")=="none": fails.append("시험 전부터 앱 화면이 아니었습니다")
+        elif logo.get("after")!="none": fails.append("로고를 눌러도 첫 화면으로 안 갑니다")
+        if logo.get("clickable")!="pointer": fails.append("로고가 눌리는 것처럼 보이지 않습니다")
+
     if errs:
         fails.append("스크립트 오류: " + errs[0])
     b.close()
@@ -67,6 +86,7 @@ lines += ["<details><summary>본 것</summary>", "",
           "- 다른 창에서 계정이 바뀌면 알려 주는가 (표시와 서버가 갈라지지 않게)",
           "- 안내 창이 겹쳐 뜨지 않는가",
           "- 「보고 있는 회의」가 이 브라우저에만 적히는가 (남의 화면을 끌고 가지 않게)",
+          "- 머리글 로고를 누르면 첫 화면(회의 목록)으로 가는가",
           "", "</details>"]
 open("session-report.md", "w", encoding="utf-8").write("\n".join(lines))
 print()
