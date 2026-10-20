@@ -631,7 +631,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=151, BUILD_DATE="2026-10-19";
+const BUILD=152, BUILD_DATE="2026-10-20";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -2622,11 +2622,49 @@ async function openPptViewer(url,name){
     window.jQuery("#pptxTarget").pptxToHtml({
       pptxFileUrl:url, slidesScale:"100%", slideMode:false, keyBoardShortCut:false
     });
+    // (v152) 그림이 안 보일 때 이유를 말해 줍니다.
+    //   파일 안의 그림 수를 직접 세어, 화면에 그려진 수와 견줍니다.
+    //   한글 파워포인트는 도형·차트를 EMF·WMF(윈도 전용 그림)로 넣는 일이 잦은데
+    //   브라우저는 그 형식을 못 그립니다 — 조용히 빠지면 「그림이 안 나온다」가 됩니다.
+    setTimeout(()=>{ pptImageCheck(url).catch(()=>{}); }, 2500);
+    setTimeout(()=>{ pptImageCheck(url).catch(()=>{}); }, 7000);
   }catch(e){
     console.error(e);
     $("pptxTarget").innerHTML='<div class="mini" style="padding:24px;text-align:center">앱 내 표시에 실패했습니다 — 상단의 [외부 뷰어] 또는 [다운로드]를 이용해 주세요.<br>'+esc(e.message)+"</div>";
   }
 }
+// 그림이 안 보일 때 이유를 말해 줍니다.
+//   가장 확실한 신호는 「깨진 img」입니다 — EMF·WMF(윈도 전용 그림)는 태그는 생기는데
+//   브라우저가 못 그려서 naturalWidth 가 0 입니다. 조용히 빈 자리가 되는 것이 그것입니다.
+//   파일 안을 읽는 것은 형식 이름을 알려 주기 위해서일 뿐, 실패해도 안내는 나갑니다.
+async function pptImageCheck(url){
+  const target=$("pptxTarget"); if(!target) return;
+  if($("pptImgWarn")) return;                       // 한 번만
+
+  const imgs=[...target.querySelectorAll("img")];
+  if(!imgs.length) return;
+  const 깨짐=imgs.filter(i=>i.complete && i.naturalWidth===0);
+  if(!깨짐.length) return;                          // 다 잘 나왔으면 조용히
+
+  // 어떤 형식이 못 그려졌는지 — src 의 data:image/… 에서 바로 읽힙니다
+  const 종류=[...new Set(깨짐.map(i=>{
+    const m=(i.getAttribute("src")||"").match(/^data:image\/([a-z0-9.+-]+)/i);
+    return m ? m[1].replace(/^x-/,"") : "";
+  }).filter(Boolean))].join("·").toUpperCase();
+
+  const box=document.createElement("div");
+  box.id="pptImgWarn";
+  box.style.cssText="margin:0 0 12px;padding:11px 14px;border-radius:10px;background:#FFF6E5;"+
+                    "border:1px solid #E8C97A;color:#6B4E00;font-size:12.5px;line-height:1.7";
+  box.innerHTML="이 자료의 그림 "+깨짐.length+"개가 화면에 나오지 않습니다"+
+    (종류?" — <b>"+esc(종류)+"</b> 형식이라 브라우저가 그리지 못합니다.":" .")+
+    "<br>한글 파워포인트는 도형·차트를 이 형식으로 넣는 일이 잦습니다."+
+    "<br><b>[외부 뷰어]</b>로 열면 원본 그대로 보이고, 파워포인트에서 <b>다른 이름으로 저장 → PDF</b> 로 올리셔도 그림이 그대로 나옵니다."+
+    '<div style="margin-top:8px"><button class="b-mint" style="padding:5px 12px;font-size:12px" id="pptGoExt">외부 뷰어로 열기</button></div>';
+  target.insertBefore(box, target.firstChild);
+  const g=$("pptGoExt"); if(g) g.onclick=()=>$("pptExt").click();
+}
+window.pptImageCheck=pptImageCheck;
 async function deleteFile(name){
   if(!sb||!canUpload()) return;
   if(!confirm("이 자료를 삭제할까요?")) return;
@@ -6002,11 +6040,11 @@ function renderRecords(){const list=$("reclist");if(!list)return;
         const nm=mm?mm.title:(r.mid?"(삭제된 회의)":"(소속 미지정)");
         byMeeting[nm]=(byMeeting[nm]||0)+1;
       });
-      extra=`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
-        <b style="color:var(--deep);font-size:12.5px">전체 기록 ${all.length}건은 여기에 있습니다</b>
-        <ul style="margin:5px 0 0;padding-left:18px">`
+      extra=`<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--mist);border:1px dashed var(--line)">
+        <b style="color:var(--soft);font-size:12.5px">↓ 아래는 <u>다른 회의</u>의 기록입니다 — 이 회의의 것이 아닙니다</b>
+        <ul style="margin:5px 0 0;padding-left:18px;color:var(--gray)">`
         +Object.keys(byMeeting).map(k=>`<li>${esc(k)} — ${byMeeting[k]}건</li>`).join("")
-        +`</ul><div class="mini" style="margin-top:6px">해당 회의로 입장하시거나, 기록의 [수정]에서 소속 회의를 바꿔 이 회의로 옮길 수 있습니다.</div></div>`;
+        +`</ul><div class="mini" style="margin-top:6px">그 회의로 입장하시면 보입니다. 잘못 붙어 있다면 그 기록의 [수정]에서 소속 회의를 이 회의로 바꾸실 수 있습니다.</div></div>`;
     }
     list.innerHTML=scopeLabel+'<div class="glass tile"><div class="mini">이 회의의 저장된 회차가 아직 없습니다. 회의를 시작하고 종료하면 여기에 쌓입니다.</div>'+extra+'</div>';
     return;}
