@@ -156,7 +156,7 @@
 .caption-box .cap-terms{font-size:12.5px;color:var(--mint2);margin-top:6px;}
 :root{
   --mint:#12BDB0;--mint2:#0FD6C6;--deep:#0E7C74;--ink:#0C2622;--ink2:#123430;
-  --gray:#41504D;--soft:#6B7C79;--light:#E7F7F5;--mist:#F4FBFA;--gold:#0B5F59;
+  --gray:#41504D;--soft:#586865;--light:#E7F7F5;--mist:#F4FBFA;--gold:#0B5F59;
   --line:#DCEEEB;--glass:rgba(255,255,255,.72);--shadow:0 8px 30px rgba(12,38,34,.10);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -178,6 +178,25 @@ header{backdrop-filter:blur(14px);background:rgba(12,38,34,.86);color:#fff;
 .brand .name b{color:var(--mint2);}
 .brand .sub{font-size:13px;color:#8FD9D2;margin-top:2px;}
 .hspace{flex:1;}
+/* (v155) 휴대폰에서 머리글이 가로로 238px 넘쳐 화면이 옆으로 밀렸습니다.
+   한 줄에 다 넣으려 하지 않고, 좁아지면 줄을 바꾸고 덜 중요한 것부터 접습니다. */
+@media (max-width:820px){
+  header{padding:10px 14px;gap:9px;}
+  .brand .sub{display:none;}
+  .brand .name{font-size:18px;}
+  .ct-mark{width:38px;height:38px;border-radius:11px;}
+  .ct-mark svg{width:26px;height:26px;}
+  #hdrBuild{display:none;}
+  .clock{display:none;}
+}
+@media (max-width:560px){
+  header{flex-wrap:wrap;row-gap:8px;}
+  .brand{flex:1 1 auto;min-width:0;}
+  .brand .name{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .hspace{display:none;}
+  .pill{font-size:11px;padding:4px 9px;}
+  header > button, header > #guideBtn{flex:0 0 auto;}
+}
 .pill{display:flex;align-items:center;gap:7px;font-size:12px;padding:5px 12px;
   border-radius:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);}
 .pill .led{width:8px;height:8px;border-radius:50%;background:#7d8;transition:.3s;}
@@ -203,8 +222,12 @@ header{backdrop-filter:blur(14px);background:rgba(12,38,34,.86);color:#fff;
 .body{flex:1;display:grid;grid-template-columns:1fr 340px;min-height:0;}
 .body.solo{grid-template-columns:1fr;}
 .stage{overflow-y:auto;min-height:0;padding:22px;}
+/* (v155) 보조 칸은 「어느 탭인가」와 「화면이 좁은가」 둘 다 봐야 합니다.
+   예전에는 JS 가 인라인 display 를 박아서 좁은 화면 규칙을 이겼고,
+   휴대폰 슬라이드 탭에서 428px 짜리 칸이 열려 화면이 39px 밀렸습니다. */
 .rail{border-left:1px solid var(--line);background:var(--glass);backdrop-filter:blur(10px);
-  display:flex;flex-direction:column;min-height:0;}
+  display:none;flex-direction:column;min-height:0;}
+.body.with-rail .rail{display:flex;}
 .rail h3{font-size:12px;font-weight:800;color:var(--deep);padding:12px 15px;
   border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;}
 .rail h3 .tag{margin-left:auto;font-size:10px;color:#fff;background:var(--mint);padding:2px 8px;border-radius:9px;}
@@ -382,7 +405,7 @@ button:disabled{opacity:.5;cursor:not-allowed;transform:none;}
 .aibadge{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:var(--deep);
   background:var(--light);border-radius:9px;padding:2px 8px;}
 .aibadge .dot{width:6px;height:6px;border-radius:50%;background:var(--mint);animation:pulse 1.6s infinite;}
-@media(max-width:860px){.body{grid-template-columns:1fr;}.rail{display:none;}
+@media(max-width:860px){.body{grid-template-columns:1fr;}.rail,.body.with-rail .rail{display:none;}
   .console{grid-template-columns:1fr;}.g2,.g3{grid-template-columns:1fr;}.appwrap{flex-direction:column;align-items:center;}}
 
 :root{--r-lg:22px;--r-xl:26px;}
@@ -414,7 +437,10 @@ header{box-shadow:0 2px 20px rgba(0,0,0,.25);}
 /* ===== Startup style layer (Stage 7) ===== */
 body{letter-spacing:-0.015em;}
 .name,.gate-title,.hero h2,.cover h1,.mc-top h4,.c-name{font-weight:800;letter-spacing:-0.03em;}
-.section-title{font-family:'Space Grotesk','Pretendard',sans-serif;text-transform:uppercase;letter-spacing:2px;font-size:12px;font-weight:700;}
+.section-title{font-family:'Space Grotesk','Pretendard',sans-serif;text-transform:uppercase;letter-spacing:2px;font-size:12px;font-weight:700;
+  /* (v155) 민트(#12BDB0)로 두면 연민트 타일 위에서 1.93:1 — 거의 안 보였습니다.
+     딥그린 #0B5F59 로 6.16:1. 색 계열은 그대로 두고 명도만 낮췄습니다. */
+  color:var(--gold);}
 .kick{font-family:'Space Grotesk','Pretendard',sans-serif;}
 .home-num,.job-status,.c-role,.mc-badge,.badge{font-family:'Space Grotesk','Pretendard',sans-serif;font-feature-settings:'tnum';}
 /* buttons: crisp startup feel */
@@ -430,6 +456,14 @@ button, .at, [role="button"]{min-height:40px;}
   /* 인라인 스타일로 그려진 버튼까지 포함 — 로그아웃·가이드·운영·뒤로가기 */
   button, .at, #opsBtn, #guideBtn, #connBack{min-height:44px;}
   button{font-size:max(13px,1em);}
+  /* (v155) 적는 칸·고르는 칸도 손가락 크기로. 35px 안팎이라 떨리는 손에 잘 안 들어갑니다.
+     글자도 16px 미만이면 iOS 가 화면을 확대해 버려 레이아웃이 튑니다. */
+  input:not([type=checkbox]):not([type=radio]):not([type=hidden]),
+  select, textarea{min-height:44px;font-size:max(16px,1em);}
+  textarea{min-height:72px;}
+  /* 체크상자는 커질 수 없으니 누르는 범위를 넓힙니다 */
+  input[type=checkbox], input[type=radio]{width:20px;height:20px;}
+  label:has(> input[type=checkbox]), label:has(> input[type=radio]){min-height:44px;display:inline-flex;align-items:center;}
 }
 .b-mint:hover,.b-deep:hover,.b-gold:hover{transform:translateY(-1px);}
 .b-mint:active,.b-deep:active,.b-gold:active{transform:translateY(0);}
@@ -519,6 +553,11 @@ button, .at, [role="button"]{min-height:40px;}
   box-shadow:0 12px 32px rgba(12,38,34,.32);opacity:0;visibility:hidden;transition:all .18s ease;z-index:60;
   text-align:left;pointer-events:none;backdrop-filter:blur(10px);}
 .tab:hover .tip{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0);}
+/* (v155) 휴대폰에서 이 말풍선이 화면 밖으로 나가 가로 스크롤이 생겼습니다.
+   화면보다 넓어지지 않게 묶고, 좁으면 최소 폭을 풀어 줍니다. */
+@media (max-width:560px){
+  .tip{min-width:0;max-width:min(300px, calc(100vw - 28px));}
+}
 .tip::before{content:"";position:absolute;bottom:100%;left:50%;transform:translateX(-50%);
   border:6px solid transparent;border-bottom-color:rgba(12,38,34,.97);}
 .tip-h{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#5FE3D6;margin-bottom:8px;}
@@ -643,7 +682,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=154, BUILD_DATE="2026-10-20";
+const BUILD=155, BUILD_DATE="2026-10-20";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -1519,7 +1558,8 @@ function switchTab(tab){
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.tab===tab));
   const showRail=(tab==="deck"||tab==="app"||tab==="registry");
   $("bodyEl").classList.toggle("solo",!showRail);
-  $("rail").style.display=showRail?"flex":"none";
+  $("bodyEl").classList.toggle("with-rail",showRail);
+  try{ $("rail").style.removeProperty("display"); }catch(e){}   // 옛 인라인 값 지우기
   if(showRail){$("railTag").textContent=({deck:"슬라이드",app:"복약앱",registry:"약사사이트"})[tab];renderRail(tab);}
   renderStage(tab);
 }
@@ -2840,7 +2880,7 @@ function prepHTML(){
        <div class="mini" id="aiTestMsg" style="margin-top:5px"></div>
      </div>
      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-       <select id="aiProvSel" onchange="setAiProv(this.value);refreshApiKeyStatus()" style="padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px">
+       <select id="aiProvSel" aria-label="AI 제공자 고르기 (Claude·OpenAI)" onchange="setAiProv(this.value);refreshApiKeyStatus()" style="padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:12.5px">
          <option value="claude">Claude 키 (sk-ant-…)</option>
          <option value="openai">OpenAI·GPT 키 (sk-…)</option>
        </select>
@@ -2908,9 +2948,9 @@ function prepHTML(){
    <div class="glass tile">
      <h4>회의 정보 <span class="aibadge" id="aiFixBadge" style="cursor:pointer" title="켜져 있으면 [AI 반영] 시 제목·목적을 AI가 고쳐 씁니다. 클릭해 켜고 끕니다."><span class="dot"></span><span id="aiFixLabel">AI 자동 수정</span></span></h4>
      <div class="field" style="margin-bottom:8px"><label style="font-size:11px;font-weight:800;color:var(--soft)">제목</label>
-       <input id="mTitle" value="${esc(state.meeting.title)}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
+       <input id="mTitle" aria-label="회의 제목" value="${esc(state.meeting.title)}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
      <div class="field"><label style="font-size:11px;font-weight:800;color:var(--soft)">목적</label>
-       <input id="mPurpose" value="${esc(state.meeting.purpose)}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
+       <input id="mPurpose" aria-label="회의 목적" value="${esc(state.meeting.purpose)}" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px"></div>
      <button class="b-ghost" id="mSave" style="margin-top:10px">저장</button>
    </div>
   </div>`;
