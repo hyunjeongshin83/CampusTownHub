@@ -51,6 +51,7 @@
     <button id="full" disabled>전체화면 (공유용)</button>
   </div>
   <div id="msg" style="margin-top:7px">기준 사진을 먼저 넣어 주세요.</div>
+  <div id="stat" style="margin-top:5px;font-size:12.5px;font-weight:700;color:var(--deep);min-height:19px"></div>
   <div class="row" style="margin-top:8px">
     <span class="mini" style="width:74px">표정 강도</span>
     <input type="range" id="gain" min="0" max="200" value="100">
@@ -67,8 +68,8 @@
 </div>
 
 <div class="stage">
-  <div class="panel"><h4>내 카메라 (나만 봅니다)</h4><video id="live" autoplay playsinline muted></video></div>
-  <div class="panel"><h4>내보내는 화면</h4><canvas id="out" width="640" height="480"></canvas></div>
+  <div class="panel"><h4>내 카메라 — 나만 봅니다 (상대에게 안 갑니다)</h4><video id="live" autoplay playsinline muted></video></div>
+  <div class="panel"><h4>내보내는 화면 — 상대가 보는 것 (사진 + 지금 표정)</h4><canvas id="out" width="640" height="480"></canvas></div>
 </div>
 
 <div class="card" style="margin-top:12px">
@@ -100,7 +101,11 @@ const out=$("out"), ctx=out.getContext("2d",{willReadFrequently:false});
 const live=$("live");
 let landmarker=null, photo=null, srcPts=null, tris=null, neutral=null;
 let running=false, stream=null, raf=0;
+let lastErr="", faceSeen=0, faceMiss=0, moveMax=0;
 const msg=t=>{ $("msg").textContent=t; };
+// 실행 중 상태 — 「왜 안 바뀌는지」가 보여야 합니다
+const stat=(t,bad)=>{ const e=$("stat"); if(!e) return;
+  e.textContent=t; e.style.color=bad?"#b4453a":"var(--deep)"; };
 
 $("gain").oninput=()=>$("gainV").textContent=$("gain").value+"%";
 $("head").oninput=()=>$("headV").textContent=$("head").value+"%";
@@ -210,25 +215,44 @@ $("go").onclick=async()=>{
   try{
     const lm=await model();
     if(!stream){ stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480}}); live.srcObject=stream; }
-    lm.setOptions({runningMode:"VIDEO"});
+    await lm.setOptions({runningMode:"VIDEO"});   // Promise 입니다 — 안 기다리면 첫 프레임이 오류를 냅니다
+    lastErr=""; faceSeen=0; faceMiss=0; moveMax=0;
     running=true; $("go").disabled=true; $("stop").disabled=false;
     msg("실행 중 — 카메라 영상은 이 브라우저 안에서만 처리됩니다.");
     loop();
   }catch(e){ msg("실패: "+(e.message||e)); }
 };
 $("stop").onclick=()=>{ running=false; cancelAnimationFrame(raf);
-  $("go").disabled=false; $("stop").disabled=true; msg("정지했습니다."); };
+  $("go").disabled=false; $("stop").disabled=true; msg("정지했습니다."); stat(""); };
 $("full").onclick=()=>{ document.body.classList.toggle("big");
   if(document.body.classList.contains("big")) out.requestFullscreen&&out.requestFullscreen().catch(()=>{}); };
 
+// 「안 바뀐다」의 정체를 알 수 있게 — 예전에는 세 곳에서 아무 말 없이 그냥 넘어갔습니다.
+//   ① 카메라가 아직 안 올라옴  ② 인식이 오류를 냄  ③ 카메라에서 얼굴을 못 찾음
+//   어느 쪽이든 화면이 가만히 있어서, 보시기엔 똑같이 「안 바뀜」이었습니다.
 function loop(){
   if(!running) return;
   raf=requestAnimationFrame(loop);
-  if(!photo||!landmarker||live.readyState<2) return;
-  let r; try{ r=landmarker.detectForVideo(live, performance.now()); }catch(e){ return; }
-  if(!r.faceLandmarks||!r.faceLandmarks.length) return;
+  if(!photo||!landmarker){ stat("준비가 덜 됐습니다 — 기준 사진을 먼저 넣어 주세요"); return; }
+  if(live.readyState<2){ stat("카메라 영상을 기다리는 중…"); return; }
+  let r;
+  try{ r=landmarker.detectForVideo(live, performance.now()); }
+  catch(e){
+    const m=(e&&e.message)||String(e);
+    if(m!==lastErr){ lastErr=m; stat("얼굴 인식이 멈췄습니다: "+m, true); }
+    return;
+  }
+  if(!r.faceLandmarks||!r.faceLandmarks.length){
+    faceMiss++; faceSeen=0;
+    if(faceMiss>12) stat("카메라에서 얼굴을 못 찾고 있습니다 — 얼굴이 화면에 들어오게, 밝은 곳에서 정면을 봐 주세요", true);
+    return;
+  }
+  faceSeen++; faceMiss=0;
   const cur=r.faceLandmarks[0];
-  if(!neutral) neutral=cur.map(p=>({x:p.x,y:p.y}));
+  if(!neutral){
+    neutral=cur.map(p=>({x:p.x,y:p.y}));
+    stat("기준 자세를 잡았습니다 — 이제 표정·고갯짓만 사진에 입혀집니다");
+  }
 
   // 사진의 얼굴 크기에 맞춰 움직임의 크기를 환산한다
   const sw=Math.abs(srcPts[454].x-srcPts[234].x)||1;          // 사진 얼굴 너비(px)
@@ -242,6 +266,19 @@ function loop(){
     x:s.x + nd.x + ((cur[i].x-neutral[i].x)-(cur[1].x-neutral[1].x))*k*gE,
     y:s.y + nd.y + ((cur[i].y-neutral[i].y)-(cur[1].y-neutral[1].y))*k*gE
   }));
+
+  // 지금 얼마나 움직이고 있는지 (화면 픽셀 기준) — 0 에 가까우면 가만히 계신 것입니다
+  let mv=0;
+  for(let i=0;i<dst.length;i+=8){
+    const d=Math.abs(dst[i].x-srcPts[i].x)+Math.abs(dst[i].y-srcPts[i].y);
+    if(d>mv) mv=d;
+  }
+  moveMax=Math.max(moveMax*0.96, mv);
+  if(faceSeen%10===0){
+    stat(moveMax<1.2
+      ? "얼굴을 찾았습니다 · 움직임 "+moveMax.toFixed(1)+"px — 거의 가만히 계십니다. 고개를 좌우로 돌리거나 웃어 보세요"
+      : "잘 되고 있습니다 · 움직임 "+moveMax.toFixed(1)+"px (사진에 지금 표정이 입혀지고 있습니다)");
+  }
 
   ctx.setTransform(1,0,0,1,0,0);
   ctx.drawImage(photo,0,0,out.width,out.height);            // 배경·머리카락은 원본 그대로
