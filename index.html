@@ -629,6 +629,18 @@ button, .at, [role="button"]{min-height:40px;}
 .anno-pop{position:fixed;z-index:10000;max-width:300px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(20,60,55,.18);padding:11px 13px;font-size:12.5px;line-height:1.6;color:var(--ink)}
 .anno-pop .t{font-weight:800;color:var(--deep);margin-bottom:3px}
 .anno-pop .acts{display:flex;gap:6px;margin-top:8px;justify-content:flex-end}
+
+/* 미팅 예약 창 (v158) — 폭과 무관하게 터치 44px. 처음 오신 분이 태블릿으로 채우는 칸입니다.
+   대비 실측: 라벨 5.86:1 · [신청 보내기] 15.96:1 · [취소] 5.94:1 · 입력 글자 21.00:1 */
+#bkModal .bk-in{width:100%;box-sizing:border-box;padding:11px 12px;min-height:44px;
+  border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:max(16px,1em);color:var(--ink);background:#fff}
+#bkModal textarea.bk-in{min-height:76px;line-height:1.6;resize:vertical}
+#bkModal .bk-lb{display:block;font-size:11.5px;font-weight:800;color:var(--soft);margin-bottom:4px}
+#bkModal .bk-ok{display:flex;gap:9px;align-items:flex-start;min-height:44px;padding:8px 0;
+  font-size:13px;line-height:1.6;color:var(--gray);cursor:pointer}
+#bkModal .bk-ok input{margin-top:3px;width:20px;height:20px;accent-color:var(--mint);flex:none}
+#bkModal button{min-height:44px;min-width:60px}
+#bkModal .bk-hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 </style>
 </head>
 <body>
@@ -639,7 +651,7 @@ button, .at, [role="button"]{min-height:40px;}
       <div><div class="gate-title">캠퍼스타운 허브</div><div class="gate-sub">CampusTown Hub · 회의 협업 플랫폼</div></div>
     </div>
     <div id="authArea"></div>
-    <div style="text-align:center;margin-top:14px"><button onclick="openInviteeGuide()" style="background:rgba(255,255,255,.1);color:#CFEEEA;border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">초대자 가이드 — 가입·앱 등록·업데이트 안내</button></div>
+    <div style="text-align:center;margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button onclick="openInviteeGuide()" style="background:rgba(255,255,255,.1);color:#CFEEEA;border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">초대자 가이드 — 가입·앱 등록·업데이트 안내</button><button onclick="openBookingForm()" style="background:rgba(255,255,255,.1);color:#CFEEEA;border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">미팅 예약 신청 — 로그인 없이</button></div>
     <div class="gate-hint">숙명 스타트업 캠퍼스 입점기업·거래처·기관·교수·학생을 위해 작성된 회의 운영 사이트입니다.<br><span style="opacity:.7">© 2026 MedIT. All rights reserved. · <span id="gateBuild"></span></span></div>
   </div>
 </div>
@@ -693,7 +705,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=157, BUILD_DATE="2026-10-21";
+const BUILD=158, BUILD_DATE="2026-10-21";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -1500,6 +1512,177 @@ async function testAI(){
 }
 window.testAI=testAI;
 
+// ==================== 미팅 예약 (바깥 분이 신청 → 운영자가 회의로) ====================
+// (v158) 로그인 없이 신청만 받습니다. 받는 곳은 홈페이지 데모 예약과 같은 함수(demo-request)로,
+//   출처 제한·허니팟·속도 제한·서버 키 저장이 이미 들어 있는 길을 그대로 씁니다.
+//   신청 내용에는 바깥 분의 이름·연락처가 있어 목록 보기는 명부(hub_members)에 있는 사람만 됩니다.
+const BOOK_FN = () => SUPABASE_URL.replace(/\/$/,"") + "/functions/v1/demo-request";
+const BOOK_SLOTS = [["am","오전 (10~12시)"],["pm1","오후 (1~3시)"],["pm2","오후 (3~5시)"],["written","서면으로 먼저 협의"]];
+
+function openBookingForm(){
+  let m=$("bkModal"); if(m) m.remove();
+  const opened=Date.now();
+  const today=new Date(Date.now()+9*3600e3).toISOString().slice(0,10);
+  const max=new Date(Date.now()+9*3600e3+89*86400e3).toISOString().slice(0,10);
+  m=document.createElement("div"); m.id="bkModal";
+  m.style.cssText="position:fixed;inset:0;z-index:10002;background:rgba(12,30,28,.6);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto";
+  const F=(id,label,extra)=>`<div style="margin-bottom:10px">
+    <label for="${id}" class="bk-lb">${label}</label>
+    <input id="${id}" class="bk-in" ${extra||""}></div>`;
+  m.innerHTML=`
+  <div style="background:#fff;border-radius:18px;max-width:min(520px,96vw);width:100%;max-height:94vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;gap:8px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)">
+      <div style="flex:1;font-weight:800;color:var(--deep);font-size:16px">미팅 예약 신청</div>
+      <button class="b-ghost" id="bkClose">닫기</button>
+    </div>
+    <div style="padding:16px 18px;overflow:auto">
+      <div class="mini" style="margin-bottom:12px;line-height:1.7">
+        로그인 없이 신청하실 수 있습니다. 신청하신 시간에 맞춰 연락드리겠습니다.<br>
+        <span style="color:var(--soft)">※ 신청 확정이 아니라 <b>요청</b>입니다 — 저희가 확인한 뒤 회신드립니다.</span>
+      </div>
+      ${F("bk_name","이름 *","maxlength=60 autocomplete=name")}
+      ${F("bk_org","소속 (회사·기관·학교) *","maxlength=100 autocomplete=organization")}
+      ${F("bk_email","이메일 *","type=email maxlength=120 autocomplete=email")}
+      ${F("bk_phone","연락처 (선택)","maxlength=30 inputmode=tel autocomplete=tel placeholder=010-0000-0000")}
+      ${F("bk_date","희망 날짜 *","type=date min="+today+" max="+max)}
+      <div style="margin-bottom:10px">
+        <label for="bk_slot" class="bk-lb">희망 시간대 *</label>
+        <select id="bk_slot" class="bk-in">
+          ${BOOK_SLOTS.map(s=>`<option value="${s[0]}">${s[1]}</option>`).join("")}
+        </select></div>
+      <div style="margin-bottom:10px">
+        <label for="bk_msg" class="bk-lb">어떤 이야기를 나누고 싶으신가요 (선택)</label>
+        <textarea id="bk_msg" class="bk-in" rows="3" maxlength="1000"></textarea></div>
+      <label class="bk-ok">
+        <input type="checkbox" id="bk_ok">
+        <span>연락을 위해 <b>이름·소속·이메일·연락처</b>를 받는 데 동의합니다. 미팅 안내 목적으로만 쓰고, 끝나면 지웁니다.</span></label>
+      <div class="bk-hp" aria-hidden="true">
+        <label for="bk_web">이 칸은 비워 두세요</label><input id="bk_web" tabindex="-1" autocomplete="off"></div>
+      <div id="bk_msg_out" class="mini" style="margin-top:10px;min-height:18px"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--line)">
+      <button class="b-ghost" id="bkCancel">취소</button>
+      <button class="b-mint" id="bkSend">신청 보내기</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  const close=()=>m.remove();
+  $("bkClose").onclick=close; $("bkCancel").onclick=close;
+  m.onclick=e=>{ if(e.target===m) close(); };
+  const say=(t,bad)=>{ const el=$("bk_msg_out"); if(el){ el.textContent=t; el.style.color=bad?"#C24A4A":"var(--deep)"; } };
+
+  $("bkSend").onclick=async()=>{
+    const v=id=>($(id)&&$(id).value||"").trim();
+    if(!v("bk_name"))  return say("이름을 적어 주세요",1);
+    if(!v("bk_org"))   return say("소속을 적어 주세요",1);
+    if(!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]{2,}$/.test(v("bk_email"))) return say("이메일을 다시 확인해 주세요",1);
+    if(!v("bk_date"))  return say("희망 날짜를 골라 주세요",1);
+    if(!$("bk_ok").checked) return say("개인정보 수집에 동의해 주셔야 접수됩니다",1);
+    const btn=$("bkSend"); btn.disabled=true; btn.textContent="보내는 중…"; say("");
+    try{
+      const r=await fetch(BOOK_FN(),{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({kind:"meeting",name:v("bk_name"),org:v("bk_org"),email:v("bk_email"),
+          phone:v("bk_phone"),preferred_date:v("bk_date"),preferred_slot:v("bk_slot"),
+          message:v("bk_msg"),website:v("bk_web"),consent:true,elapsed_ms:Date.now()-opened})});
+      const d=await r.json().catch(()=>({}));
+      if(d.ok){
+        m.querySelector("div[style*='overflow:auto']").innerHTML=
+          '<div style="padding:26px 10px;text-align:center">'
+          +'<div style="font-size:17px;font-weight:800;color:var(--deep);margin-bottom:8px">신청이 접수되었습니다</div>'
+          +'<div class="mini" style="line-height:1.8">적어 주신 이메일로 회신드리겠습니다.<br>확정 전까지는 일정이 잡힌 것이 아닙니다.</div></div>';
+        $("bkSend").style.display="none"; $("bkCancel").textContent="닫기";
+        return;
+      }
+      const why={rate_limited:"오늘 신청 횟수를 넘었습니다 — 내일 다시 시도해 주세요",
+                 too_fast:"잠시 뒤 다시 눌러 주세요",
+                 origin:"이 주소에서는 신청할 수 없습니다",
+                 server:"서버에 문제가 있습니다 — 잠시 뒤 다시 시도해 주세요"}[d.error]
+                || (d.field?("입력을 다시 확인해 주세요 ("+d.field+")"):"보내지 못했습니다");
+      say(why,1);
+    }catch(e){ say("보내지 못했습니다 — 인터넷 연결을 확인해 주세요",1); }
+    finally{ const bb=$("bkSend"); if(bb){ bb.disabled=false; bb.textContent="신청 보내기"; } }
+  };
+  setTimeout(()=>{ const f=$("bk_name"); if(f) f.focus(); },60);
+}
+window.openBookingForm=openBookingForm;
+
+// ── 운영자: 들어온 신청 보기 ─────────────────────────────────
+async function loadBookings(){
+  if(!sb) return null;
+  try{
+    const {data:{session}}=await sb.auth.getSession();
+    if(!session) return null;
+    const r=await fetch(BOOK_FN(),{method:"POST",
+      headers:{"Content-Type":"application/json","x-user-token":session.access_token},
+      body:JSON.stringify({action:"list"})});
+    const d=await r.json().catch(()=>({}));
+    return d.ok ? (d.items||[]) : null;
+  }catch(e){ return null; }
+}
+async function renderBookings(){
+  const box=$("bookBox"); if(!box) return;
+  const items=await loadBookings();
+  if(items===null){ box.innerHTML=""; return; }         // 명부에 없음·연결 안 됨 — 조용히 비워 둡니다
+  const open=items.filter(x=>x.status!=="done"&&x.status!=="declined");
+  BOOKINGS=open;
+  if(!open.length){ box.innerHTML=""; return; }
+  const slotLabel=v=>({am:"오전 (10~12시)",pm1:"오후 (1~3시)",pm2:"오후 (3~5시)",written:"서면 협의"}[v]||v||"");
+  box.innerHTML='<div style="background:#FFF6E3;border:1px solid #E7CE93;border-radius:13px;padding:11px 14px;margin-bottom:12px">'
+    +'<b style="font-size:13px;color:#7a5b00">미팅 예약 신청 '+open.length+'건</b>'
+    + open.map(x=>`<div style="margin-top:9px;padding-top:9px;border-top:1px dashed #E0CB9A">
+        <div style="font-size:13px;color:#333"><b>${esc(x.name||"")}</b> · ${esc(x.org||"")}</div>
+        <div style="font-size:12px;color:#5c5340;line-height:1.7;margin-top:3px">
+          희망 <b>${esc(x.preferred_date||"")}</b> ${esc(slotLabel(x.preferred_slot))}<br>
+          ${esc(x.email||"")}${x.phone?" · "+esc(x.phone):""}
+          ${x.message?'<br>'+esc(x.message):""}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:7px">
+          <button class="b-ghost" data-bkno="${esc(x.id)}" style="padding:4px 11px;font-size:12px;color:#8a6a00">보류</button>
+          <button class="b-ghost" data-bkmail="${esc(x.id)}" style="padding:4px 11px;font-size:12px">메일 회신</button>
+          <button class="b-mint" data-bkgo="${esc(x.id)}" style="padding:4px 13px;font-size:12px">회의 만들기</button>
+        </div></div>`).join("")
+    +'</div>';
+  box.querySelectorAll("[data-bkno]").forEach(b=>b.onclick=()=>markBooking(b.dataset.bkno,"declined"));
+  box.querySelectorAll("[data-bkmail]").forEach(b=>b.onclick=()=>mailBooking(b.dataset.bkmail));
+  box.querySelectorAll("[data-bkgo]").forEach(b=>b.onclick=()=>bookingToMeeting(b.dataset.bkgo));
+}
+let BOOKINGS=[];
+const findBooking=id=>(BOOKINGS||[]).find(x=>String(x.id)===String(id));
+async function markBooking(id,status){
+  if(!sb) return;
+  const {data:{session}}=await sb.auth.getSession(); if(!session) return;
+  try{
+    await fetch(BOOK_FN(),{method:"POST",
+      headers:{"Content-Type":"application/json","x-user-token":session.access_token},
+      body:JSON.stringify({action:"mark",id,status})});
+    toast(status==="done"?"처리 완료로 표시했습니다":"보류로 표시했습니다");
+    renderBookings();
+  }catch(e){ toast("표시 실패: "+(e.message||e)); }
+}
+window.markBooking=markBooking;
+function mailBooking(id){
+  const x=findBooking(id); if(!x) return;
+  openGmail(x.email||"", "[캠퍼스타운 허브] 미팅 일정 안내",
+    (x.name||"")+"님, 안녕하세요.\n\n신청해 주신 미팅 건으로 연락드립니다.\n"
+    +"희망하신 일시: "+(x.preferred_date||"")+" "+(x.preferred_slot||"")+"\n\n"
+    +"아래 일시로 진행하면 어떠실까요?\n\n- 일시: \n- 방식: 화상회의(링크 추후 안내)\n\n감사합니다.");
+}
+window.mailBooking=mailBooking;
+async function bookingToMeeting(id){
+  const x=findBooking(id); if(!x) return;
+  const timeOf={"오전 (10~12시)":"10:00","오후 (1~3시)":"13:00","오후 (3~5시)":"15:00"}[x.preferred_slot]||"";
+  const m={id:"m_"+Date.now(), title:(x.org||x.name||"미팅")+" 미팅",
+    purpose:(x.message||"").slice(0,200), place:"온라인", date:x.preferred_date||"", time:timeOf,
+    host:state.user.name, company:x.org||"", zoom:"", kakao:"",
+    attendees:[{name:state.user.name,email:state.user.email},{name:x.name||"",email:x.email||""}],
+    jobs:[], started:null, ended:null};
+  state.meetings.push(m);
+  try{ await saveNow(); }catch(e){ try{ scheduleSave(); }catch(_){} }
+  await markBooking(id,"done");
+  toast("'"+m.title+"' 회의를 만들었습니다 — 신청자가 참석자로 들어갔습니다");
+  try{ if($("mlList")) showMeetingList(); else refreshAll(); }catch(e){}
+}
+window.bookingToMeeting=bookingToMeeting;
 // ==================== 초대자 가이드 ====================
 const INVITEE_GUIDE_TEXT=[
 "[캠퍼스타운 허브] 초대자 안내",
@@ -7165,6 +7348,7 @@ function showMeetingList(){
         <button class="b-ghost" data-apno="${esc(a.email)}" style="padding:4px 11px;font-size:12px;color:#C24A4A">거절</button>
       </div>`).join("")}
     </div>`:""}
+    <div id="bookBox"></div>
     <div class="ml-head">
       <div><b>${esc(state.user.name)}</b> · ${roleLabel(state.user.role)}</div>
       <button class="at" id="logoutBtn">로그아웃</button>
@@ -7241,6 +7425,7 @@ function showMeetingList(){
   if($("mlExport"))$("mlExport").onclick=exportData;
   if($("mlImport"))$("mlImport").onclick=importData;
   if($("mlReset"))$("mlReset").onclick=resetData;
+  if(canCreate){ try{ renderBookings(); }catch(e){ console.warn("예약 신청 불러오기 실패:",e); } }
 }
 function renderMeetingCards(list,emptyMsg){
   const box=$("mlList"); if(!box)return;
