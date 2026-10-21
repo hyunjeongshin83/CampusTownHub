@@ -648,6 +648,11 @@ button, .at, [role="button"]{min-height:40px;}
 #dgModal #dgBody img{max-width:100%;height:auto}
 #dgModal #dgBody h2,#dgModal #dgBody h3,#dgModal #dgBody h4,#dgModal #dgBody h5{font-family:inherit}
 #dgModal #dgBody pre{max-width:100%}
+
+/* 모션캠 연동 화상회의 (v162) */
+.mcwrap{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+@media (max-width:900px){ .mcwrap{grid-template-columns:1fr} #mcFrame{height:480px!important} }
+#vFrame .mcwrap button{min-height:44px}
 </style>
 </head>
 <body>
@@ -712,7 +717,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=161, BUILD_DATE="2026-10-21";
+const BUILD=162, BUILD_DATE="2026-10-21";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -4896,7 +4901,8 @@ function videoHTML(){
        <div style="display:flex;gap:7px;flex-wrap:wrap">
          <button class="b-mint" id="vStart">화상회의 시작</button>
          <button class="b-deep" onclick="openJitsiWindow()" title="허브 안에서 안 열릴 때 — 계정·로그인 없이 바로 들어가지는 서버를 새 창으로 엽니다">새 창에서 열기</button>
-         <button class="b-ghost" onclick="window.open('motioncam.html','_blank','noopener')" title="내 사진에 표정·고갯짓만 입혀 내보냅니다 — 지금 모습을 보이고 싶지 않을 때">모션캠</button>
+         <button class="b-deep" onclick="openMotionCall()" title="내 사진에 지금 표정만 입혀 회의로 바로 내보냅니다 — OBS·화면공유 없이">모션캠으로 입장</button>
+         <button class="b-ghost" onclick="window.open('motioncam.html','_blank','noopener')" title="모션캠만 따로 열어 봅니다 (회의 연결 없이)">모션캠 혼자 보기</button>
          <button class="b-ghost" id="vCopy">링크 복사</button>
          <button class="b-deep" id="vInvite">이메일로 초대</button>
        </div>
@@ -5002,6 +5008,264 @@ function jitsiFallbackIframe(box,room){
     'style="width:100%;height:520px;border:0;border-radius:16px;"></iframe>';
   showAfterCallBox("manual");
 }
+
+// ==================== 모션캠 연동 화상회의 (v162) ====================
+// 왜 따로 만들었나
+//   지금까지 화상회의는 jitsi.riot.im 을 iframe 으로 띄웠습니다. 그런데 iframe 바깥 API 에는
+//   영상 트랙을 넣는 명령이 없습니다 (setVideoInputDevice 로 실제 장치를 고르는 것뿐).
+//   그래서 모션캠 화면을 카메라로 내보낼 수가 없었고, OBS·화면공유를 안내하고 있었습니다.
+//   iframe 을 쓰지 않고 lib-jitsi-meet 로 허브가 직접 통화하면 캔버스를 그대로 트랙으로 넣을 수 있습니다.
+//   2026-10-21 실제로 확인했습니다: 캔버스 트랙 생성 성공 · 우리 출처에서 XMPP 접속 성공.
+//
+// 섞여도 됩니다
+//   같은 방(MUC)에 들어가므로, 상대는 평소처럼 링크로 들어오셔도 대표님 얼굴이 모션캠으로 보입니다.
+//   방 이름은 Jitsi 가 소문자로 처리하므로 양쪽 모두 소문자로 맞춥니다.
+//
+// 기존 iframe 길은 그대로 둡니다 — 이 모드가 말을 안 들어도 회의가 멈추지 않게.
+const MC_LIB   = "https://jitsi.riot.im/libs/lib-jitsi-meet.min.js";
+const MC_WS    = "wss://meet.element.io/xmpp-websocket";
+const MC_HOSTS = { domain: "meet.jitsi", muc: "muc.meet.jitsi" };
+
+let mcLib=false, mcConn=null, mcRoom=null, mcTracks=[], mcRemote={}, mcCanvasStream=null, mcJoined=false;
+
+function mcRoomName(){ return jitsiRoom().toLowerCase(); }   // iframe 쪽과 같은 방에 들어가기 위해
+
+async function mcLoadLib(){
+  if(window.JitsiMeetJS){ mcLib=true; return true; }
+  await new Promise((res,rej)=>{
+    const s=document.createElement("script"); s.src=MC_LIB;
+    s.onload=res; s.onerror=()=>rej(new Error("화상 라이브러리를 받지 못했습니다")); document.head.appendChild(s);
+  });
+  mcLib=!!window.JitsiMeetJS;
+  if(!mcLib) throw new Error("화상 라이브러리가 열리지 않았습니다");
+  return true;
+}
+
+// ── 모션캠 화면을 가져옵니다 ────────────────────────────────
+// 모션캠 코드를 여기 복사하지 않습니다 — 같은 저장소의 motioncam.html 을 같은 출처 iframe 으로
+// 띄워 그 캔버스를 그대로 가져옵니다. 복사하면 두 벌이 갈라집니다 (저장소에서 겪은 문제입니다).
+function mcCanvas(){
+  const f=$("mcFrame");
+  try{
+    const d=f&&(f.contentDocument||(f.contentWindow&&f.contentWindow.document));
+    return (d&&d.getElementById("out"))||null;
+  }catch(e){ return null; }   // 출처가 다르면 못 읽습니다 (같은 저장소라 정상이면 읽힙니다)
+}
+function mcReady(){
+  const c=mcCanvas();
+  if(!c) return {ok:false, why:"모션캠 화면을 아직 읽지 못했습니다"};
+  try{
+    const d=c.getContext("2d").getImageData(0,0,1,1);   // 같은 출처가 아니면 여기서 막힙니다
+    void d;
+  }catch(e){ return {ok:false, why:"모션캠 화면을 읽을 수 없습니다 ("+(e.name||"보안")+")"}; }
+  if(c.width<2||c.height<2) return {ok:false, why:"모션캠에 기준 사진이 아직 없습니다"};
+  return {ok:true, w:c.width, h:c.height};
+}
+
+function mcSay(t,bad){
+  const e=$("mcMsg"); if(!e) return;
+  e.textContent=t; e.style.color=bad?"#C24A4A":"var(--deep)";
+}
+
+// ── 들어가기 ───────────────────────────────────────────────
+async function mcJoin(){
+  const btn=$("mcJoinBtn");
+  const r=mcReady();
+  if(!r.ok){ mcSay(r.why+" — 왼쪽에서 사진을 넣고 [모션캠 시작]을 눌러 주세요", true); return; }
+  if(btn){ btn.disabled=true; btn.textContent="들어가는 중…"; }
+  try{
+    mcSay("화상 라이브러리를 받는 중…");
+    await mcLoadLib();
+    JitsiMeetJS.setLogLevel(JitsiMeetJS.logLevels.ERROR);
+    JitsiMeetJS.init({ disableAudioLevels:true });
+
+    const room=mcRoomName();
+    mcSay("화상 서버에 접속 중…");
+    mcConn=new JitsiMeetJS.JitsiConnection(null,null,{
+      hosts:MC_HOSTS, serviceUrl:MC_WS+"?room="+encodeURIComponent(room),
+      clientNode:"http://jitsi.org/jitsimeet"
+    });
+    const CE=JitsiMeetJS.events.connection;
+    await new Promise((res,rej)=>{
+      const t=setTimeout(()=>rej(new Error("접속이 30초 안에 끝나지 않았습니다")),30000);
+      mcConn.addEventListener(CE.CONNECTION_ESTABLISHED, ()=>{ clearTimeout(t); res(); });
+      mcConn.addEventListener(CE.CONNECTION_FAILED, e=>{ clearTimeout(t); rej(new Error("접속 실패: "+e)); });
+      mcConn.connect();
+    });
+
+    // 마이크 (소리) — 실패해도 영상은 넣습니다
+    mcSay("마이크를 준비하는 중…");
+    mcTracks=[];
+    try{
+      const a=await JitsiMeetJS.createLocalTracks({devices:["audio"]});
+      mcTracks=mcTracks.concat(a);
+    }catch(e){ mcSay("마이크를 못 잡았습니다 — 소리 없이 들어갑니다 ("+(e.message||e)+")", true); }
+
+    // 모션캠 캔버스 → 카메라 트랙
+    mcSay("모션캠 화면을 카메라로 바꾸는 중…");
+    const c=mcCanvas();
+    mcCanvasStream=c.captureStream(20);
+    const v=await JitsiMeetJS.createLocalTracksFromMediaStreams([
+      { stream:mcCanvasStream, sourceType:"canvas", mediaType:"video", videoType:"camera" }]);
+    mcTracks=mcTracks.concat(v);
+
+    // 방에 들어갑니다
+    mcRoom=mcConn.initJitsiConference(room,{ openBridgeChannel:true, p2p:{ enabled:true } });
+    const QE=JitsiMeetJS.events.conference;
+    mcRoom.on(QE.CONFERENCE_JOINED, ()=>{
+      mcJoined=true;
+      mcSay("회의에 들어왔습니다 — 상대에게는 모션캠 화면이 보입니다");
+      // 기존 iframe 길과 같은 처리: 회의 시작 기록 + 받아쓰기
+      if(!state.meeting.started){
+        state.meeting.started=Date.now(); state.meeting.ended=null; state.meetingStart=Date.now();
+        state.meeting.when=Date.now();
+        try{ setPill("live","회의 진행 중"); }catch(e){}
+        scheduleSave();
+        setTimeout(()=>{ if(typeof startMic==="function") startMic(); },700);
+      }
+      try{ showAfterCallBox("live"); }catch(e){}
+      mcRenderTiles();
+    });
+    mcRoom.on(QE.TRACK_ADDED, t=>{ if(!t||t.isLocal()) return; mcAddRemote(t); });
+    mcRoom.on(QE.TRACK_REMOVED, t=>{ if(!t||t.isLocal()) return; mcDropRemote(t); });
+    mcRoom.on(QE.USER_JOINED, (id,user)=>{
+      const nm=(user&&user.getDisplayName&&user.getDisplayName())||"참석자";
+      mcRemote[id]=mcRemote[id]||{id,name:nm,tracks:[]};
+      mcRemote[id].name=nm;
+      try{ addVideoAttendee(nm); }catch(e){}
+      mcRenderTiles();
+    });
+    mcRoom.on(QE.USER_LEFT, id=>{ delete mcRemote[id]; mcRenderTiles(); });
+    mcRoom.on(QE.DISPLAY_NAME_CHANGED, (id,nm)=>{
+      if(mcRemote[id]&&nm){ mcRemote[id].name=nm; try{ addVideoAttendee(nm); }catch(e){} mcRenderTiles(); }
+    });
+    mcRoom.on(QE.CONFERENCE_FAILED, e=>{ mcSay("방에 들어가지 못했습니다: "+e, true); });
+    mcRoom.setDisplayName((state.user&&state.user.name)||"참석자");
+    mcRoom.join();
+    mcTracks.forEach(t=>{ try{ mcRoom.addTrack(t); }catch(e){ console.warn("트랙 추가 실패",e); } });
+
+    if(btn){ btn.textContent="회의 중"; btn.disabled=true; }
+    const lb=$("mcLeaveBtn"); if(lb) lb.disabled=false;
+    const mb=$("mcMuteBtn");  if(mb) mb.disabled=false;
+  }catch(e){
+    mcSay("들어가지 못했습니다: "+(e.message||e)+" — 아래 [보통 화상회의로] 를 쓰시면 됩니다", true);
+    if(btn){ btn.disabled=false; btn.textContent="이 화면으로 회의 입장"; }
+    try{ await mcLeave(true); }catch(_){}
+  }
+}
+window.mcJoin=mcJoin;
+
+function mcAddRemote(t){
+  const id=t.getParticipantId&&t.getParticipantId(); if(!id) return;
+  mcRemote[id]=mcRemote[id]||{id,name:"참석자",tracks:[]};
+  mcRemote[id].tracks.push(t);
+  mcRenderTiles();
+  setTimeout(()=>{   // 타일이 그려진 뒤에 붙입니다
+    const el=t.getType()==="video" ? $("mcV_"+id) : $("mcA_"+id);
+    if(el){ try{ t.attach(el); }catch(e){ console.warn("붙이기 실패",e); } }
+  },60);
+}
+function mcDropRemote(t){
+  const id=t.getParticipantId&&t.getParticipantId(); if(!id||!mcRemote[id]) return;
+  mcRemote[id].tracks=mcRemote[id].tracks.filter(x=>x!==t);
+  mcRenderTiles();
+}
+
+function mcRenderTiles(){
+  const box=$("mcTiles"); if(!box) return;
+  const ppl=Object.values(mcRemote);
+  if(!ppl.length){
+    box.innerHTML='<div class="mini" style="padding:18px;text-align:center;color:var(--soft)">'
+      +(mcJoined?'아직 아무도 안 들어왔습니다 — 링크를 보내 주세요.':'회의에 들어가면 참석자가 여기 보입니다.')+'</div>';
+    return;
+  }
+  box.innerHTML=ppl.map(p=>
+    '<div style="position:relative;background:#0d2220;border-radius:12px;overflow:hidden">'
+    +'<video id="mcV_'+esc(p.id)+'" autoplay playsinline '
+    +'style="display:block;width:100%;height:150px;object-fit:cover;background:#0d2220"></video>'
+    +'<audio id="mcA_'+esc(p.id)+'" autoplay></audio>'
+    +'<div style="position:absolute;left:6px;bottom:6px;background:rgba(10,30,28,.72);color:#fff;'
+    +'font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px">'+esc(p.name||"참석자")+'</div></div>'
+  ).join("");
+  // 이미 받아 둔 트랙을 다시 붙입니다
+  ppl.forEach(p=>p.tracks.forEach(t=>{
+    const el=t.getType()==="video" ? $("mcV_"+p.id) : $("mcA_"+p.id);
+    if(el){ try{ t.attach(el); }catch(e){} }
+  }));
+}
+
+let mcMuted=false;
+function mcMute(){
+  const a=mcTracks.find(t=>t.getType&&t.getType()==="audio");
+  if(!a){ mcSay("마이크가 없습니다", true); return; }
+  mcMuted=!mcMuted;
+  try{ mcMuted?a.mute():a.unmute(); }catch(e){}
+  const b=$("mcMuteBtn"); if(b) b.textContent=mcMuted?"마이크 켜기":"마이크 끄기";
+  mcSay(mcMuted?"마이크를 껐습니다":"마이크를 켰습니다");
+}
+window.mcMute=mcMute;
+
+async function mcLeave(quiet){
+  try{ if(mcRoom){ mcTracks.forEach(t=>{ try{ mcRoom.removeTrack(t); }catch(e){} }); await mcRoom.leave(); } }catch(e){}
+  mcTracks.forEach(t=>{ try{ t.dispose(); }catch(e){} });
+  try{ if(mcCanvasStream) mcCanvasStream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  try{ if(mcConn) mcConn.disconnect(); }catch(e){}
+  mcRoom=null; mcConn=null; mcTracks=[]; mcRemote={}; mcCanvasStream=null; mcJoined=false; mcMuted=false;
+  mcRenderTiles();
+  const jb=$("mcJoinBtn"); if(jb){ jb.disabled=false; jb.textContent="이 화면으로 회의 입장"; }
+  const lb=$("mcLeaveBtn"); if(lb) lb.disabled=true;
+  const mb=$("mcMuteBtn");  if(mb){ mb.disabled=true; mb.textContent="마이크 끄기"; }
+  if(!quiet){
+    mcSay("회의에서 나왔습니다");
+    try{ showAfterCallBox("left"); }catch(e){}
+  }
+}
+window.mcLeave=mcLeave;
+
+// ── 화면 ───────────────────────────────────────────────────
+function openMotionCall(){
+  const box=$("vFrame"); if(!box){ toast("화상회의 탭에서 눌러 주세요"); return; }
+  try{ if(jitsiApi){ jitsiApi.dispose(); jitsiApi=null; } }catch(e){}
+  try{ clearTimeout(jitsiStuck); }catch(e){}
+  box.classList.remove("vframe-empty");
+  box.innerHTML=`
+   <div class="mcwrap">
+     <div>
+       <div class="section-title">1. 모션캠 준비</div>
+       <div class="mini" style="margin-bottom:6px">사진을 넣고 <b>[모션캠 시작]</b> 을 누르세요. 카메라 영상은 이 브라우저 밖으로 안 나갑니다.</div>
+       <iframe id="mcFrame" src="motioncam.html" title="모션캠 준비"
+         allow="camera; microphone" style="width:100%;height:560px;border:1px solid var(--line);border-radius:13px;background:#fff"></iframe>
+     </div>
+     <div>
+       <div class="section-title">2. 회의</div>
+       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+         <button class="b-mint" id="mcJoinBtn" onclick="mcJoin()">이 화면으로 회의 입장</button>
+         <button class="b-ghost" id="mcMuteBtn" onclick="mcMute()" disabled>마이크 끄기</button>
+         <button class="b-ghost" id="mcLeaveBtn" onclick="mcLeave()" disabled>나가기</button>
+       </div>
+       <div id="mcMsg" class="mini" style="min-height:36px;font-weight:700;color:var(--deep);line-height:1.7">왼쪽에서 모션캠을 준비한 뒤 [이 화면으로 회의 입장] 을 눌러 주세요.</div>
+       <div id="mcTiles" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px;margin-top:4px"></div>
+       <div class="mini" style="margin-top:10px;background:var(--pale);border-radius:11px;padding:9px 12px;line-height:1.8">
+         상대는 <b>평소처럼 링크로</b> 들어오시면 됩니다 — 같은 방이라 대표님 얼굴만 모션캠으로 보입니다.<br>
+         업무·진료 회의에서는 AI 보정 중임을 알리세요 (모션캠의 「AI 보정 영상」 표시를 켜 두면 화면에 나옵니다).
+       </div>
+       <div style="margin-top:9px">
+         <button class="b-ghost" onclick="startJitsi()">보통 화상회의로 (모션캠 없이)</button>
+       </div>
+     </div>
+   </div>`;
+  mcRenderTiles();
+  // 모션캠이 준비되면 알려 줍니다 — 「왜 입장이 안 되는지」를 기다리지 않게
+  let tick=0;
+  const iv=setInterval(()=>{
+    if(!$("mcFrame")){ clearInterval(iv); return; }
+    if(mcJoined){ clearInterval(iv); return; }
+    const r=mcReady();
+    if(r.ok){ clearInterval(iv); mcSay("모션캠 준비됨 ("+r.w+"×"+r.h+") — [이 화면으로 회의 입장] 을 누르세요"); }
+    else if(++tick%6===0) mcSay(r.why);
+  }, 1500);
+}
+window.openMotionCall=openMotionCall;
 
 // (v160) 새 창에서 화상회의 — 허브 안에 못 넣는 서버(meet.ffmuc.net)를 쓰는 길입니다.
 //   임베드는 막혀 있지만 로그인·계정 없이 바로 들어가지므로 가장 확실합니다.
