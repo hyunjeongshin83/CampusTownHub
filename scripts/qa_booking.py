@@ -50,8 +50,62 @@ def post(body, headers=None, origin=ORIGIN):
         return {"ok": False, "error": "net:%s" % e}
 
 
+# 자동 점검이 쓰는 주소. 함수가 운영자 목록에서 이 주소를 빼므로 대표님 화면에는 안 보입니다.
+QA_EMAIL = "qa-auto@campustownhub.invalid"
+
+
+def happy_path():
+    """실제로 접수되는지 — 거절되는 길만 보다가 정작 되는 길이 막혀 있던 적이 있습니다.
+
+    2026-10-21: demo_requests_kind_check 가 demo·pilot 만 허용해 kind=meeting 저장이
+    500 으로 떨어지고 있었습니다. 막는 길만 점검해서 못 잡았습니다.
+    그래서 이제 (1) 토큰 없이도 함수가 열려 있는지 (verify_jwt), (2) 정말 저장되는지를 봅니다.
+    """
+    print("── 실제로 되는 길 ──")
+
+    # (1) verify_jwt 가 꺼져 있는가 — 배포 도구가 이 값을 true 로 되돌린 사고가 있었습니다.
+    #     켜져 있으면 바깥 분은 401 만 받고 신청 창은 아무 말도 못 합니다.
+    req = urllib.request.Request(FN, data=b"{}", method="POST",
+                                 headers={"Content-Type": "application/json", "Origin": ORIGIN})
+    code = None
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            code = r.status
+    except urllib.error.HTTPError as e:
+        code = e.code
+    except Exception as e:
+        bad.append("접수 함수에 닿지 못했습니다: %s" % e)
+        return
+    if code == 401:
+        bad.append("접수 함수가 로그인을 요구합니다 (401) — verify_jwt 가 켜져 있어 "
+                   "바깥 분이 신청조차 못 합니다. false 로 되돌려야 합니다")
+        print("  토큰 없이 호출          → 401 (막혔습니다)")
+        return
+    print("  토큰 없이 호출          → %s (열려 있습니다)" % code)
+
+    # (2) 정말 저장되는가. 한 번만 넣습니다 — 점검이 표를 불리지 않게.
+    #     ok           → 들어갔습니다 (증명 끝)
+    #     rate_limited → 오늘 이미 들어간 것이 3건 있다는 뜻이니 저장되는 것입니다
+    #     server       → 저장이 깨졌습니다 (10-21 에 실제로 이랬습니다)
+    import datetime
+    d = post({"kind": "meeting", "name": "[자동점검] 접수되는지 보기",
+              "org": "자동점검(운영자 목록에는 안 보입니다)", "email": QA_EMAIL,
+              "preferred_date": (datetime.date.today() + datetime.timedelta(days=7)).isoformat(),
+              "preferred_slot": "pm1",
+              "message": "자동 점검입니다. 운영자 목록에서는 빠집니다.",
+              "consent": True, "elapsed_ms": 9000})
+    if d.get("ok"):
+        print("  미팅 신청 저장          → 들어갔습니다")
+    elif d.get("error") == "rate_limited":
+        print("  미팅 신청 저장          → 오늘 치 3건이 이미 들어가 있습니다 (저장됩니다)")
+    else:
+        bad.append("미팅 신청이 저장되지 않습니다 — %s. "
+                   "demo_requests 의 kind 제약·컬럼을 확인해야 합니다 "
+                   "(10-21: kind_check 가 demo·pilot 만 허용해 500 이었습니다)" % json.dumps(d, ensure_ascii=False))
+
+
 def server_checks():
-    print("── 서버 쪽 ──")
+    print("── 막는 길 ──")
     # 목록 보기는 토큰 없이 막혀야 합니다 (신청자 연락처가 들어 있습니다)
     d = post({"action": "list"})
     ok = d.get("error") in ("forbidden", "unauthorized")
@@ -247,6 +301,7 @@ def main():
     ui_checks()
     if not bad:
         size_checks()
+    happy_path()
     server_checks()
     print()
     if bad:
