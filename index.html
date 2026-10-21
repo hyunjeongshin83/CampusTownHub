@@ -712,7 +712,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=159, BUILD_DATE="2026-10-21";
+const BUILD=160, BUILD_DATE="2026-10-21";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -4888,13 +4888,14 @@ function videoHTML(){
   return `<div class="hero">
    <div class="section-title">Video · 화상회의 (Jitsi Meet · 무료·무제한)</div>
    <h2 style="font-size:22px;color:var(--ink);margin-bottom:4px">화상회의</h2>
-   <div class="mini" style="margin-bottom:14px">계정 없이 무료로, 시간 제한 없이 사용할 수 있습니다. 아래에서 바로 시작하거나, 이메일로 참석자를 초대하세요.</div>
+   <div class="mini" style="margin-bottom:14px">계정 없이 무료로, 시간 제한 없이 사용할 수 있습니다. 아래에서 바로 시작하거나, 이메일로 참석자를 초대하세요. <b>들어갈 때 화면의 [Join meeting] 을 한 번 눌러야 합니다</b> — 공개 화상 서버가 들어가기 전에 카메라·마이크를 확인시킵니다. 허브 안에서 안 열리면 <b>[새 창에서 열기]</b> 를 쓰세요.</div>
 
    <div class="glass tile" style="margin-bottom:14px">
      <div class="vrow">
        <div><b>회의 링크</b><div class="mini" id="vLink">${esc(link)}</div></div>
        <div style="display:flex;gap:7px;flex-wrap:wrap">
          <button class="b-mint" id="vStart">화상회의 시작</button>
+         <button class="b-deep" onclick="openJitsiWindow()" title="허브 안에서 안 열릴 때 — 계정·로그인 없이 바로 들어가지는 서버를 새 창으로 엽니다">새 창에서 열기</button>
          <button class="b-ghost" onclick="window.open('motioncam.html','_blank','noopener')" title="내 사진에 표정·고갯짓만 입혀 내보냅니다 — 지금 모습을 보이고 싶지 않을 때">모션캠</button>
          <button class="b-ghost" id="vCopy">링크 복사</button>
          <button class="b-deep" id="vInvite">이메일로 초대</button>
@@ -4964,24 +4965,65 @@ let jitsiApi=null, jitsiJoinedAt=0, jitsiNames=[], vAfterMode="";
 //   끝내고 다른 탭으로 가서 [회의 종료]를 눌러야만 기록이 남았고, 그걸 모르면 그냥 사라졌습니다.
 //   이제 Jitsi 의 바깥 API 로 「들어왔다·나갔다·누가 있었다」를 받아 회의록으로 잇습니다.
 //   API 가 안 열리면(차단·오프라인) 예전처럼 iframe 으로 돌아갑니다 — 화상회의 자체는 막지 않습니다.
-function loadJitsiApi(){
+// (v160) 화상 서버를 meet.jit.si 에서 옮겼습니다.
+//   2026-10-21 실제로 붙여 보니 meet.jit.si 는 「The conference has not yet started
+//   because no moderators have yet arrived」 에서 더 나아가지 않습니다 —
+//   로그인한 moderator 가 없으면 방 자체가 열리지 않게 바뀌었습니다.
+//   external_api.js·앱 묶음·방 주소까지 전부 200 으로 내려오는데 입장만 안 되므로,
+//   가짜 Jitsi 로 배선만 보던 기존 점검(qa_video.py)으로는 보이지 않았습니다.
+//   meet.ffmuc.net 은 로그인 없이 3초에 들어가고 바로 moderator 가 됩니다.
+//   앞의 서버가 안 되면 다음으로 넘어갑니다 — 한 곳이 죽어도 회의가 멈추지 않게.
+let jitsiStuck=null;   // (v160) 방이 안 열릴 때 알려 주는 타이머
+// 2026-10-21 실제로 붙여 본 결과입니다 (가짜 Jitsi 가 아니라 진짜 서버에 클릭까지).
+//   meet.jit.si    [Join meeting] 을 눌러도 "no moderators have yet arrived" 에서 멈춥니다.
+//                  로그인한 주최자가 없으면 방이 안 열리게 바뀌었습니다. 허브가 쓰던 서버입니다.
+//   jitsi.riot.im  익명으로 13초에 입장됩니다. 임베드 제한 헤더가 없어 허브 안에 넣을 수 있습니다.
+//   meet.ffmuc.net 익명으로 3초에 입장되지만 x-frame-options: SAMEORIGIN 이라 허브 안에는
+//                  못 넣습니다 — 그래서 「새 창」 전용으로 둡니다. 가장 확실한 길입니다.
+const JITSI_HOSTS=["jitsi.riot.im","meet.jit.si"];     // 허브 안에 넣을 수 있는 서버
+const JITSI_WINDOW_HOST="meet.ffmuc.net";              // 새 창 전용 (임베드 불가, 입장은 확실)
+let JITSI_HOST=JITSI_HOSTS[0];
+function loadJitsiApi(host){
+  const h=host||JITSI_HOST;
   if(window.JitsiMeetExternalAPI) return Promise.resolve(true);
   return new Promise(res=>{
     const s=document.createElement("script");
-    s.src="https://meet.jit.si/external_api.js";
+    s.src="https://"+h+"/external_api.js";
     s.onload=()=>res(!!window.JitsiMeetExternalAPI);
     s.onerror=()=>res(false);
-    setTimeout(()=>res(!!window.JitsiMeetExternalAPI), 6000);   // 느리면 그냥 iframe 으로
+    setTimeout(()=>res(!!window.JitsiMeetExternalAPI), 8000);   // 느리면 그냥 iframe 으로
     document.head.appendChild(s);
   });
 }
 
 function jitsiFallbackIframe(box,room){
   box.innerHTML='<iframe allow="camera; microphone; fullscreen; display-capture; autoplay" '+
-    'src="https://meet.jit.si/'+room+'#config.prejoinPageEnabled=false" '+
+    'src="https://'+JITSI_HOST+'/'+room+'#config.prejoinPageEnabled=false" '+
     'style="width:100%;height:520px;border:0;border-radius:16px;"></iframe>';
   showAfterCallBox("manual");
 }
+
+// (v160) 새 창에서 화상회의 — 허브 안에 못 넣는 서버(meet.ffmuc.net)를 쓰는 길입니다.
+//   임베드는 막혀 있지만 로그인·계정 없이 바로 들어가지므로 가장 확실합니다.
+//   방 이름은 허브 안에서 쓰는 것과 같게 해, 참석자가 어느 길로 와도 같은 방에 모입니다.
+function jitsiWindowLink(){ return "https://"+JITSI_WINDOW_HOST+"/"+jitsiRoom(); }
+window.jitsiWindowLink=jitsiWindowLink;
+function openJitsiWindow(){
+  const url=jitsiWindowLink();
+  const w=window.open(url,"_blank","noopener");
+  if(!w){ copyText(url,"창이 막혀 링크를 복사했습니다 — 새 탭에 붙여넣어 주세요"); return; }
+  toast("새 창에서 화상회의를 엽니다 — [Join meeting] 을 눌러 주세요");
+  // 회의가 시작된 것으로 기록하고, 끝난 뒤 회의록을 만들 수 있게 안내창을 띄웁니다
+  if(!state.meeting.started){
+    state.meeting.started=Date.now(); state.meeting.ended=null; state.meetingStart=Date.now();
+    state.meeting.when=Date.now();
+    try{ setPill("live","회의 진행 중"); }catch(e){}
+    scheduleSave();
+    setTimeout(()=>{ if(typeof startMic==="function") startMic(); },800);
+  }
+  try{ showAfterCallBox("manual"); }catch(e){}
+}
+window.openJitsiWindow=openJitsiWindow;
 
 async function startJitsi(){
   const box=$("vFrame"); if(!box)return;
@@ -4995,15 +5037,46 @@ async function startJitsi(){
 
   box.innerHTML="";
   try{
-    jitsiApi=new window.JitsiMeetExternalAPI("meet.jit.si",{
+    jitsiApi=new window.JitsiMeetExternalAPI(JITSI_HOST,{
       roomName:room, parentNode:box, width:"100%", height:520,
       configOverwrite:{prejoinPageEnabled:false},
       userInfo:{displayName:(state.user&&state.user.name)||"", email:(state.user&&state.user.email)||""}
     });
   }catch(e){ jitsiFallbackIframe(box,room); return; }
 
+  // (v160) 「방이 안 열린다」를 사람이 알아채게 — 예전에는 빈 화면을 보며 기다렸습니다.
+  //   moderator 를 요구하는 서버에서는 입장 이벤트가 영원히 안 옵니다.
+  // (v160) 방이 안 열리면 사람에게 알려 줍니다.
+  //   처음에는 다음 서버로 자동 전환했는데, 그게 되던 서버(jitsi.riot.im)를
+  //   moderator 를 요구하는 서버(meet.jit.si)로 바꿔 버렸습니다 — 자동 전환은 뺐습니다.
+  //   프리조인 화면은 정상입니다: 공개 Jitsi 는 prejoinPageEnabled=false 를 무시하므로
+  //   참석자가 직접 [Join meeting] 을 눌러야 들어갑니다. 그걸 모르면 빈 화면을 보며 기다립니다.
+  jitsiStuck=setTimeout(()=>{
+    if(jitsiJoinedAt) return;                       // 이미 들어갔으면 아무것도 안 함
+    const b=$("vFrame"); if(!b) return;
+    if($("vStuckNote")) return;
+    const note=document.createElement("div");
+    note.id="vStuckNote"; note.className="mini";
+    note.style.cssText="background:#FFF6E3;border:1px solid #E7CE93;border-radius:12px;padding:11px 14px;margin-top:9px;line-height:1.8";
+    note.innerHTML='<b style="color:#7a5b00">아직 회의에 들어가지 않았습니다.</b><br>'
+      +'· 화면에 <b>[Join meeting]</b> 이 보이면 눌러 주세요 — 공개 화상 서버는 들어가기 전에 카메라를 확인시킵니다.<br>'
+      +'· <b>「no moderators have yet arrived」</b> 가 보이면 그 서버는 로그인한 주최자를 요구합니다. '
+      +'아래 <b>[새 창에서 열기]</b> 를 쓰시면 그 제한이 없습니다.';
+    b.appendChild(note);
+    const row=document.createElement("div");
+    row.style.cssText="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px";
+    const w=document.createElement("button");
+    w.className="b-mint"; w.textContent="새 창에서 열기 (가장 확실)";
+    w.onclick=()=>openJitsiWindow();
+    const r=document.createElement("button");
+    r.className="b-ghost"; r.textContent="다시 시작";
+    r.onclick=()=>{ note.remove(); row.remove(); jitsiJoinedAt=0; JITSI_HOST=JITSI_HOSTS[0]; startJitsi(); };
+    row.appendChild(w); row.appendChild(r); b.appendChild(row);
+  }, 30000);
+
   jitsiNames=[];
   jitsiApi.addListener("videoConferenceJoined", ()=>{
+    clearTimeout(jitsiStuck);
     jitsiJoinedAt=Date.now();
     // 회의가 아직 안 열렸으면 여기서 엽니다 — 받아쓰기도 같이 켜집니다.
     // startMeeting() 은 콘솔 탭으로 옮겨 가므로 여기서는 쓰지 않습니다 (화면이 바뀌면 화상회의가 끊깁니다).
