@@ -278,7 +278,7 @@ with sync_playwright() as p:
         state.records = [{id:'r1', mid:'mx', title:'동산병원 1차 Fit 미팅', dt:'2026. 11. 12.',
           nextActions:['방준석 교수와 주제 합의','한 장 제안서 작성'],
           notes:{summary:'요약', actions:['김다빈 매니저 서면 정리 확인','한 장 제안서 작성']},
-          report:'## 다음 할 일\n\n| 할 일 | 담당 |\n| --- | --- |\n| [최우선] 과제 공고 모니터링 | 신현정 |\n| 한 장 제안서 작성 | 신현정 |\n'}];
+          report:`## 다음 할 일\n\n| 할 일 | 담당 |\n| --- | --- |\n| [최우선] 과제 공고 모니터링 | 신현정 |\n| 한 장 제안서 작성 | 신현정 |\n`}];
         state.schedule = {goals:[], done:[]};
         const todos = recordTodos(state.records[0]);
         await recordToJobs('r1');
@@ -380,6 +380,78 @@ with sync_playwright() as p:
         bad.append("마지막 장인데 [다음 장] 이 아직 눌립니다")
     if "슬라이드 3장" not in pres["msg"] and "3장" not in pres["msg"]:
         bad.append("몇 장을 발표 중인지 화면에 안 적힙니다: %r" % pres["msg"])
+
+    # ── 5f. AI 직원 자료 자동 갱신 (v166) ──
+    #   쌓지 말고 축약해서 덮어쓰는 구조입니다. 실제 ElevenLabs 자료는 건드리지 않고
+    #   (대표님 에이전트입니다) 허브가 보내는 내용과 막는 길만 봅니다.
+    print("── 자료 자동 갱신 ──")
+    learn = pg.evaluate(r"""async () => {
+        const seen = [];
+        window.callClaude = async (sys, src) => { seen.push({sys, src});
+            return `# MedIT 진행 상황 — 2026-11-13 기준
+
+## 말하지 않을 것 (중요)
+- 다른 참석자 평가 금지
+
+## 지금 어디까지 왔나
+- ` + "가".repeat(220); };
+        sb = {auth:{getSession: async () => ({data:{session:{access_token:'t'}}})}};
+        const calls = [];
+        window.fetch = async (u, o) => { const b = JSON.parse(o.body); calls.push(b);
+            if (b.action === 'read') return {json: async () => ({ok:true, text:'지금 자료 내용', chars:6})};
+            return {json: async () => ({ok:true, chars:(b.text||'').length, name:b.name})}; };
+        document.body.insertAdjacentHTML('beforeend','<div id="learnMsg"></div>');
+        state.records = [{id:'rL', mid:'mx', title:'동산병원 1차', dt:'2026.11.12',
+                          report:`## 다음 할 일\n- 한 장 제안서`}];
+        const d = await learnFromRecord('rL', {quiet:true});
+        const sys = seen[0] ? seen[0].sys : '';
+        const src = seen[0] ? seen[0].src : '';
+        return {chars: d.chars, name: d.name,
+                actions: calls.map(c => c.action),
+                readFirst: calls[0] && calls[0].action === 'read',
+                sysHasCondense: /축약/.test(sys), sysHasNoAdd: /더하지 말고/.test(sys),
+                sysHasGuard: /말하지 않을 것/.test(sys),
+                srcHasCur: /지금 자료 내용/.test(src), srcHasNew: /한 장 제안서/.test(src),
+                msg: (document.getElementById('learnMsg')||{}).textContent};
+    }""")
+    print("  호출 순서          → %s" % " → ".join(learn["actions"]))
+    print("  보낸 글자          → %d자" % learn["chars"])
+    print("  자료 이름          → %s" % learn["name"])
+    print("  화면 안내          → %s" % learn["msg"][:60])
+    if not learn["readFirst"]:
+        bad.append("지금 자료를 먼저 읽지 않고 덮어씁니다 — 축약의 기준이 없어집니다")
+    if learn["actions"] != ["read", "write"]:
+        bad.append("호출 순서가 read → write 가 아닙니다: %s" % learn["actions"])
+    for k, nm in (("sysHasCondense", "축약"), ("sysHasNoAdd", "더하지 말고"), ("sysHasGuard", "말하지 않을 것")):
+        if not learn[k]:
+            bad.append("축약 지시에 「%s」 가 빠졌습니다" % nm)
+    if not learn["srcHasCur"]:
+        bad.append("축약할 때 지금 자료를 넘기지 않습니다")
+    if not learn["srcHasNew"]:
+        bad.append("축약할 때 새 회의록을 넘기지 않습니다")
+
+    # 축약이 짧게 나오면 기존 자료를 지켜야 합니다
+    guard = pg.evaluate("""async () => {
+        window.callClaude = async () => "너무 짧음";
+        const calls = [];
+        window.fetch = async (u, o) => { const b = JSON.parse(o.body); calls.push(b.action);
+            if (b.action === 'read') return {json: async () => ({ok:true, text:'기존', chars:2})};
+            return {json: async () => ({ok:true, chars:0})}; };
+        try { await learnFromRecord('rL', {quiet:true}); } catch (e) { 
+            return {blocked: !calls.includes('write'), why: e.message}; }
+        return {blocked: !calls.includes('write'), why: '(오류 없이 통과)'};
+    }""")
+    print("  짧은 축약 막기     → %s (%s)" % ("막음" if guard["blocked"] else "통과", guard["why"][:44]))
+    if not guard["blocked"]:
+        bad.append("축약이 짧게 나왔는데 그대로 덮어썼습니다 — 자료가 날아갑니다")
+
+    # 자동 갱신 스위치
+    sw = pg.evaluate("""() => { learnAutoSet(false); const off = learnAutoOn();
+        learnAutoSet(true); return {off, on: learnAutoOn()}; }""")
+    if sw["off"] or not sw["on"]:
+        bad.append("자동 갱신 스위치가 듣지 않습니다: %s" % sw)
+    else:
+        print("  자동 갱신 스위치   → 끄고 켜집니다")
 
     # ── 6. 진짜 SDK 가 내려오는지 (통화는 안 켭니다) ──
     print("── SDK 내려받기 (통화 안 켬) ──")
