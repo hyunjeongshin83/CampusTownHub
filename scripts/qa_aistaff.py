@@ -272,6 +272,115 @@ with sync_playwright() as p:
         if kid["circles"] < 9:
             bad.append("곱슬머리 원이 %d개뿐입니다 — 파마머리로 안 보입니다" % kid["circles"])
 
+    # ── 5d. 회의록 → 업무 넘기기 (v165) ──
+    print("── 회의록 → 업무 ──")
+    jobs = pg.evaluate(r"""async () => {
+        state.records = [{id:'r1', mid:'mx', title:'동산병원 1차 Fit 미팅', dt:'2026. 11. 12.',
+          nextActions:['방준석 교수와 주제 합의','한 장 제안서 작성'],
+          notes:{summary:'요약', actions:['김다빈 매니저 서면 정리 확인','한 장 제안서 작성']},
+          report:'## 다음 할 일\n\n| 할 일 | 담당 |\n| --- | --- |\n| [최우선] 과제 공고 모니터링 | 신현정 |\n| 한 장 제안서 작성 | 신현정 |\n'}];
+        state.schedule = {goals:[], done:[]};
+        const todos = recordTodos(state.records[0]);
+        await recordToJobs('r1');
+        const m = document.getElementById('tjModal');
+        const cks = [...m.querySelectorAll('.tj-ck')];
+        cks.forEach(c => c.checked = true);
+        m.querySelector('.tj-dt').value = '2026-11-20';
+        window.saveNow = async () => {};
+        document.getElementById('tjSave').click();
+        await new Promise(r => setTimeout(r, 400));
+        return {found: todos.length, texts: todos.map(t => t.text.slice(0,24)),
+                goals: (state.schedule.goals||[]).map(g => [g.title.slice(0,30), g.date, g.status, !!g.fromRecord]),
+                closed: !document.getElementById('tjModal')};
+    }""")
+    print("  찾은 할 일 %d건 (중복 뺀 뒤)" % jobs["found"])
+    for t in jobs["texts"]:
+        print("    · %s" % t)
+    print("  업무로 등록 %d건 · 창 닫힘 %s" % (len(jobs["goals"]), jobs["closed"]))
+    for g in jobs["goals"]:
+        print("    → %-32s 기한 %s · %s" % (g[0], g[1] or "없음", g[2]))
+    # 「한 장 제안서 작성」이 3곳에 있으니 겹치지 않고 한 번만 나와야 합니다
+    if jobs["found"] != 4:
+        bad.append("할 일을 %d건으로 봤습니다 — 겹치는 것을 뺀 4건이어야 합니다: %s" % (jobs["found"], jobs["texts"]))
+    if not jobs["goals"]:
+        bad.append("업무로 등록되지 않았습니다")
+    if not all(g[3] for g in jobs["goals"]):
+        bad.append("업무 카드에 어느 회의록에서 왔는지가 안 남았습니다")
+    if not any(g[1] == "2026-11-20" for g in jobs["goals"]):
+        bad.append("넣은 기한이 업무에 안 들어갔습니다")
+    if not any(g[0].startswith("[최우선]") for g in jobs["goals"]):
+        bad.append("우선순위 표시가 업무 제목에 안 붙었습니다")
+    if not jobs["closed"]:
+        bad.append("등록 뒤 창이 닫히지 않습니다")
+
+    # 두 번 눌러도 같은 업무가 또 생기면 안 됩니다
+    again = pg.evaluate("""async () => {
+        const before = state.schedule.goals.length;
+        await recordToJobs('r1');
+        const m = document.getElementById('tjModal');
+        [...m.querySelectorAll('.tj-ck')].forEach(c => c.checked = true);
+        document.getElementById('tjSave').click();
+        await new Promise(r => setTimeout(r, 400));
+        return {before, after: state.schedule.goals.length};
+    }""")
+    print("  두 번 등록        → %d건 → %d건" % (again["before"], again["after"]))
+    if again["after"] != again["before"]:
+        bad.append("같은 할 일을 두 번 등록하면 업무가 또 생깁니다 (%d → %d)"
+                   % (again["before"], again["after"]))
+
+    # ── 5e. AI 직원 발표 (v165) ──
+    print("── AI 직원 발표 ──")
+    pres = pg.evaluate("""async () => {
+        state.webSlides = [
+          {t:'MedIT 소개', pts:['복약 관리 플랫폼','비임상 연구']},
+          {t:'제안 ①', pts:['성인 예방접종 적응증 판정']},
+          {t:'제안 ②', pts:['고령 환자 복약 안전']}];
+        const sent = [];
+        window.ElevenLabsClient = { Conversation: { startSession: async o => {
+            window.__opt = o;
+            return {endSession: async () => {},
+                    output: null,
+                    sendContextualUpdate: t => sent.push(['ctx', t.slice(0,40)]),
+                    sendUserMessage: t => sent.push(['msg', t])};
+        }}};
+        await elStart();
+        const onConnect = window.__opt.onStatusChange;
+        onConnect({status:'connected'});
+        await elPresent('start');
+        const first = {slide: elSlide, ctl: !!window.__wsCtl, at: window.__wsCtl ? window.__wsCtl.at() : -1};
+        await elPresent('next');
+        const second = {slide: elSlide, at: window.__wsCtl ? window.__wsCtl.at() : -1};
+        await elPresent('next');
+        await elPresent('next');                     // 끝에서 더 눌러도 넘어가면 안 됩니다
+        const last = {slide: elSlide, at: window.__wsCtl ? window.__wsCtl.at() : -1,
+                      nextDisabled: (document.getElementById('elNext')||{}).disabled};
+        if (window.__wsCtl) window.__wsCtl.close();
+        return {sent, first, second, last, msg: (document.getElementById('elMsg')||{}).textContent};
+    }""")
+    for k, t in pres["sent"][:5]:
+        print("  %s → %s" % (k, t[:60]))
+    print("  1장: 화면 %d · 2장: 화면 %d · 끝: %d장 (전체 3장) · [다음 장] 잠김 %s"
+          % (pres["first"]["at"] + 1, pres["second"]["at"] + 1,
+             pres["last"]["slide"], pres["last"]["nextDisabled"]))
+    ctxs = [t for k, t in pres["sent"] if k == "ctx"]
+    msgs = [t for k, t in pres["sent"] if k == "msg"]
+    if not any("발표 자료" in c for c in ctxs):
+        bad.append("연결될 때 발표 자료를 에이전트에 넘기지 않습니다: %s" % ctxs[:2])
+    if not any("1장부터 발표" in m for m in msgs):
+        bad.append("[발표 시작] 이 발표 지시를 보내지 않습니다: %s" % msgs[:2])
+    if not pres["first"]["ctl"]:
+        bad.append("발표 시작 때 슬라이드 화면이 열리지 않습니다")
+    if pres["first"]["at"] != 0:
+        bad.append("발표 시작인데 화면이 1장이 아닙니다 (%d장)" % (pres["first"]["at"] + 1))
+    if pres["second"]["at"] != 1:
+        bad.append("[다음 장] 을 눌렀는데 화면이 2장이 아닙니다 (%d장)" % (pres["second"]["at"] + 1))
+    if pres["last"]["slide"] != 3:
+        bad.append("끝에서 더 눌렀을 때 %d장까지 갔습니다 — 3장에서 멈춰야 합니다" % pres["last"]["slide"])
+    if not pres["last"]["nextDisabled"]:
+        bad.append("마지막 장인데 [다음 장] 이 아직 눌립니다")
+    if "슬라이드 3장" not in pres["msg"] and "3장" not in pres["msg"]:
+        bad.append("몇 장을 발표 중인지 화면에 안 적힙니다: %r" % pres["msg"])
+
     # ── 6. 진짜 SDK 가 내려오는지 (통화는 안 켭니다) ──
     print("── SDK 내려받기 (통화 안 켬) ──")
     sdk = pg.evaluate("""async () => {

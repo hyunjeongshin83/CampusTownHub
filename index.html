@@ -723,7 +723,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=164, BUILD_DATE="2026-11-12";
+const BUILD=165, BUILD_DATE="2026-11-12";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -3808,8 +3808,14 @@ function playWebSlides(auto){
   const prev=()=>{ if(idx>0){idx--;draw(); if(auto)speakCur();} };
   const key=e=>{ if(e.key==="ArrowRight"||e.key===" ")next(); else if(e.key==="ArrowLeft")prev(); else if(e.key==="Escape")close(); };
   const close=()=>{ try{speechSynthesis.cancel();}catch(_){}
-    document.removeEventListener("keydown",key); ov.remove(); };
+    document.removeEventListener("keydown",key); ov.remove(); window.__wsCtl=null; };
   ov.onclick=next; document.addEventListener("keydown",key);
+  // (v165) 바깥에서 넘길 손잡이 — AI 직원이 발표할 때 말과 화면이 어긋나지 않게.
+  //   브라우저 음성(auto)과 AI 직원 목소리가 겹치면 두 사람이 말하는 것처럼 됩니다 —
+  //   AI 직원 발표는 auto=false 로 열어 화면만 넘깁니다.
+  window.__wsCtl={ len:ws.length, at:()=>idx,
+    go:i=>{ idx=Math.max(0,Math.min(ws.length-1,i|0)); draw(); },
+    next, prev, close:()=>{ window.__wsCtl=null; close(); } };
   if(auto)speakCur();
 }
 window.renderWebSlides=renderWebSlides;
@@ -5018,6 +5024,234 @@ function jitsiFallbackIframe(box,room){
 }
 
 
+// ==================== 회의록 → 업무 (v165) ====================
+// 회의록을 잘 써 놓고도 「다음 할 일」이 회의록 안에만 남아 있었습니다.
+// 업무에서 쓰려면 ① 할 일이 업무 카드로 넘어가고 ② 후속 메일이 바로 나가야 합니다.
+
+// 회의록 여러 곳에 흩어진 할 일을 한 줄씩 긁어 모읍니다
+function recordTodos(r){
+  const out=[], seen=new Set();
+  const add=(t,why)=>{
+    let s=String(t||"").trim();
+    if(!s) return;
+    // 표·목록 기호만 먼저 떼어 냅니다. 대괄호를 통째로 떼면 [최우선] 이 「최우선]」 으로
+    //   망가집니다 — 점검에서 실제로 그렇게 나왔습니다. 우선순위를 먼저 떼고 나머지를 정리합니다.
+    s=s.replace(/^[\s\-•\*]+/,"").replace(/^\|\s*/,"").replace(/\s*\|\s*$/,"").trim();
+    s=s.replace(/^\[\s*[xX]?\s*\]\s*/,"").trim();          // 체크상자 [ ] · [x]
+    let pri="";
+    const pm=/^\[(최우선|높음|보통|낮음)\]\s*/.exec(s);
+    if(pm){ pri=pm[1]; s=s.slice(pm[0].length); }
+    s=s.replace(/^[\s\-•\*]+/,"").replace(/\s+/g," ").trim();
+    if(s.length<3||s.length>200) return;
+    const key=s.replace(/\s/g,"").slice(0,40);
+    if(seen.has(key)) return;              // 같은 할 일이 여러 곳에 있어도 한 번만
+    seen.add(key);
+    out.push({text:s, pri, from:why});
+  };
+  (r.nextActions||[]).forEach(t=>add(t,"다음 할 일"));
+  if(r.notes&&Array.isArray(r.notes.actions)) r.notes.actions.forEach(t=>add(t,"회의록 요약"));
+  // AI 보고서의 「다음 할 일」·「액션」 절에서 표·목록 줄을 긁습니다
+  const md=r.report||"";
+  if(md){
+    const sec=/##\s*(다음 할 일|액션|할 일|해야 할 일)[^\n]*\n([\s\S]*?)(?=\n##\s|\s*$)/g;
+    let m;
+    while((m=sec.exec(md))){
+      m[2].split("\n").forEach(ln=>{
+        const t=ln.trim();
+        if(!t||/^\|?\s*-{3,}/.test(t)) return;                     // 표 구분선
+        if(/^\|/.test(t)){
+          const cells=t.split("|").map(x=>x.trim()).filter(Boolean);
+          if(!cells.length) return;
+          if(/^(할 일|항목|내용)$/.test(cells[0])) return;          // 표 머리글
+          add(cells[0], cells[1]?("담당 "+cells[1]):"보고서");
+        } else if(/^[-*•]/.test(t)) add(t,"보고서");
+      });
+    }
+  }
+  return out;
+}
+
+async function recordToJobs(id){
+  const r=(state.records||[]).find(x=>x.id===id); if(!r){ toast("회차를 찾지 못했습니다"); return; }
+  const todos=recordTodos(r);
+  if(!todos.length){
+    toast("이 회의록에서 「다음 할 일」을 찾지 못했습니다 — AI 보고서를 먼저 만들어 보세요");
+    return;
+  }
+  let m=$("tjModal"); if(m) m.remove();
+  m=document.createElement("div"); m.id="tjModal";
+  m.style.cssText="position:fixed;inset:0;z-index:10004;background:rgba(12,30,28,.6);display:flex;align-items:center;justify-content:center;padding:16px";
+  const PRI=["최우선","높음","보통","낮음"];
+  m.innerHTML=`
+  <div style="background:#fff;border-radius:18px;max-width:min(680px,96vw);width:100%;max-height:94vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;gap:8px;align-items:center;padding:13px 17px;border-bottom:1px solid var(--line)">
+      <div style="flex:1;font-weight:800;color:var(--deep);font-size:14.5px">다음 할 일을 업무로 등록</div>
+      <button class="b-ghost" id="tjClose">닫기</button>
+    </div>
+    <div style="padding:13px 17px;overflow:auto">
+      <div class="mini" style="margin-bottom:10px;line-height:1.7">
+        <b>${esc(r.title||"")}</b> · ${esc(r.dt||"")}<br>
+        회의록에서 찾은 할 일 ${todos.length}건입니다. 넘길 것만 체크하고 기한을 넣어 주세요.
+        등록하면 <b>[일정] 탭</b>의 업무 카드가 됩니다.
+      </div>
+      ${todos.map((t,i)=>`
+        <div style="border-top:1px dashed var(--line);padding:9px 0">
+          <label style="display:flex;gap:9px;align-items:flex-start;min-height:44px;cursor:pointer">
+            <input type="checkbox" class="tj-ck" data-i="${i}" ${t.pri==="낮음"?"":"checked"}
+              style="margin-top:4px;width:20px;height:20px;accent-color:var(--mint);flex:none">
+            <span style="font-size:13px;line-height:1.6;color:var(--ink)">${esc(t.text)}
+              <span class="mini" style="display:block;margin-top:2px;color:var(--soft)">${esc(t.from)}</span></span>
+          </label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;padding-left:29px">
+            <input type="date" class="tj-dt" data-i="${i}" style="padding:9px 10px;min-height:44px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
+            <select class="tj-pri" data-i="${i}" style="padding:9px 10px;min-height:44px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px">
+              ${PRI.map(p=>`<option ${((t.pri||"보통")===p)?"selected":""}>${p}</option>`).join("")}
+            </select>
+          </div>
+        </div>`).join("")}
+      <div id="tjMsg" class="mini" style="margin-top:10px;min-height:19px;font-weight:700;color:var(--deep)"></div>
+    </div>
+    <div style="display:flex;gap:7px;justify-content:flex-end;padding:12px 17px;border-top:1px solid var(--line)">
+      <button class="b-ghost" id="tjCancel">취소</button>
+      <button class="b-mint" id="tjSave">업무로 등록</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  const close=()=>m.remove();
+  $("tjClose").onclick=close; $("tjCancel").onclick=close;
+  m.onclick=e=>{ if(e.target===m) close(); };
+  $("tjSave").onclick=async()=>{
+    const picks=[...m.querySelectorAll(".tj-ck")].filter(c=>c.checked).map(c=>+c.dataset.i);
+    if(!picks.length){ $("tjMsg").textContent="넘길 할 일을 하나 이상 골라 주세요"; return; }
+    const btn=$("tjSave"); btn.disabled=true; btn.textContent="등록 중…";
+    try{
+      state.schedule=state.schedule||{goals:[],done:[]};
+      state.schedule.goals=state.schedule.goals||[];
+      let n=0;
+      picks.forEach(i=>{
+        const t=todos[i];
+        const dt=(m.querySelector('.tj-dt[data-i="'+i+'"]')||{}).value||"";
+        const pri=(m.querySelector('.tj-pri[data-i="'+i+'"]')||{}).value||"보통";
+        // 이미 같은 업무가 있으면 또 만들지 않습니다.
+        //   저장된 제목에는 「[최우선] 」 같은 표시가 붙으므로, 비교할 때는 양쪽에서 떼고 봅니다 —
+        //   안 떼면 두 번 눌렀을 때 같은 업무가 또 생깁니다 (점검에서 4건 → 5건으로 나왔습니다).
+        const bare=x=>String(x||"").replace(/^\[(최우선|높음|보통|낮음)\]\s*/,"").replace(/\s/g,"").slice(0,40);
+        const key=bare(t.text);
+        if(state.schedule.goals.some(g=>bare(g.title)===key)) return;
+        state.schedule.goals.push({
+          id:"g_"+Date.now()+"_"+i, oid:(state.user&&state.user.id)||"", oname:(state.user&&state.user.name)||"",
+          title:(pri&&pri!=="보통"?"["+pri+"] ":"")+t.text,
+          date:dt, status:"예정", url:"",
+          memo:"회의록에서 넘김 — "+(r.title||"")+" ("+(r.dt||"")+")",
+          vis:"all", assignee:(state.user&&state.user.name)||"", fromRecord:r.id
+        });
+        n++;
+      });
+      await saveNow();
+      try{ renderGoals(); }catch(e){}
+      close();
+      toast(n? (n+"건을 업무로 등록했습니다 — [일정] 탭에서 보입니다") : "이미 등록된 할 일이었습니다");
+      if(n) try{ switchTab("schedule"); }catch(e){}
+    }catch(e){
+      $("tjMsg").textContent="등록하지 못했습니다: "+((e&&e.message)||e);
+      btn.disabled=false; btn.textContent="업무로 등록";
+    }
+  };
+}
+window.recordToJobs=recordToJobs;
+
+// ── 후속 메일 초안 ──────────────────────────────────────────
+// 회의 끝에 보내는 감사·확인 메일. 회의록을 읽고 AI 가 씁니다.
+async function recordFollowupMail(id){
+  const r=(state.records||[]).find(x=>x.id===id); if(!r){ toast("회차를 찾지 못했습니다"); return; }
+  const m=(state.meetings||[]).find(x=>x.id===r.mid);
+  const to=((m&&m.attendees)||[]).map(a=>a&&a.email).filter(e=>e&&e.includes("@"))
+            .filter(e=>e!==((state.user&&state.user.email)||"")).join(",");
+  const src=[
+    r.report?("[회의록]\n"+r.report):"",
+    (!r.report&&r.notes)?("[요약]\n"+JSON.stringify(r.notes)):"",
+    (!r.report&&r.rawNote)?("[원문]\n"+r.rawNote.slice(0,6000)):""
+  ].filter(Boolean).join("\n\n").slice(0,20000);
+  if(!src){ toast("메일을 쓸 내용이 없습니다 — AI 보고서를 먼저 만들어 보세요"); return; }
+  toast("후속 메일을 쓰는 중…");
+  const sys=[
+    "회의가 끝난 뒤 참석자에게 보내는 후속 메일을 씁니다. 보내는 사람은 MedIT 대표 신현정입니다.",
+    "",
+    "지켜야 할 것",
+    "· 한국어 존댓말. 과장·수식 없이 담백하게. 전체 12줄 안.",
+    "· 첫 줄은 인사와 감사. 상대가 짚어 준 것을 한 문장으로 되짚어 그 사람 말을 들었다는 것이 보이게.",
+    "· 다음에 우리가 무엇을 언제까지 보내겠다는 약속을 분명히 한 줄.",
+    "· 회의록에 없는 약속·날짜·숫자를 만들지 않습니다. 날짜가 정해지지 않았으면 「정리해 먼저 보여드리겠습니다」처럼 적습니다.",
+    "· 서명은 「MedIT 신현정」.",
+    "",
+    "출력 형식 — 이 두 줄로 시작하고 나머지는 본문만",
+    "제목: (메일 제목 한 줄)",
+    "---",
+    "(본문)"
+  ].join("\n");
+  try{
+    const out=await callClaude(sys, src, 900);
+    const txt=(out||"").trim();
+    if(!txt) throw new Error("빈 응답");
+    let subj="["+(m&&m.company?m.company.split(",")[0].trim()+" ":"")+"회의] 감사드립니다", body=txt;
+    const mm=/^제목:\s*(.+)\n-{3,}\n([\s\S]+)$/m.exec(txt);
+    if(mm){ subj=mm[1].trim(); body=mm[2].trim(); }
+    openGmail(to, subj, body);
+    if(!to) toast("참석자 이메일이 없어 받는 사람은 비워 두었습니다");
+  }catch(e){
+    toast("메일 초안 실패: "+((e&&e.message)||e));
+  }
+}
+window.recordFollowupMail=recordFollowupMail;
+
+// ==================== AI 직원 발표 (v165) ====================
+// 「발표해주세요」 하면 연결된 슬라이드에 맞춰 AI 직원이 발표합니다.
+//   SDK 의 sendContextualUpdate 로 자료를 미리 넣고, sendUserMessage 로 발표를 시킵니다.
+//   화면의 슬라이드도 같이 넘겨 말과 화면이 어긋나지 않게 합니다.
+function deckText(){
+  const sl=state.webSlides||[];
+  if(!sl.length) return "";
+  return sl.map((s,i)=>(i+1)+"장. "+(s.t||"")+"\n"+((s.pts||[]).map(p=>" - "+p).join("\n"))).join("\n\n");
+}
+function elPushDeck(){
+  if(!elConv||!elConv.sendContextualUpdate) return false;
+  const d=deckText();
+  if(!d) return false;
+  try{
+    elConv.sendContextualUpdate(
+      "[발표 자료] 아래는 지금 화면에 띄울 수 있는 발표 자료 전체입니다. "
+      +"대표님이 발표를 요청하면 1장부터 순서대로, 한 장에 두세 문장으로 설명하세요. "
+      +"자료에 없는 내용은 만들지 마세요.\n\n"+d.slice(0,8000));
+    return true;
+  }catch(e){ return false; }
+}
+let elSlide=0;
+async function elPresent(which){
+  if(!elConv){ elSay("먼저 [AI 직원 부르기] 를 눌러 주세요", true); return; }
+  const sl=state.webSlides||[];
+  if(!sl.length){ elSay("발표할 슬라이드가 없습니다 — [슬라이드] 탭에서 먼저 만들어 주세요", true); return; }
+  if(which==="start") elSlide=1; else elSlide=Math.min(sl.length, elSlide+1);
+  const s=sl[elSlide-1]||{};
+  try{
+    if(elConv.sendContextualUpdate)
+      elConv.sendContextualUpdate("[지금 화면] "+elSlide+"장 / 전체 "+sl.length+"장 — "
+        +(s.t||"")+"\n"+((s.pts||[]).map(p=>" - "+p).join("\n")));
+    if(elConv.sendUserMessage)
+      elConv.sendUserMessage(which==="start"
+        ? "저희 AI 직원이 소개드리겠습니다. 1장부터 발표해 주세요."
+        : elSlide+"장을 발표해 주세요.");
+    else { elSay("이 판의 SDK 로는 발표를 시킬 수 없습니다", true); return; }
+  }catch(e){ elSay("발표를 시키지 못했습니다: "+((e&&e.message)||e), true); return; }
+  // 화면도 같이 넘깁니다 — 없으면 전체화면을 먼저 엽니다 (브라우저 음성은 끈 채)
+  try{
+    if(!window.__wsCtl) playWebSlides(false);
+    if(window.__wsCtl) window.__wsCtl.go(elSlide-1);
+  }catch(e){ console.warn("슬라이드 넘기기 실패",e); }
+  elSay("AI 직원이 "+elSlide+"장을 발표합니다 (전체 "+sl.length+"장)");
+  const b=$("elNext"); if(b) b.disabled = elSlide>=sl.length;
+}
+window.elPresent=elPresent;
+
 // ── 꼬마 아이콘 (v164) ──────────────────────────────────────
 // 머리글 오른쪽의 어린이 얼굴. 그냥 그림으로 두면 눌러도 아무 일이 없어
 // AI 직원을 부르는 단추로 뒀습니다 — 회의 안에서만 뜻이 있으므로 그때로 데려갑니다.
@@ -5108,7 +5342,12 @@ async function elStart(){
       connectionType: "webrtc",
       onStatusChange: s=>{
         elStatus=(s&&s.status)||s||"";
-        if(elStatus==="connected") elSay("AI 직원이 동석했습니다 — 저희 쪽으로 향한 질문에 답합니다");
+        if(elStatus==="connected"){
+          const pushed=elPushDeck();        // 발표 자료를 먼저 넣어 둡니다
+          elSay("AI 직원이 동석했습니다 — 저희 쪽으로 향한 질문에 답합니다"
+            + (pushed? " · 슬라이드 "+((state.webSlides||[]).length)+"장을 넘겨 두었습니다 ([발표 시작] 가능)"
+                     : " · 발표할 슬라이드가 없습니다"));
+        }
         if(elStatus==="disconnected"){ elSay("AI 직원 연결이 끊어졌습니다"); elReset(); }
       },
       onModeChange: m=>{
@@ -5221,10 +5460,12 @@ function aiStaffPanelHTML(){
     <div class="section-title">AI 직원 동석</div>
     <div class="mini" style="margin-bottom:8px;line-height:1.75">
       MedIT AI 직원이 회의에 함께 앉습니다. 이름을 부르지 않아도 <b>저희 쪽으로 향한 질문</b>이면 답하고,
-      나머지는 조용히 듣습니다. <b>한 말과 들은 말이 회의록에 그대로 남습니다.</b>
+      나머지는 조용히 듣습니다. <b>한 말과 들은 말이 회의록에 그대로 남습니다.</b><br><b>[발표 시작]</b> 을 누르면 [슬라이드] 탭의 자료를 1장부터 발표합니다 — 화면도 같이 넘어갑니다.
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:7px">
       <button class="b-deep" id="elBtn" onclick="elStart()">AI 직원 부르기</button>
+      <button class="b-mint" id="elPresent" onclick="elPresent('start')" title="연결된 슬라이드를 1장부터 AI 직원이 발표합니다">발표 시작</button>
+      <button class="b-ghost" id="elNext" onclick="elPresent('next')" title="다음 장으로 넘기고 그 장을 발표시킵니다">다음 장</button>
       <span class="mini" id="elMode" style="font-weight:700;color:var(--deep)"></span>
       <span class="mini" id="elCount" style="margin-left:auto"></span>
     </div>
@@ -5826,6 +6067,8 @@ function showMinutesDone(rec){
       <button class="b-ghost" onclick="exportRecord('${rec.id}')" title="이 회의록을 .md 파일로 내려받습니다">파일로 저장</button>
       <button class="b-ghost" onclick="switchTab('email')" title="참석자에게 보낼 이메일 초안">이메일 초안</button>
       <button class="b-mint" onclick="aiReportRecord('${rec.id}')" title="회의록을 구조화 보고서로 정리합니다">AI 보고서 만들기</button>
+      <button class="b-deep" onclick="recordToJobs('${rec.id}')" title="회의록의 「다음 할 일」을 [일정] 탭의 업무 카드로 넘깁니다">업무로 넘기기</button>
+      <button class="b-ghost" onclick="recordFollowupMail('${rec.id}')" title="참석자에게 보낼 후속 메일을 회의록에서 씁니다">후속 메일 초안</button>
     </div>
   </div>`;
 }
