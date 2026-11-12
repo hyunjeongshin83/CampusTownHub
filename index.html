@@ -653,6 +653,11 @@ button, .at, [role="button"]{min-height:40px;}
 .mcwrap{display:grid;grid-template-columns:1fr 1fr;gap:13px}
 @media (max-width:900px){ .mcwrap{grid-template-columns:1fr} #mcFrame{height:480px!important} }
 #vFrame .mcwrap button{min-height:44px}
+
+/* AI 직원·바깥 회의 칸 (v163) — 터치 44px 은 폭과 무관하게.
+   WCAG 실측: [참석+녹취] 15.96:1 · [소리 녹음] 5.94:1 · [AI 직원] 13.47:1 · 작은 글자 5.86~5.94:1 */
+#extBox button,#elPanel button{min-height:44px;min-width:60px}
+#elPanel label{min-height:44px}
 </style>
 </head>
 <body>
@@ -676,6 +681,7 @@ button, .at, [role="button"]{min-height:40px;}
   <button class="at" id="hdrHome" title="첫 화면(회의 목록)으로 돌아갑니다" style="white-space:nowrap" onclick="goMeetingList()">회의 목록</button>
   <span class="mini" id="hdrBuild" style="color:#9FD9D2;opacity:.75;white-space:nowrap"></span>
   <button id="guideBtn" onclick="openInviteeGuide()" style="background:rgba(255,255,255,.12);color:#DFF7F4;border:1px solid rgba(255,255,255,.25);border-radius:9px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">초대자 가이드</button>
+<button id="kidBtn" title="AI 직원 — 회의에 함께 앉습니다 (화상회의 탭에서 부릅니다)" aria-label="AI 직원" onclick="kidClick()" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:12px;padding:3px 5px;cursor:pointer;line-height:0;min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:center;flex:none"><svg viewBox="0 0 44 48" width="30" height="33" aria-hidden="true" focusable="false"><g fill="#4A3426"><circle cx="12" cy="12" r="5"/><circle cx="19" cy="8" r="5.4"/><circle cx="26" cy="8" r="5.2"/><circle cx="32" cy="12" r="4.8"/><circle cx="9" cy="18" r="4.4"/><circle cx="35" cy="18" r="4.4"/><circle cx="15" cy="7" r="4.2"/><circle cx="29" cy="6" r="4.2"/><circle cx="22" cy="5" r="4.6"/></g><ellipse cx="22" cy="25" rx="10" ry="12.6" fill="#F6D9BF"/><circle cx="11.6" cy="25" r="2.5" fill="#F0CBAC"/><circle cx="32.4" cy="25" r="2.5" fill="#F0CBAC"/><path d="M12.6 19.5q4-5 9.4-4.6 5.4.4 9.4 4.6-3-2.2-6.2-1.6-2 .4-3.2 1.6-1.2-1.2-3.2-1.6-3.2-.6-6.2 1.6z" fill="#4A3426"/><circle cx="18" cy="24.6" r="1.7" fill="#2A1F18"/><circle cx="26" cy="24.6" r="1.7" fill="#2A1F18"/><circle cx="18.6" cy="24" r=".6" fill="#fff"/><circle cx="26.6" cy="24" r=".6" fill="#fff"/><path d="M15.8 21.4q2.2-1 4.4 0M23.8 21.4q2.2-1 4.4 0" stroke="#4A3426" stroke-width="1.3" stroke-linecap="round" fill="none"/><path d="M22 26.4v2.2" stroke="#D9A982" stroke-width="1.3" stroke-linecap="round"/><path d="M18.6 31q3.4 2.6 6.8 0" stroke="#B96A5A" stroke-width="1.6" stroke-linecap="round" fill="none"/><circle cx="15.2" cy="28.6" r="1.7" fill="#F2A9A0" opacity=".55"/><circle cx="28.8" cy="28.6" r="1.7" fill="#F2A9A0" opacity=".55"/><path d="M19 36.6h6v2.6h-6z" fill="#F0CBAC"/><path d="M13 48q1.6-7 9-7t9 7z" fill="#12BDB0"/><path d="M22 41.2l-2.4 3 2.4 2.4 2.4-2.4z" fill="#fff"/></svg></button>
   <div class="pill idle" id="pill"><span class="led"></span><span id="pillText">회의 대기</span></div>
   <span class="clock" id="clock"></span>
   <div class="hdr-user" id="hdrUser" style="display:none">
@@ -717,7 +723,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=162, BUILD_DATE="2026-10-21";
+const BUILD=164, BUILD_DATE="2026-10-21";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -4909,6 +4915,8 @@ function videoHTML(){
      </div>
    </div>
 
+   <div id="extBox"></div>
+   ${aiStaffPanelHTML()}
    <div id="vAfter"></div>
 
    <div class="vsplit">
@@ -5008,6 +5016,390 @@ function jitsiFallbackIframe(box,room){
     'style="width:100%;height:520px;border:0;border-radius:16px;"></iframe>';
   showAfterCallBox("manual");
 }
+
+
+// ── 꼬마 아이콘 (v164) ──────────────────────────────────────
+// 머리글 오른쪽의 어린이 얼굴. 그냥 그림으로 두면 눌러도 아무 일이 없어
+// AI 직원을 부르는 단추로 뒀습니다 — 회의 안에서만 뜻이 있으므로 그때로 데려갑니다.
+function kidClick(){
+  try{
+    if(!currentMeeting()){ toast("회의를 먼저 고르면 AI 직원을 부를 수 있습니다"); goMeetingList(); return; }
+    showTab("video");
+    setTimeout(()=>{ const b=$("elBtn"); if(b){ b.scrollIntoView({behavior:"smooth",block:"center"});
+      b.animate&&b.animate([{boxShadow:"0 0 0 0 rgba(18,189,176,.7)"},{boxShadow:"0 0 0 14px rgba(18,189,176,0)"}],{duration:900,iterations:2}); } },420);
+    toast("화상회의 탭의 [AI 직원 부르기] 로 안내했습니다");
+  }catch(e){ toast("AI 직원은 화상회의 탭에서 부릅니다"); }
+}
+window.kidClick=kidClick;
+
+// ==================== AI 직원 동석 · 외부 회의 (v163) ====================
+// 왜
+//   지금까지는 ElevenLabs 'MedIT AI 직원' 탭을 따로 열고, 회의 앱에서 그 탭을 화면공유하면서
+//   「탭 오디오 공유」를 체크해 목소리를 넣었습니다. 손이 많이 가고, 무엇보다
+//   AI 직원이 한 말과 들은 말이 회의록에 하나도 남지 않았습니다.
+//   에이전트가 공개 설정(enable_auth=false)이라 API 키 없이 허브에서 바로 띄울 수 있습니다.
+//
+// 무엇이 달라지나
+//   · 허브 안에서 AI 직원을 켭니다 (탭을 따로 열지 않습니다)
+//   · AI 직원이 한 말 · 들은 말이 회의록 녹취에 그대로 쌓입니다
+//   · 허브 자체 화상회의(v162 lib-jitsi-meet)에서는 AI 직원 목소리가 통화로 바로 나갑니다
+//   · 구글 밋·줌 같은 바깥 회의에서는 그 앱의 소리 공유 경로를 화면에 적어 둡니다
+const EL_AGENT = "agent_9601m77503f9fjgry14bv8rjgbpj";     // MedIT AI 직원 (공개 에이전트)
+const EL_SDK   = "https://cdn.jsdelivr.net/npm/@elevenlabs/client@1.33.0/dist/lib.iife.js";
+
+let elConv=null, elStatus="idle", elHeard=0, elSaid=0, elAgentTrack=null, elTapStream=null;
+
+// IIFE 가 만드는 전역 이름은 ElevenLabsClient 입니다 (ElevenLabs 가 아닙니다 — 처음에 잘못 짚었습니다).
+// 판이 바뀌어 이름이 달라질 수 있어 둘 다 봅니다.
+function elNS(){
+  return (window.ElevenLabsClient&&window.ElevenLabsClient.Conversation&&window.ElevenLabsClient)
+      || (window.ElevenLabs&&window.ElevenLabs.Conversation&&window.ElevenLabs) || null;
+}
+async function elLoad(){
+  if(elNS()) return true;
+  await new Promise((res,rej)=>{
+    const s=document.createElement("script"); s.src=EL_SDK;
+    s.onload=res; s.onerror=()=>rej(new Error("AI 직원 라이브러리를 받지 못했습니다")); document.head.appendChild(s);
+  });
+  if(!elNS()) throw new Error("AI 직원 라이브러리가 열리지 않았습니다 (전역 이름이 바뀐 것 같습니다)");
+  return true;
+}
+function elSay(t,bad){
+  const e=$("elMsg"); if(e){ e.textContent=t; e.style.color=bad?"#C24A4A":"var(--deep)"; }
+}
+function elCount(){
+  const e=$("elCount"); if(e) e.textContent="AI 직원 발언 "+elSaid+"건 · 들은 말 "+elHeard+"건";
+}
+
+// AI 직원 목소리를 통화로 흘려보내기 (허브 자체 화상회의에서만 됩니다)
+//   SDK 안쪽(conversation.output)에 손을 댑니다 — 공개 API 가 아니라서 판을 1.33.0 으로 묶어 두고,
+//   모양이 바뀌면 조용히 실패하는 대신 「소리 공유로 하세요」 안내로 넘어갑니다.
+async function elPipeIntoCall(){
+  try{
+    const out=elConv&&elConv.output;
+    if(!out||!out.audioContext) return {ok:false, why:"이 판의 SDK 에서는 목소리를 꺼낼 수 없습니다"};
+    const node=out.gain||out.analyser;
+    if(!node||!node.connect) return {ok:false, why:"목소리 출력 지점을 찾지 못했습니다"};
+    const dest=out.audioContext.createMediaStreamDestination();
+    node.connect(dest);
+    elTapStream=dest.stream;
+    if(!(typeof mcRoom!=="undefined"&&mcRoom&&typeof mcJoined!=="undefined"&&mcJoined))
+      return {ok:false, why:"허브 화상회의에 아직 들어가지 않았습니다"};
+    if(!(window.JitsiMeetJS&&JitsiMeetJS.createLocalTracksFromMediaStreams))
+      return {ok:false, why:"화상 라이브러리가 준비되지 않았습니다"};
+    const tr=await JitsiMeetJS.createLocalTracksFromMediaStreams([
+      { stream:elTapStream, sourceType:"canvas", mediaType:"audio" }]);
+    if(!tr||!tr.length) return {ok:false, why:"목소리 트랙을 만들지 못했습니다"};
+    elAgentTrack=tr[0];
+    await mcRoom.addTrack(elAgentTrack);
+    return {ok:true};
+  }catch(e){ return {ok:false, why:(e&&e.message)||String(e)}; }
+}
+
+async function elStart(){
+  const btn=$("elBtn"); if(btn){ btn.disabled=true; btn.textContent="연결 중…"; }
+  try{
+    elSay("AI 직원을 부르는 중…");
+    await elLoad();
+    elHeard=0; elSaid=0; elCount();
+    const myName=(state.user&&state.user.name)||"대표님";
+    elConv=await elNS().Conversation.startSession({
+      agentId: EL_AGENT,
+      connectionType: "webrtc",
+      onStatusChange: s=>{
+        elStatus=(s&&s.status)||s||"";
+        if(elStatus==="connected") elSay("AI 직원이 동석했습니다 — 저희 쪽으로 향한 질문에 답합니다");
+        if(elStatus==="disconnected"){ elSay("AI 직원 연결이 끊어졌습니다"); elReset(); }
+      },
+      onModeChange: m=>{
+        const mode=(m&&m.mode)||m;
+        const e=$("elMode");
+        if(e) e.textContent = mode==="speaking" ? "말하는 중" : "듣는 중";
+      },
+      onMessage: o=>{
+        try{
+          const src=o&&o.source, msg=(o&&o.message||"").trim();
+          if(!msg) return;
+          if(src==="ai"){
+            elSaid++; addSegment(msg,"AI 직원",true);
+          }else{
+            // AI 직원이 마이크로 들은 말. 브라우저 받아쓰기가 이미 돌고 있으면 두 번 적힙니다.
+            elHeard++;
+            const dup=(typeof listening!=="undefined"&&listening);
+            const want=$("elHear")? $("elHear").checked : !dup;
+            if(want) addSegment(msg, dup? "현장 (AI 직원이 들은 말)" : myName, true);
+          }
+          elCount();
+        }catch(e){ console.warn("AI 직원 기록 실패",e); }
+      },
+      onError: e=>{ elSay("AI 직원 오류: "+((e&&e.message)||e), true); }
+    });
+
+    if(btn){ btn.textContent="AI 직원 내보내기"; btn.disabled=false; btn.onclick=elStop; }
+    const hb=$("elHear"); if(hb) hb.disabled=false;
+
+    // 허브 자체 화상회의에 들어가 있으면 목소리를 통화로 바로 넣습니다
+    const p=await elPipeIntoCall();
+    const n=$("elPipe");
+    if(n){
+      n.innerHTML = p.ok
+        ? '<b style="color:var(--deep)">AI 직원 목소리가 통화로 나가고 있습니다.</b> 상대에게 바로 들립니다.'
+        : '<b style="color:#7a5b00">AI 직원 목소리는 이 컴퓨터에서만 들립니다.</b> '
+          +'상대에게 들리게 하려면 아래 「상대에게 들리게 하는 법」 을 따라 주세요.<br>'
+          +'<span class="mini">(이유: '+esc(p.why)+')</span>';
+    }
+  }catch(e){
+    elSay("AI 직원을 부르지 못했습니다: "+((e&&e.message)||e), true);
+    if(btn){ btn.disabled=false; btn.textContent="AI 직원 부르기"; btn.onclick=elStart; }
+  }
+}
+window.elStart=elStart;
+
+async function elStop(){
+  try{ if(elConv&&elConv.endSession) await elConv.endSession(); }catch(e){}
+  elReset();
+  elSay("AI 직원을 내보냈습니다 — 지금까지 기록은 회의록에 남아 있습니다");
+}
+window.elStop=elStop;
+
+function elReset(){
+  try{ if(elAgentTrack&&typeof mcRoom!=="undefined"&&mcRoom) mcRoom.removeTrack(elAgentTrack); }catch(e){}
+  try{ if(elAgentTrack) elAgentTrack.dispose(); }catch(e){}
+  try{ if(elTapStream) elTapStream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  elConv=null; elAgentTrack=null; elTapStream=null; elStatus="idle";
+  const btn=$("elBtn"); if(btn){ btn.disabled=false; btn.textContent="AI 직원 부르기"; btn.onclick=elStart; }
+  const e=$("elMode"); if(e) e.textContent="";
+}
+
+// ── 바깥 회의 앱 알아보기 ───────────────────────────────────
+// 소리를 넣는 길이 앱마다 다릅니다. 2026-11-12 에 각 앱 문서를 확인해 적었습니다.
+const MEET_APPS=[
+  { key:"meet",  re:/(^|\.)meet\.google\.com/i, name:"구글 밋",
+    how:["회의 화면 아래 <b>[발표 시작]</b>", "<b>Chrome 탭</b> 을 고릅니다",
+         "<b>MedIT AI 직원</b> 탭을 고르고", "<b>「탭 오디오 공유」</b> 를 반드시 체크",
+         "<b>[공유]</b>"],
+    note:"구글 밋은 소리만 공유하는 길이 없어 탭을 함께 보여 줘야 합니다." },
+  { key:"zoom",  re:/(^|\.)zoom\.(us|com)/i, name:"줌",
+    how:["회의 화면 아래 <b>[화면 공유]</b>", "위쪽 <b>[고급]</b> 탭",
+         "<b>「컴퓨터 소리」</b> 를 고릅니다", "<b>[공유]</b>"],
+    note:"줌은 화면을 안 보여 주고 <b>소리만</b> 공유할 수 있습니다 — 이 길이 가장 깔끔합니다." },
+  { key:"teams", re:/(^|\.)teams\.(microsoft|live)\.com/i, name:"팀즈",
+    how:["<b>[공유]</b> 를 누릅니다", "<b>「컴퓨터 소리 포함」</b> 을 켭니다",
+         "<b>MedIT AI 직원</b> 탭(또는 창)을 고릅니다"],
+    note:"팀즈는 공유 창에서 소리 포함을 먼저 켜야 선택이 됩니다." },
+  { key:"webex", re:/(^|\.)webex\.com/i, name:"웹엑스",
+    how:["<b>[공유]</b>","<b>「컴퓨터 오디오 공유」</b> 체크","AI 직원 탭을 고릅니다"], note:"" }
+];
+function meetApp(url){
+  const u=(url||"").trim(); if(!u) return null;
+  // 주소 전체에 정규식을 걸면 "https://" 때문에 (^|\.) 가 안 맞습니다 — 호스트만 떼어 봅니다.
+  let host="";
+  try{ host=new URL(/^https?:\/\//i.test(u)?u:("https://"+u)).hostname.toLowerCase(); }
+  catch(e){ host=u.toLowerCase(); }
+  for(const a of MEET_APPS) if(a.re.test(host)) return a;
+  return { key:"other", name:"외부 회의", how:["회의 앱에서 <b>화면·탭 공유</b> 를 누르고",
+    "<b>소리(오디오) 함께 공유</b> 를 켠 뒤", "<b>MedIT AI 직원</b> 탭을 고릅니다"],
+    note:"쓰시는 앱 이름을 알려 주시면 그 앱의 정확한 메뉴로 적어 두겠습니다." };
+}
+function extLink(){ const m=currentMeeting(); return m&&(m.zoom||"").trim(); }
+
+function elHowToHTML(){
+  const app=meetApp(extLink());
+  if(!app) return '<div class="mini">회의에 <b>외부 회의 링크</b>(구글 밋·줌 등)를 넣으면 그 앱에 맞는 방법을 여기 적어 드립니다. '
+    +'허브 자체 화상회의를 쓰시면 이 단계가 아예 필요 없습니다.</div>';
+  return '<div class="mini" style="line-height:1.9">'
+    +'<b>'+esc(app.name)+'</b> 에서 AI 직원 목소리를 상대에게 들리게 하려면<br>'
+    +app.how.map((s,i)=>'<span style="color:var(--deep);font-weight:700">'+(i+1)+'.</span> '+s).join("<br>")
+    +(app.note?'<br><span style="color:var(--soft)">'+app.note+'</span>':'')
+    +'<br><span style="color:var(--soft)">공유를 켜면 상대에게는 AI 직원 목소리가, 대표님께는 그대로 들립니다.</span></div>';
+}
+
+// ── AI 직원 패널 ────────────────────────────────────────────
+function aiStaffPanelHTML(){
+  return `
+  <div class="glass tile" id="elPanel" style="margin-bottom:13px">
+    <div class="section-title">AI 직원 동석</div>
+    <div class="mini" style="margin-bottom:8px;line-height:1.75">
+      MedIT AI 직원이 회의에 함께 앉습니다. 이름을 부르지 않아도 <b>저희 쪽으로 향한 질문</b>이면 답하고,
+      나머지는 조용히 듣습니다. <b>한 말과 들은 말이 회의록에 그대로 남습니다.</b>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:7px">
+      <button class="b-deep" id="elBtn" onclick="elStart()">AI 직원 부르기</button>
+      <span class="mini" id="elMode" style="font-weight:700;color:var(--deep)"></span>
+      <span class="mini" id="elCount" style="margin-left:auto"></span>
+    </div>
+    <label class="mini" style="display:flex;gap:7px;align-items:flex-start;min-height:44px;padding:6px 0;cursor:pointer">
+      <input type="checkbox" id="elHear" disabled style="margin-top:3px;width:20px;height:20px;accent-color:var(--mint);flex:none">
+      <span>AI 직원이 <b>들은 말</b>도 회의록에 넣기 — 브라우저 받아쓰기를 함께 쓰면 같은 말이 두 번 적힐 수 있어 기본은 꺼 둡니다.</span>
+    </label>
+    <div id="elMsg" class="mini" style="min-height:20px;font-weight:700;color:var(--deep);line-height:1.7">아직 부르지 않았습니다.</div>
+    <div id="elPipe" class="mini" style="margin-top:6px;line-height:1.75"></div>
+    <details style="margin-top:8px">
+      <summary class="mini" style="cursor:pointer;font-weight:800;color:var(--soft)">상대에게 들리게 하는 법</summary>
+      <div style="margin-top:7px" id="elHow">${elHowToHTML()}</div>
+    </details>
+    <div class="mini" style="margin-top:9px;background:var(--pale);border-radius:11px;padding:9px 12px;line-height:1.8">
+      회의 상대에게 <b>AI가 함께 듣고 기록한다는 것을 먼저 알리세요.</b> 녹취·기록에 동의를 받아야 합니다.
+    </div>
+  </div>`;
+}
+
+// ==================== 바깥 회의 (구글 밋 · 줌 · 팀즈) (v163) ====================
+// 회의는 바깥 앱에서 하고, 기록은 허브에서 합니다.
+//   10-22 교수님 회의는 허브 화상회의로 했고, 11-12 동산병원 회의는 구글 밋으로 했습니다.
+//   어느 쪽이든 회의록은 한 곳에 모여야 업무에 씁니다.
+//
+// 녹취가 어디까지 되는지 (솔직하게)
+//   ① 내 마이크   브라우저 받아쓰기로 실시간. 지금도 됩니다.
+//   ② 회의 소리 전체(상대 목소리)
+//        브라우저 받아쓰기는 마이크만 듣습니다 — 스피커로 나오는 상대 목소리는 글로 못 바꿉니다.
+//        그래서 탭·창 소리를 파일로 녹음해 회의 자료에 올려 둡니다. 글로 바꾸는 것은 따로 붙여야 합니다.
+//   ③ AI 직원을 부르면 그 귀로 들은 말도 들어옵니다 (위 AI 직원 패널).
+let extRec=null, extChunks=[], extStartedAt=0, extTimer=0;
+
+function extConsentKey(){ const m=currentMeeting(); return "medit:consent:"+((m&&m.id)||"x"); }
+function extConsented(){ try{ return localStorage.getItem(extConsentKey())==="1"; }catch(e){ return false; } }
+
+async function extJoin(){
+  const m=currentMeeting();
+  if(!m){ toast("회의를 먼저 고르거나 만들어 주세요"); return; }
+  const url=extLink();
+  if(!url){ toast("회의 정보에 외부 회의 링크를 먼저 넣어 주세요"); openMeetingEditor&&openMeetingEditor(m.id); return; }
+
+  // 동의 — 남의 말을 기록하는 일입니다. 허브 메모에도 요청으로 남아 있던 항목입니다.
+  if(!extConsented()){
+    const ok=await formModalP("녹취 전에 확인해 주세요",[],{
+      saveLabel:"알렸습니다 — 시작",
+      note:"회의 상대에게 <b>기록(녹취)한다는 것을 알리고 동의를 받으셨는지</b> 확인합니다.\n"
+          +"상대 동의 없이 남의 말을 기록·보관하면 분쟁이 됩니다. 연구·의료 회의는 특히 그렇습니다.\n\n"
+          +"[알렸습니다 — 시작] 을 누르면 이 회의에서는 다시 묻지 않습니다."});
+    if(!ok) return;
+    try{ localStorage.setItem(extConsentKey(),"1"); }catch(e){}
+  }
+
+  window.open(url,"_blank","noopener");
+  if(!state.meeting.started){
+    state.meeting.started=Date.now(); state.meeting.ended=null;
+    state.meetingStart=Date.now(); state.meeting.when=Date.now();
+    try{ setPill("live","회의 진행 중"); }catch(e){}
+    scheduleSave();
+  }
+  setTimeout(()=>{ if(typeof startMic==="function") startMic(); },900);
+  try{ showAfterCallBox("manual"); }catch(e){}
+  extStatus("바깥 회의 창을 열었습니다 — 내 마이크 받아쓰기를 시작했습니다");
+  extRenderBox();
+}
+window.extJoin=extJoin;
+
+function extStatus(t,bad){
+  const e=$("extMsg"); if(e){ e.textContent=t; e.style.color=bad?"#C24A4A":"var(--deep)"; }
+}
+
+// 회의 소리 전체를 파일로 — 상대 목소리까지 남겨 둡니다
+async function extRecordStart(){
+  if(extRec){ extRecordStop(); return; }
+  try{
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia)
+      throw new Error("이 브라우저는 화면·탭 소리 녹음을 지원하지 않습니다");
+    const st=await navigator.mediaDevices.getDisplayMedia({ video:true, audio:true });
+    const at=st.getAudioTracks();
+    if(!at.length){
+      st.getTracks().forEach(t=>t.stop());
+      throw new Error("소리가 안 잡혔습니다 — 공유 창에서 「탭 오디오 공유」(줌은 「컴퓨터 소리」)를 체크해 주세요");
+    }
+    // 소리만 남깁니다 — 화면은 녹음하지 않습니다 (용량·개인정보)
+    st.getVideoTracks().forEach(t=>t.stop());
+    const only=new MediaStream(at);
+    const mime=["audio/webm;codecs=opus","audio/webm","audio/mp4"].find(t=>MediaRecorder.isTypeSupported(t))||"";
+    extChunks=[];
+    extRec=new MediaRecorder(only, mime?{mimeType:mime}:undefined);
+    extRec.ondataavailable=e=>{ if(e.data&&e.data.size) extChunks.push(e.data); };
+    extRec.onstop=async()=>{
+      try{ only.getTracks().forEach(t=>t.stop()); }catch(e){}
+      const blob=new Blob(extChunks,{type:extChunks[0]&&extChunks[0].type||"audio/webm"});
+      extChunks=[];
+      await extSaveAudio(blob);
+    };
+    at[0].onended=()=>{ if(extRec) extRecordStop(); };     // 사용자가 공유를 멈추면 같이 멈춥니다
+    extRec.start(4000);
+    extStartedAt=Date.now();
+    extTimer=setInterval(()=>{
+      const s=Math.round((Date.now()-extStartedAt)/1000);
+      const e=$("extRecState");
+      if(e) e.textContent="녹음 중 "+Math.floor(s/60)+"분 "+(s%60)+"초";
+    },1000);
+    const b=$("extRecBtn"); if(b){ b.textContent="녹음 끝내고 자료에 올리기"; b.className="b-gold"; }
+    extStatus("회의 소리를 녹음합니다 — 끝내면 이 회의 자료에 올라갑니다");
+  }catch(e){
+    extStatus("녹음을 시작하지 못했습니다: "+((e&&e.message)||e), true);
+  }
+}
+window.extRecordStart=extRecordStart;
+
+function extRecordStop(){
+  try{ if(extRec&&extRec.state!=="inactive") extRec.stop(); }catch(e){}
+  extRec=null; clearInterval(extTimer); extTimer=0;
+  const b=$("extRecBtn"); if(b){ b.textContent="회의 소리 녹음"; b.className="b-ghost"; }
+  const e=$("extRecState"); if(e) e.textContent="올리는 중…";
+}
+window.extRecordStop=extRecordStop;
+
+async function extSaveAudio(blob){
+  const m=currentMeeting();
+  const mins=Math.max(1,Math.round((Date.now()-extStartedAt)/60000));
+  const ext=(blob.type||"").includes("mp4")?"m4a":"webm";
+  const nm="회의소리_"+(new Date().toISOString().slice(0,16).replace(/[:T]/g,"")) +"_"+mins+"분."+ext;
+  const e=$("extRecState");
+  try{
+    if(!sb) throw new Error("클라우드에 연결되지 않았습니다");
+    const stored=(m&&m.id?m.id:"x")+"/"+Date.now()+"_"+nm;
+    const {error}=await sb.storage.from(BUCKET).upload(stored, blob, {contentType:blob.type||"audio/webm"});
+    if(error) throw error;
+    state.fileNames=state.fileNames||{}; state.fileNames[stored]=nm;
+    state.fileMeeting=state.fileMeeting||{}; if(m) state.fileMeeting[stored]=m.id;
+    await saveNow();
+    if(e) e.textContent="자료에 올렸습니다 — "+nm;
+    extStatus("회의 소리를 자료에 올렸습니다 ("+mins+"분). 「자료」 탭에서 받으실 수 있습니다");
+    try{ renderFiles(); }catch(_){}
+  }catch(err){
+    // 못 올려도 파일은 손에 쥐어 드립니다
+    try{
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(blob); a.download=nm; a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+      if(e) e.textContent="올리지 못해 파일로 내려 드렸습니다";
+      extStatus("자료에 올리지 못했습니다 ("+((err&&err.message)||err)+") — 파일로 내려 드렸습니다", true);
+    }catch(_){ extStatus("녹음 파일을 저장하지 못했습니다: "+((err&&err.message)||err), true); }
+  }
+}
+
+function extRenderBox(){
+  const b=$("extBox"); if(!b) return;
+  const url=extLink(); const app=meetApp(url);
+  b.innerHTML=`
+   <div class="glass tile" style="margin-bottom:13px">
+     <div class="section-title">바깥 회의 ${app?("· "+esc(app.name)):""}</div>
+     <div class="mini" style="margin-bottom:8px;line-height:1.75">
+       ${url
+         ? '회의는 <b>'+esc(app.name)+'</b> 에서 하고, 기록은 여기 쌓입니다.<br><span style="color:var(--soft)">'+esc(url.slice(0,70))+(url.length>70?'…':'')+'</span>'
+         : '이 회의에 <b>외부 회의 링크</b>가 없습니다. 「회의 정보 고치기」에서 구글 밋·줌 링크를 넣어 주세요.'}
+     </div>
+     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px">
+       <button class="b-mint" onclick="extJoin()" ${url?"":"disabled"}>바깥 회의 참석 + 녹취 시작</button>
+       <button class="b-ghost" id="extRecBtn" onclick="extRecordStart()">회의 소리 녹음</button>
+       <span class="mini" id="extRecState" style="margin-left:auto;font-weight:700;color:var(--deep)"></span>
+     </div>
+     <div id="extMsg" class="mini" style="min-height:20px;font-weight:700;color:var(--deep);line-height:1.7"></div>
+     <div class="mini" style="margin-top:8px;background:var(--pale);border-radius:11px;padding:9px 12px;line-height:1.85">
+       <b>어디까지 글로 남는지</b><br>
+       · <b>내 목소리</b> — 실시간으로 회의록에 쌓입니다.<br>
+       · <b>상대 목소리</b> — 브라우저 받아쓰기는 마이크만 듣기 때문에 글로는 안 남습니다.
+         [회의 소리 녹음] 으로 <b>소리 파일</b>을 남겨 자료에 올려 둡니다.<br>
+       · <b>AI 직원</b>을 부르면 그 귀로 들은 말도 회의록에 들어옵니다.
+     </div>
+   </div>`;
+}
+window.extRenderBox=extRenderBox;
 
 // ==================== 모션캠 연동 화상회의 (v162) ====================
 // 왜 따로 만들었나
@@ -5441,7 +5833,10 @@ window.showMinutesDone=showMinutesDone;
 window.startJitsi=startJitsi; window.showAfterCallBox=showAfterCallBox;
 function bindVideo(){
   const m=currentMeeting()||{};
-  const link="https://meet.jit.si/"+jitsiRoom();
+  // (v163) 바깥 회의(구글 밋·줌) 칸을 먼저 그립니다 — 회의가 바깥에서 열릴 수도 있습니다
+  try{ extRenderBox(); }catch(e){ console.warn("바깥 회의 칸 실패",e); }
+  try{ const n=$("elHow"); if(n) n.innerHTML=elHowToHTML(); }catch(e){}
+  const link="https://"+JITSI_HOST+"/"+jitsiRoom();
   const s1=$("vStart"),s2=$("vStart2");
   if(s1)s1.onclick=startJitsi; if(s2)s2.onclick=startJitsi;
   const cp=$("vCopy");if(cp)cp.onclick=()=>{copyText(link,"링크를 복사했습니다");};
@@ -5654,12 +6049,40 @@ function bindConsole(){
   $("autoSync").onchange=e=>{if(e.target.checked){autoTimer=setInterval(()=>{if(state.segments.length)syncNotes(true);},30000);toast("30초마다 자동 반영 (실패 시 조용히 건너뜀)");}else clearInterval(autoTimer);};
   if(listening){micBtnState(true);}
 }
+
+// ── 녹취에서 「이미 회의록으로 올라간 문장」은 숨깁니다 (v164) ─────────
+// 전에는 녹취가 모든 문장을, 회의록이 그중 올라간 것을 또 보여 줘서 같은 말이 두 번 보였습니다.
+// 올라간 것은 회의록에 있으니 녹취에서는 비웁니다. 데이터는 그대로 두고 보이는 것만 줄입니다 —
+// 그래서 고치기(editSeg*)에 넘기는 번호는 원래 번호 그대로입니다.
+let SHOW_ALL_SEGS=false;
+function segCursor(){ const ld=state.liveDoc||{cursor:0}; return Math.min(ld.cursor||0,(state.segments||[]).length); }
+function visibleSegs(){
+  const segs=state.segments||[];
+  const from=SHOW_ALL_SEGS?0:segCursor();
+  return segs.map((s,i)=>({s,i})).slice(from);
+}
+function movedNote(){
+  const n=segCursor();
+  if(SHOW_ALL_SEGS) return '<div class="mini" style="padding:4px 0"><a href="#" onclick="toggleAllSegs(event)" style="color:var(--mint);font-weight:700">올라간 '+n+'문장 다시 숨기기</a></div>';
+  if(!n) return "";
+  return '<div class="mini" style="padding:4px 0;color:var(--soft)">'+n+'문장은 아래 회의록으로 올라갔습니다 · '
+    +'<a href="#" onclick="toggleAllSegs(event)" style="color:var(--mint);font-weight:700">모두 보기</a></div>';
+}
+function toggleAllSegs(e){ if(e&&e.preventDefault) e.preventDefault();
+  SHOW_ALL_SEGS=!SHOW_ALL_SEGS; renderTranscript(); }
+window.toggleAllSegs=toggleAllSegs;
+
 function renderTranscript(interim){const box=$("transcript");
   // (v148) 화상회의 탭에는 #transcript 가 없습니다. 예전처럼 여기서 끝내 버리면
   //   오른쪽 실시간 기록이 영영 안 그려집니다 — 콘솔 칸이 없어도 옆칸은 그립니다.
   if(!box){ renderVideoLive(interim); return; }
-  if(!state.segments.length&&!interim){box.innerHTML='<div class="mini" style="font-style:italic">회의를 시작하면 자동으로 녹취됩니다. 타이핑도 가능합니다.</div>';renderVideoLive(interim);return;}
-  let h=state.segments.map((s,i)=>`<div class="note ${(state.user&&s.who===state.user.name)?'me':''}"><span class="who" style="cursor:pointer;${s.guessed?'border-bottom:1px dotted var(--gray);':''}" title="${s.guessed?'AI 추정 화자 — 클릭해 확정·수정':'클릭해 발화자 이름 수정'}" onclick="editSegWho(${i})">${esc(s.who)}${s.guessed?'˟':''} · ${s.time}${s.lang&&s.lang!=="ko"?" · "+micLangLabel(SCRIPT2LANG[s.lang]||s.lang):""}</span><span style="cursor:pointer" title="클릭해 발언 내용 수정 (비우면 삭제)" onclick="editSegText(${i})">${esc(s.text)}</span>${s.needKo?'<div class="mini" style="margin-top:3px;font-style:italic">한국어로 번역 중…</div>':(s.ko?`<div style="margin-top:3px;padding-top:3px;border-top:1px dashed var(--line);color:var(--deep)">→ ${esc(s.ko)}</div>`:"")}</div>`).join("");
+  const vis=visibleSegs();
+  if(!vis.length&&!interim){
+    box.innerHTML=segCursor()
+      ? movedNote()
+      : '<div class="mini" style="font-style:italic">회의를 시작하면 자동으로 녹취됩니다. 타이핑도 가능합니다.</div>';
+    renderVideoLive(interim);return;}
+  let h=movedNote()+vis.map(({s,i})=>`<div class="note ${(state.user&&s.who===state.user.name)?'me':''}"><span class="who" style="cursor:pointer;${s.guessed?'border-bottom:1px dotted var(--gray);':''}" title="${s.guessed?'AI 추정 화자 — 클릭해 확정·수정':'클릭해 발화자 이름 수정'}" onclick="editSegWho(${i})">${esc(s.who)}${s.guessed?'˟':''} · ${s.time}${s.lang&&s.lang!=="ko"?" · "+micLangLabel(SCRIPT2LANG[s.lang]||s.lang):""}</span><span style="cursor:pointer" title="클릭해 발언 내용 수정 (비우면 삭제)" onclick="editSegText(${i})">${esc(s.text)}</span>${s.needKo?'<div class="mini" style="margin-top:3px;font-style:italic">한국어로 번역 중…</div>':(s.ko?`<div style="margin-top:3px;padding-top:3px;border-top:1px dashed var(--line);color:var(--deep)">→ ${esc(s.ko)}</div>`:"")}</div>`).join("");
   if(interim)h+=`<div class="note" style="opacity:.5;font-style:italic"><span class="who">발화 (인식중…)</span>${esc(interim)}</div>`;
   box.innerHTML=h;box.scrollTop=box.scrollHeight;const sc=$("segCount");if(sc)sc.textContent=state.segments.length;
   if(typeof renderLiveWho==="function")renderLiveWho();
@@ -5668,11 +6091,12 @@ function renderTranscript(interim){const box=$("transcript");
 //   화상 화면을 떠나지 않고 적을 수 있어야 회의 중에 실제로 쓰입니다.
 function renderVideoLive(interim){
   const box=$("vTranscript"); if(!box) return;
-  const segs=state.segments||[];
-  if(!segs.length && !interim){
-    box.innerHTML='<div class="mini" style="font-style:italic">아직 기록이 없습니다. 말소리가 잡히면 여기에 쌓이고, 아래 칸에 적으셔도 됩니다.</div>';
+  const vis=visibleSegs();
+  if(!vis.length && !interim){
+    box.innerHTML=segCursor()? movedNote()
+      : '<div class="mini" style="font-style:italic">아직 기록이 없습니다. 말소리가 잡히면 여기에 쌓이고, 아래 칸에 적으셔도 됩니다.</div>';
   }else{
-    box.innerHTML=segs.map(s=>'<div style="padding:5px 0;border-bottom:1px dashed var(--line)">'
+    box.innerHTML=movedNote()+vis.map(({s})=>'<div style="padding:5px 0;border-bottom:1px dashed var(--line)">'
       +'<span style="color:var(--deep);font-weight:700">'+esc(s.who)+'</span>'
       +' <span class="mini">'+esc(s.time||"")+'</span><br>'+esc(s.text||"")
       +(s.ko?'<div style="color:var(--deep);margin-top:2px">→ '+esc(s.ko)+'</div>':'')
@@ -5680,7 +6104,7 @@ function renderVideoLive(interim){
       +(interim?'<div style="opacity:.5;font-style:italic;padding:5px 0">'+esc(interim)+'</div>':"");
     box.scrollTop=box.scrollHeight;
   }
-  const c=$("vSegCount"); if(c) c.textContent=segs.length;
+  const c=$("vSegCount"); if(c) c.textContent=(state.segments||[]).length;
   const ms=$("vMicState"); if(ms){
     ms.textContent = (typeof listening!=="undefined" && listening) ? "● 듣는 중" : "마이크 꺼짐";
     ms.style.color = (typeof listening!=="undefined" && listening) ? "var(--deep)" : "";
@@ -8239,6 +8663,8 @@ function openMeetingCreator(presetCompany){
       ${fld("목적 (선택)","mn_purpose","")}
       ${fld("소속·회사 배지 (쉼표로 여러 개 — 입주기업은 이름 일부만 쳐도 자동 완성)","mn_company",presetCompany||"","예: 메디, 츄구미, ChewGumi …")}
       <div id="mn_company_sug" style="display:flex;gap:5px;flex-wrap:wrap;margin:-3px 0 9px"></div>
+      ${fld("외부 회의 링크 (선택 — 구글 밋·줌·팀즈)","mn_zoom","","https://meet.google.com/… 또는 https://zoom.us/j/…")}
+      <div class="mini" style="margin:-4px 0 9px;line-height:1.6">넣어 두면 「화상회의」 탭에서 그 앱에 맞는 참석·소리 공유 방법이 나오고, 녹취·회의록이 허브에 쌓입니다.</div>
       ${fld("카카오톡 오픈채팅 링크 (선택)","mn_kakao","","https://open.kakao.com/o/…")}
       <button class="b-ghost" style="padding:5px 11px;font-size:12px;margin:-4px 0 9px" onclick="kakaoRoomHelper('mn_')">카톡방 만들기 도우미</button>
       <div class="mini" style="line-height:1.5">참석자 등록·초대는 만들고 입장 후 [사전 준비] 탭에서 합니다. 만든 회의는 즉시 클라우드에 저장됩니다.</div>
@@ -8253,7 +8679,8 @@ function openMeetingCreator(presetCompany){
     if(date&&!/^\d{4}-\d{2}-\d{2}$/.test(date)){toast("날짜 형식: YYYY-MM-DD");return;}
     const m={id:"m_"+Date.now(),title,purpose:($("mn_purpose").value||"").trim(),
       place:($("mn_place").value||"").trim(),date,time:($("mn_time").value||"").trim(),
-      host:state.user.name,company:($("mn_company").value||"").trim(),zoom:"",kakao:($("mn_kakao").value||"").trim(),
+      host:state.user.name,company:($("mn_company").value||"").trim(),
+      zoom:(($("mn_zoom")&&$("mn_zoom").value)||"").trim(),kakao:($("mn_kakao").value||"").trim(),
       attendees:[{name:state.user.name,email:state.user.email}],jobs:[],started:null,ended:null};
     state.meetings.push(m);
     await saveNow();                                   // 즉시 클라우드 저장 — 이동·재로그인 시 유실 방지
