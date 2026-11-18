@@ -5,7 +5,15 @@
   1) 로그인 없이 신청 창이 열리고, 빈 칸·동의 없이는 안 보내지는지
   2) 들어온 신청을 보는 길이 로그인 없이는 막혀 있는지 (신청에 남의 연락처가 있습니다)
 
-실제 신청은 보내지 않습니다 — 보내는 단추는 누르지 않고, 막는 길만 서버에 물어봅니다.
+★ 이 점검은 운영 표(demo_requests)에 실제로 한 행을 넣습니다. 그래야 끝까지 확인됩니다.
+   2026-10-21 에 demo_requests_kind_check 가 meeting 저장을 500 으로 떨어뜨리고 있었는데,
+   거절 경로만 보던 때에는 못 잡았습니다. 그래서 들어가는 것까지 실제로 넣어 봅니다.
+   넣는 행은 email 이 qa-auto@campustownhub.invalid 이고 이름이 「[자동점검]…」 입니다.
+     · 운영자 목록에서는 demo-request 함수가 이 주소를 걸러 보이지 않습니다
+     · DB 에서는 pg_cron 작업 purge-demo-requests(매시 :17)가 2시간 지난 것을 지웁니다
+   (2026-11-19) 그 청소가 없어 10-28 부터 42건이 쌓여 있었습니다. 작업을 매시로 바꾸고
+   자동점검 주소를 청소 대상에 넣어 고쳤습니다. 이 머리말에는 「실제 신청은 보내지 않습니다」라고
+   적혀 있었는데 사실이 아니었고, 그 거짓 설명이 쌓이는 것을 눈에 안 띄게 했습니다.
 """
 import os, re, sys, json, pathlib, urllib.request, urllib.error
 from playwright.sync_api import sync_playwright

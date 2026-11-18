@@ -406,9 +406,13 @@ with sync_playwright() as p:
         const d = await learnFromRecord('rL', {quiet:true});
         const sys = seen[0] ? seen[0].sys : '';
         const src = seen[0] ? seen[0].src : '';
+        // learnCall 이 보내는 것만 셉니다 — v167 부터 learnFromRecord 가
+        // 넘어간 표(learnedAt)를 회차에 적어 저장하므로 저장 쪽 호출이 섞입니다.
+        const la = calls.filter(c => c && (c.action === 'read' || c.action === 'write'));
         return {chars: d.chars, name: d.name,
-                actions: calls.map(c => c.action),
-                readFirst: calls[0] && calls[0].action === 'read',
+                actions: la.map(c => c.action),
+                learnedAt: !!(state.records[0] && state.records[0].learnedAt),
+                readFirst: la[0] && la[0].action === 'read',
                 sysHasCondense: /축약/.test(sys), sysHasNoAdd: /더하지 말고/.test(sys),
                 sysHasGuard: /말하지 않을 것/.test(sys),
                 srcHasCur: /지금 자료 내용/.test(src), srcHasNew: /한 장 제안서/.test(src),
@@ -422,6 +426,10 @@ with sync_playwright() as p:
         bad.append("지금 자료를 먼저 읽지 않고 덮어씁니다 — 축약의 기준이 없어집니다")
     if learn["actions"] != ["read", "write"]:
         bad.append("호출 순서가 read → write 가 아닙니다: %s" % learn["actions"])
+    # (v167) 넘어간 회차에 표가 남아야 「밀린 회의록」을 셀 수 있습니다
+    print("  넘어간 표(learnedAt) → %s" % ("남음" if learn["learnedAt"] else "없음"))
+    if not learn["learnedAt"]:
+        bad.append("자료를 넘겼는데 회차에 learnedAt 표가 안 남습니다 — 밀린 회의록을 셀 수 없습니다")
     for k, nm in (("sysHasCondense", "축약"), ("sysHasNoAdd", "더하지 말고"), ("sysHasGuard", "말하지 않을 것")):
         if not learn[k]:
             bad.append("축약 지시에 「%s」 가 빠졌습니다" % nm)
@@ -452,6 +460,85 @@ with sync_playwright() as p:
         bad.append("자동 갱신 스위치가 듣지 않습니다: %s" % sw)
     else:
         print("  자동 갱신 스위치   → 끄고 켜집니다")
+
+    # ── 5g. 밀린 회의록 · 열쇠 확인 (v167) ──
+    #   자동 갱신은 회의가 끝나는 순간에만 돕니다. 회의를 열지 않은 날이나
+    #   스위치를 켜기 전에 끝난 회의는 넘어가지 않으므로, 몰아서 넘기는 길이 있어야 합니다.
+    print("── 밀린 회의록 ──")
+    back = pg.evaluate(r"""async () => {
+        const order = [];
+        window.callClaude = async () => '# MedIT 진행 상황\n\n## 지금\n- ' + '가'.repeat(230);
+        sb = {auth:{getSession: async () => ({data:{session:{access_token:'t'}}})}};
+        window.fetch = async (u, o) => { const b = JSON.parse(o.body);
+            if (b.action === 'read')  return {json: async () => ({ok:true, text:'기존', chars:2})};
+            if (b.action === 'write') return {json: async () => ({ok:true, chars:(b.text||'').length})};
+            return {json: async () => ({ok:true})}; };
+        const realLFR = learnFromRecord;
+        window.learnFromRecord = async (id, opt) => { order.push(id); return realLFR(id, opt); };
+        state.records = [
+          {id:'r3', title:'셋째', dt:'2026.11.12', report:'## 다음 할 일\n- 셋'},
+          {id:'r1', title:'첫째', dt:'2026.07.21', report:'## 다음 할 일\n- 하나'},
+          {id:'r2', title:'둘째', dt:'2026.10.22', report:'## 다음 할 일\n- 둘', learnedAt:'2026-11-01T00:00:00Z'}
+        ];
+        learnPendingPaint();
+        const before = {n: learnPending().length,
+                        txt: (document.getElementById('learnBackTxt')||{}).textContent,
+                        dis: !!(document.getElementById('learnBackBtn')||{}).disabled};
+        await learnBacklog();
+        learnPendingPaint();
+        const after = {n: learnPending().length,
+                       txt: (document.getElementById('learnBackTxt')||{}).textContent,
+                       dis: !!(document.getElementById('learnBackBtn')||{}).disabled};
+        window.learnFromRecord = realLFR;
+        return {before, after, order};
+    }""")
+    print("  돌리기 전          → %s (단추 %s)"
+          % (back["before"]["txt"], "잠김" if back["before"]["dis"] else "눌림"))
+    print("  처리 순서          → %s" % " → ".join(back["order"]))
+    print("  돌린 뒤            → %s (단추 %s)"
+          % (back["after"]["txt"], "잠김" if back["after"]["dis"] else "눌림"))
+    if back["before"]["n"] != 2:
+        bad.append("이미 넘어간 회차를 밀린 것으로 셉니다 (%d건, 2건이어야 함)" % back["before"]["n"])
+    if back["before"]["dis"]:
+        bad.append("밀린 회의록이 있는데 [밀린 회의록 가르치기] 가 잠겨 있습니다")
+    if back["order"] != ["r1", "r3"]:
+        bad.append("오래된 것부터 넘기지 않습니다: %s (r1 → r3 이어야 함)" % back["order"])
+    if back["after"]["n"] != 0:
+        bad.append("다 넘겼는데 밀린 것이 %d건 남아 있습니다" % back["after"]["n"])
+    if not back["after"]["dis"]:
+        bad.append("밀린 것이 없는데 단추가 아직 눌립니다")
+
+    # 열쇠가 없을 때 — 회의를 끝내 보지 않고도 알 수 있어야 합니다
+    key = pg.evaluate(r"""async () => {
+        sb = {auth:{getSession: async () => ({data:{session:{access_token:'t'}}})}};
+        window.fetch = async () => ({json: async () => ({ok:false, error:'need_key'})});
+        await learnKeyCheck();
+        const a = (document.getElementById('learnKeyMsg')||{}).textContent;
+        window.fetch = async () => ({json: async () => ({ok:true, text:'자료 1234', chars:7})});
+        await learnKeyCheck();
+        const b = (document.getElementById('learnKeyMsg')||{}).textContent;
+        return {noKey: a, okKey: b};
+    }""")
+    print("  열쇠 없을 때       → %s" % key["noKey"][:70])
+    print("  열쇠 있을 때       → %s" % key["okKey"][:70])
+    if "ELEVENLABS_API_KEY" not in key["noKey"]:
+        bad.append("열쇠가 없는데 무엇을 해야 하는지 안 알려줍니다: %r" % key["noKey"])
+    if "됩니다" not in key["okKey"]:
+        bad.append("열쇠가 맞는데 된다고 안 합니다: %r" % key["okKey"])
+
+    # 새 단추도 44px 를 지켜야 합니다 (폭 3종)
+    for w, label in ((390, "휴대폰 390"), (768, "태블릿 768"), (1280, "데스크톱 1280")):
+        pg.set_viewport_size({"width": w, "height": 900})
+        sz = pg.evaluate(r"""() => ['learnBackBtn','learnKeyMsg'].map(id => {
+            const e = document.getElementById(id); if (!e) return id + ':없음';
+            const r = e.getBoundingClientRect();
+            return (r.width > 0 && id === 'learnBackBtn' && (r.height < 44 || r.width < 44))
+                 ? (id + ':' + Math.round(r.width) + 'x' + Math.round(r.height)) : null;
+        }).filter(Boolean)""")
+        print("  %-14s 새 단추 44px %s" % (label, "OK" if not sz else "못 미침 " + str(sz)))
+        if sz:
+            bad.append("%s: 밀린 회의록 단추가 44px 못 미침 — %s" % (label, sz))
+    pg.set_viewport_size({"width": 1280, "height": 900})
 
     # ── 6. 진짜 SDK 가 내려오는지 (통화는 안 켭니다) ──
     print("── SDK 내려받기 (통화 안 켬) ──")

@@ -723,7 +723,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=166, BUILD_DATE="2026-11-12";
+const BUILD=167, BUILD_DATE="2026-11-19";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -898,6 +898,9 @@ function canView(m){
 }
 const $=id=>document.getElementById(id);
 const esc=s=>(s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));   // 속성 안전 — 따옴표 포함 내용이 입력칸을 깨뜨리지 않게
+// 오늘 날짜(한국). toISOString() 은 UTC 라서 자정~오전 9시 사이에는 어제가 나옵니다 —
+// 새벽에 회의를 끝내면 AI 직원 자료가 「어제 기준」으로 적히고 있었습니다 (v167).
+const kstDay=()=>new Date(Date.now()+9*3600e3).toISOString().slice(0,10);
 // (v137) 복사는 권한이 막히면 조용히 실패합니다. 휴대폰·비활성 탭에서 흔합니다.
 // 한 군데로 모아, 막히면 옛 방식으로 한 번 더 해보고, 그래도 안 되면 사실대로 알립니다.
 function copyText(s, okMsg){
@@ -2294,7 +2297,7 @@ function bindLit(){
   renderLit();
   const g=$("litGo"); if(g)g.onclick=litSearch;
   const qi=$("litQ"); if(qi)qi.addEventListener("keydown",e=>{if(e.key==='Enter')litSearch();});
-  const stamp=()=>new Date().toISOString().slice(0,10).replace(/-/g,"");
+  const stamp=()=>kstDay().replace(/-/g,"");
   const md=$("litMD"); if(md)md.onclick=()=>{const s=litSelected(); if(!s.length){toast("선택된 항목이 없습니다");return;} litDownload("문헌정리_"+stamp()+".md","text/markdown",litToMD(s)); toast(s.length+"건 MD로 내보냈습니다");};
   const cv=$("litCSV"); if(cv)cv.onclick=()=>{const s=litSelected(); if(!s.length){toast("선택된 항목이 없습니다");return;} litDownload("문헌정리_"+stamp()+".csv","text/csv",litToCSV(s)); toast(s.length+"건 CSV로 내보냈습니다");};
   const cp=$("litCopy"); if(cp)cp.onclick=()=>{const s=litSelected(); if(!s.length){toast("선택된 항목이 없습니다");return;} copyText(litToMD(s)); toast("복사했습니다");};
@@ -5339,7 +5342,7 @@ async function learnFromRecord(id, opts){
       "[지금 자료]\n"+(cur||"(아직 없습니다)"),
       "[새 회의록] "+(r.title||"")+" · "+(r.dt||"")+"\n"
         +(r.report || (r.notes?JSON.stringify(r.notes):"") || (r.rawNote||"").slice(0,8000)),
-      "[오늘] "+new Date().toISOString().slice(0,10)
+      "[오늘] "+kstDay()
     ].join("\n\n").slice(0,30000);
 
     say("축약하는 중… (1분까지 걸립니다)");
@@ -5349,7 +5352,10 @@ async function learnFromRecord(id, opts){
 
     say("AI 직원에게 넘기는 중…");
     const d=await learnCall({action:"write", text:txt,
-      name:"MedIT 진행 상황 ("+new Date().toISOString().slice(0,10)+" 기준)"});
+      name:"MedIT 진행 상황 ("+kstDay()+" 기준)"});
+    // 넘어간 회차에 표를 남깁니다 — 이것이 없으면 무엇이 밀렸는지 알 수 없습니다 (v167)
+    try{ r.learnedAt=new Date().toISOString(); await saveRecords(); }catch(_){}
+    try{ learnPendingPaint(); }catch(_){}
     say("AI 직원 자료를 갱신했습니다 ("+d.chars.toLocaleString()+"자) — 다음 회의부터 이 내용을 알고 들어갑니다");
     return d;
   }catch(e){
@@ -5374,6 +5380,61 @@ async function learnAuto(recId){
   catch(e){ console.warn("AI 직원 자료 자동 갱신 실패:", e&&e.message); }
 }
 window.learnAuto=learnAuto;
+
+// ── 밀린 회의록 (v167) ────────────────────────────────────────
+// 자동 갱신은 「회의가 끝나는 순간」에만 돕니다. 그래서 회의를 열지 않으면
+// 자동 학습이 돌지 않고, 켜기 전에 끝난 회의도 넘어가지 않았습니다.
+// 예약 작업(야간)으로 옮기는 길도 봤지만, 갱신에는 대표님 로그인 토큰이 필요하고
+// 그 토큰을 예약 작업 지시문에 둘 수는 없습니다 — 그래서 허브 안에서 몰아 처리합니다.
+function learnPending(){ return (state.records||[]).filter(r=>r&&r.id&&!r.learnedAt); }
+function learnPendingPaint(){
+  const n=learnPending().length;
+  const b=$("learnBackBtn"); const t=$("learnBackTxt");
+  if(t) t.textContent = n ? ("아직 안 넘어간 회의록 "+n+"건") : "회의록이 모두 넘어갔습니다";
+  if(b){ b.disabled=!n; b.textContent = n ? ("밀린 회의록 "+n+"건 가르치기") : "밀린 것 없음"; }
+}
+window.learnPendingPaint=learnPendingPaint;
+
+let learnBackBusy=false;
+async function learnBacklog(){
+  if(learnBackBusy) return;
+  const list=learnPending().slice().sort((a,b)=>String(a.dt||"").localeCompare(String(b.dt||"")));
+  if(!list.length){ toast("밀린 회의록이 없습니다"); return; }
+  learnBackBusy=true;
+  const b=$("learnBackBtn"); if(b) b.disabled=true;
+  const say=t=>{ const e=$("learnKeyMsg"); if(e){ e.textContent=t; e.style.color="var(--deep)"; } };
+  let done=0;
+  try{
+    // 오래된 것부터 하나씩. 매번 「지금 자료 + 이 회의록」을 축약해 덮어쓰므로
+    // 순서대로 돌리면 마지막에 전체가 반영된 한 덩어리가 남습니다 (쌓지 않습니다).
+    for(const r of list){
+      say("가르치는 중… "+(done+1)+"/"+list.length+" · "+(r.title||r.dt||""));
+      await learnFromRecord(r.id,{quiet:true});
+      done++;
+    }
+    say("밀린 회의록 "+done+"건을 넘겼습니다.");
+    toast("밀린 회의록 "+done+"건을 AI 직원에게 넘겼습니다");
+  }catch(e){
+    const m=(e&&e.message)||String(e);
+    const el=$("learnKeyMsg"); if(el){ el.textContent=done+"건까지 넘기고 멈췄습니다 — "+m; el.style.color="#C24A4A"; }
+    toast("멈췄습니다: "+m);
+  }finally{ learnBackBusy=false; learnPendingPaint(); }
+}
+window.learnBacklog=learnBacklog;
+
+// 회의를 열지 않고도 열쇠·명부가 맞는지 한 번에 보는 단추.
+// 이게 없으면 「회의를 끝내 봐야」 ELEVENLABS_API_KEY 가 있는지 알 수 없었습니다.
+async function learnKeyCheck(){
+  const el=$("learnKeyMsg");
+  const put=(t,bad)=>{ if(el){ el.textContent=t; el.style.color=bad?"#C24A4A":"var(--deep)"; } };
+  put("확인 중…");
+  try{
+    const d=await learnCall({action:"read"});
+    const n=(d.text||"").length;
+    put("됩니다 — 지금 AI 직원이 들고 있는 자료 "+n.toLocaleString()+"자"+(n?"":" (아직 비어 있습니다)"));
+  }catch(e){ put("안 됩니다 — "+((e&&e.message)||e), true); }
+}
+window.learnKeyCheck=learnKeyCheck;
 
 // ── 꼬마 아이콘 (v164) ──────────────────────────────────────
 // 머리글 오른쪽의 어린이 얼굴. 그냥 그림으로 두면 눌러도 아무 일이 없어
@@ -5598,6 +5659,17 @@ function aiStaffPanelHTML(){
     </label>
     <div id="elMsg" class="mini" style="min-height:20px;font-weight:700;color:var(--deep);line-height:1.7">아직 부르지 않았습니다.</div>
     <div id="elPipe" class="mini" style="margin-top:6px;line-height:1.75"></div>
+    <div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--line,#e3e0d8)">
+      <div class="mini" style="font-weight:800;color:var(--soft);margin-bottom:5px">AI 직원이 들고 다니는 자료</div>
+      <div class="mini" id="learnBackTxt" style="margin-bottom:6px;line-height:1.7">—</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="b-deep" id="learnBackBtn" onclick="learnBacklog()"
+          title="아직 안 넘어간 회의록을 오래된 것부터 하나씩 축약해 넘깁니다 (쌓지 않고 덮어씁니다)">밀린 회의록 가르치기</button>
+        <button class="b-ghost" onclick="learnKeyCheck()"
+          title="회의를 열지 않고 지금 자료를 읽어 봅니다 — 열쇠·명부가 맞는지 확인됩니다">지금 확인</button>
+      </div>
+      <div id="learnKeyMsg" class="mini" style="min-height:18px;margin-top:6px;font-weight:700;color:var(--deep);line-height:1.7"></div>
+    </div>
     <details style="margin-top:8px">
       <summary class="mini" style="cursor:pointer;font-weight:800;color:var(--soft)">상대에게 들리게 하는 법</summary>
       <div style="margin-top:7px" id="elHow">${elHowToHTML()}</div>
@@ -6216,6 +6288,7 @@ function bindVideo(){
   // (v163) 바깥 회의(구글 밋·줌) 칸을 먼저 그립니다 — 회의가 바깥에서 열릴 수도 있습니다
   try{ extRenderBox(); }catch(e){ console.warn("바깥 회의 칸 실패",e); }
   try{ const n=$("elHow"); if(n) n.innerHTML=elHowToHTML(); }catch(e){}
+  try{ learnPendingPaint(); }catch(e){}   // (v167) 밀린 회의록 건수
   const link="https://"+JITSI_HOST+"/"+jitsiRoom();
   const s1=$("vStart"),s2=$("vStart2");
   if(s1)s1.onclick=startJitsi; if(s2)s2.onclick=startJitsi;
@@ -8007,7 +8080,7 @@ function exportData(){
   const blob=new Blob([JSON.stringify(dump,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
-  a.href=url; a.download="campustown-hub-backup-"+new Date().toISOString().slice(0,10)+".json";
+  a.href=url; a.download="campustown-hub-backup-"+kstDay()+".json";
   a.click(); URL.revokeObjectURL(url);
   toast("백업 파일을 내려받았습니다");
 }
