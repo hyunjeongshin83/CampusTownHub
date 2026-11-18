@@ -508,7 +508,9 @@ with sync_playwright() as p:
     if not back["after"]["dis"]:
         bad.append("밀린 것이 없는데 단추가 아직 눌립니다")
 
-    # 열쇠가 없을 때 — 회의를 끝내 보지 않고도 알 수 있어야 합니다
+    # (v169) 열쇠가 없어도 끝까지 되어야 합니다.
+    #   진행 상황은 허브 저장소가 정본이고, 통화를 시작할 때 sendContextualUpdate 로 넘어갑니다.
+    #   ElevenLabs 지식자료는 ELEVENLABS_API_KEY 가 있을 때만 쓰는 덤입니다.
     key = pg.evaluate(r"""async () => {
         sb = {auth:{getSession: async () => ({data:{session:{access_token:'t'}}})}};
         window.fetch = async () => ({json: async () => ({ok:false, error:'need_key'})});
@@ -517,14 +519,76 @@ with sync_playwright() as p:
         window.fetch = async () => ({json: async () => ({ok:true, text:'자료 1234', chars:7})});
         await learnKeyCheck();
         const b = (document.getElementById('learnKeyMsg')||{}).textContent;
-        return {noKey: a, okKey: b};
+        return {noKey: a, okKey: b, stored: (await learnStoreGet()).length};
     }""")
-    print("  열쇠 없을 때       → %s" % key["noKey"][:70])
-    print("  열쇠 있을 때       → %s" % key["okKey"][:70])
-    if "ELEVENLABS_API_KEY" not in key["noKey"]:
-        bad.append("열쇠가 없는데 무엇을 해야 하는지 안 알려줍니다: %r" % key["noKey"])
-    if "됩니다" not in key["okKey"]:
-        bad.append("열쇠가 맞는데 된다고 안 합니다: %r" % key["okKey"])
+    print("  열쇠 없을 때       → %s" % key["noKey"][:76])
+    print("  열쇠 있을 때       → %s" % key["okKey"][:76])
+    if "허브 자료" not in key["noKey"] or "열쇠 없음" not in key["noKey"]:
+        bad.append("열쇠가 없을 때 허브 자료로 돌아간다는 것을 안 알려줍니다: %r" % key["noKey"])
+    if "오류" in key["noKey"] or "실패" in key["noKey"]:
+        bad.append("열쇠가 없는 것을 오류처럼 알립니다 — 열쇠는 이제 덤입니다: %r" % key["noKey"])
+    if "열쇠 있음" not in key["okKey"]:
+        bad.append("열쇠가 있을 때 그렇다고 안 합니다: %r" % key["okKey"])
+    if not key["stored"]:
+        bad.append("허브 저장소에 진행 상황이 안 남았습니다 — 통화에 넘길 것이 없습니다")
+
+    # 열쇠가 끝까지 없어도 자료 갱신이 완주하는가 (열쇠 없이 쓰는 것이 기본 경로입니다)
+    nokey = pg.evaluate(r"""async () => {
+        const pushed = [];
+        window.callClaude = async () => '# MedIT 진행 상황\n\n## 지금\n- ' + '가'.repeat(240);
+        sb = {auth:{getSession: async () => ({data:{session:{access_token:'t'}}})}};
+        window.fetch = async () => ({json: async () => ({ok:false, error:'need_key'})});
+        elConv = {sendContextualUpdate: t => pushed.push(t)};   // 통화 중인 상황
+        state.records = [{id:'nk', title:'열쇠없음', dt:'2026.11.12', report:'## 다음 할 일\n- 하나'}];
+        let err = '';
+        try { await learnFromRecord('nk', {quiet:true}); } catch (e) { err = e.message || String(e); }
+        const out = {err, learned: !!state.records[0].learnedAt,
+                     stored: (await learnStoreGet()).length,
+                     pushedNow: pushed.length, head: (pushed[0]||'').slice(0, 24),
+                     msg: (document.getElementById('learnMsg')||{}).textContent};
+        elConv = null;
+        return out;
+    }""")
+    print("── 열쇠 없이 (기본 경로) ──")
+    print("  완주                → %s" % (("실패: " + nokey["err"]) if nokey["err"] else "됩니다"))
+    print("  허브에 저장         → %d자 · 회차 표 %s" % (nokey["stored"], "남음" if nokey["learned"] else "없음"))
+    print("  통화에 바로 넘김    → %d건 · %r" % (nokey["pushedNow"], nokey["head"]))
+    print("  화면 안내           → %s" % nokey["msg"][:90])
+    if nokey["err"]:
+        bad.append("열쇠가 없으면 자료 갱신이 멈춥니다 — 열쇠 없이 되는 것이 기본이어야 합니다: %s" % nokey["err"])
+    if not nokey["stored"]:
+        bad.append("열쇠가 없을 때 허브 저장소에 아무것도 안 남습니다")
+    if not nokey["learned"]:
+        bad.append("열쇠가 없을 때 회차에 learnedAt 표가 안 남습니다 — 매번 다시 가르치게 됩니다")
+    if nokey["pushedNow"] != 1 or "[MedIT 진행 상황]" not in nokey["head"]:
+        bad.append("통화 중인데 갱신한 자료를 바로 넘기지 않습니다: %d건 %r" % (nokey["pushedNow"], nokey["head"]))
+
+    # 통화를 시작할 때 진행 상황이 먼저 넘어가는가 (발표 자료보다 앞)
+    start = pg.evaluate(r"""async () => {
+        const pushed = [];
+        await store.set('medit:aistaff', {text: '# MedIT 진행 상황\n- 동산병원 1차 미팅 결과', at: '', day: ''});
+        state.webSlides = [{title:'한 장', md:'# 한 장'}];
+        let handlers = null;
+        window.ElevenLabsClient = {Conversation: {startSession: async o => {
+            handlers = o;
+            return {sendContextualUpdate: t => pushed.push(t), output: null,
+                    endSession: async () => {}};
+        }}};
+        await elStart();
+        if (handlers && handlers.onStatusChange) handlers.onStatusChange({status: 'connected'});
+        const msg = (document.getElementById('elMsg') || {}).textContent;
+        elConv = null;
+        return {order: pushed.map(t => t.slice(0, 14)), msg};
+    }""")
+    print("── 통화 시작 때 넘기는 것 ──")
+    print("  순서                → %s" % " → ".join(start["order"]))
+    print("  화면 안내           → %s" % str(start["msg"])[:90])
+    if not start["order"] or "[MedIT 진행 상황]" not in start["order"][0]:
+        bad.append("통화를 시작할 때 진행 상황을 먼저 넘기지 않습니다: %s" % start["order"])
+    if len(start["order"]) < 2 or "[발표 자료]" not in start["order"][1]:
+        bad.append("진행 상황 뒤에 발표 자료가 안 넘어갑니다: %s" % start["order"])
+    if "진행 상황" not in str(start["msg"]):
+        bad.append("진행 상황을 알고 들어왔다는 것이 화면에 안 적힙니다: %r" % start["msg"])
 
     # 새 단추도 44px 를 지켜야 합니다 (폭 3종)
     for w, label in ((390, "휴대폰 390"), (768, "태블릿 768"), (1280, "데스크톱 1280")):
@@ -566,8 +630,8 @@ with sync_playwright() as p:
         bad.append("홈 화면에 밀린 회의록 건수가 안 나옵니다: %r" % home["pend"])
     if home["h"] < 44 or home["w"] < 44:
         bad.append("홈 화면 [밀린 회의록] 단추가 44px 못 미침 (%dx%d)" % (home["w"], home["h"]))
-    if "ELEVENLABS_API_KEY" not in str(home["msg"]):
-        bad.append("홈 화면에서 열쇠 확인 결과가 안 보입니다: %r" % home["msg"])
+    if "허브 자료" not in str(home["msg"]):
+        bad.append("홈 화면에서 자료 확인 결과가 안 보입니다: %r" % home["msg"])
     pg.evaluate("() => switchTab('video')")
 
     # ── 6. 진짜 SDK 가 내려오는지 (통화는 안 켭니다) ──
