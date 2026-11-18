@@ -540,6 +540,36 @@ with sync_playwright() as p:
             bad.append("%s: 밀린 회의록 단추가 44px 못 미침 — %s" % (label, sz))
     pg.set_viewport_size({"width": 1280, "height": 900})
 
+    # 홈 화면에서도 확인이 되어야 합니다 (v168).
+    #   회의 화면의 AI 직원 칸은 회의를 골라야 보입니다 — 열쇠만 확인하려고
+    #   회의를 열 수는 없으니 홈에도 같은 단추를 뒀습니다.
+    home = pg.evaluate(r"""async () => {
+        switchTab('home');
+        await new Promise(r => setTimeout(r, 400));
+        state.records = [{id:'h1', title:'밀린 것', dt:'2026.07.21', report:'## 다음 할 일\n- 하나'}];
+        learnPendingPaint();
+        const g = id => document.getElementById(id);
+        const r = g('learnBackBtn2') ? g('learnBackBtn2').getBoundingClientRect() : null;
+        sb = {auth:{getSession: async () => ({data:{session:{access_token:'t'}}})}};
+        window.fetch = async () => ({json: async () => ({ok:false, error:'need_key'})});
+        await learnKeyCheck();
+        return {pend: (g('homeLearnPend')||{}).textContent,
+                btn:  (g('learnBackBtn2')||{}).textContent,
+                w: r ? Math.round(r.width) : 0, h: r ? Math.round(r.height) : 0,
+                msg:  (g('homeLearnMsg')||{}).textContent};
+    }""")
+    print("── 홈 화면에서 확인 ──")
+    print("  밀린 건수          → %s" % home["pend"])
+    print("  단추               → %s (%dx%d)" % (home["btn"], home["w"], home["h"]))
+    print("  열쇠 확인 결과     → %s" % home["msg"][:70])
+    if "1건" not in str(home["pend"]):
+        bad.append("홈 화면에 밀린 회의록 건수가 안 나옵니다: %r" % home["pend"])
+    if home["h"] < 44 or home["w"] < 44:
+        bad.append("홈 화면 [밀린 회의록] 단추가 44px 못 미침 (%dx%d)" % (home["w"], home["h"]))
+    if "ELEVENLABS_API_KEY" not in str(home["msg"]):
+        bad.append("홈 화면에서 열쇠 확인 결과가 안 보입니다: %r" % home["msg"])
+    pg.evaluate("() => switchTab('video')")
+
     # ── 6. 진짜 SDK 가 내려오는지 (통화는 안 켭니다) ──
     print("── SDK 내려받기 (통화 안 켬) ──")
     sdk = pg.evaluate("""async () => {
