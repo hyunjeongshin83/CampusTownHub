@@ -662,6 +662,16 @@ button, .at, [role="button"]{min-height:40px;}
    — 같은 실수를 네 번째로 했습니다. 인라인이 아니라 여기에 둡니다 (인라인은 시트를 이깁니다).
    잰 값: 165x40 → 165x44 */
 #homeAiStaff button{min-height:44px;min-width:60px}
+/* (v170) 참석자별 메일 모음. 단추 기본값이 40px 이라 여기서 44px 로 올립니다 — 잰 값 뒤에 적습니다 */
+#mailPanel button{min-height:44px;min-width:60px}
+#mailPanel textarea{min-height:88px;font-size:max(16px,1em)}
+.chip .x.mailb{background:var(--mint-bg,#e7f3ee);color:var(--deep);font-weight:800}
+.mailrow{border-top:1px solid var(--line);padding:9px 0;display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:start}
+.mailrow .mailmeta{grid-column:1;font-size:12px;color:var(--soft);font-weight:700}
+.mailrow .mailgist{grid-column:1;font-size:13.5px;line-height:1.65}
+.mailrow .mailacts{grid-column:2;grid-row:1/3;display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.mailrow .mailacts button{padding:6px 11px;font-size:12.5px}
+@media (max-width:560px){ .mailrow{grid-template-columns:1fr} .mailrow .mailacts{grid-column:1;grid-row:auto;justify-content:flex-start} }
 </style>
 </head>
 <body>
@@ -727,7 +737,7 @@ button, .at, [role="button"]{min-height:40px;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ==================== 빌드 정보 · 자동 업데이트 감지 ====================
-const BUILD=169, BUILD_DATE="2026-11-19";
+const BUILD=170, BUILD_DATE="2026-11-23";
 
 // (v141) 안드로이드 설치용 서비스워커 등록.
 // 화면은 sw.js 안에서 "서버 먼저"로 받게 해 두었습니다 — 설치해 써도 옛 화면이 뜨지 않습니다.
@@ -819,6 +829,7 @@ const state={
   jobs:[],               // {id,title,desc,fromMeetingId,linkedMeetingIds:[],status}
   meeting:{},            // = 현재 회의 (currentMeetingId로 참조, 하위호환) — null이면 로드 시 Object.assign이 깨지므로 항상 객체
   attendees:[],          // 현재 회의 참석자 (meeting.attendees 미러)
+  mails:{},              // (v170) 참석자 이메일 → 압축한 메일 목록 [{date,dir,subject,gist,approved}]
   uploads:[],
   tabNotes:{deck:[],app:[],registry:[],console:[]},
   segments:[], notes:null, research:[], nextActions:[], topicTags:[],
@@ -1225,6 +1236,108 @@ async function migrateIntroDeck(mid){
 }
 window.loadMeetingSession=loadMeetingSession;
 async function saveRecords(){await store.set("medit:records2",state.records);}
+
+// ══ 참석자별 메일 모음 (v170) ═══════════════════════════════════════
+// 대표님 요청(2026-11-23): 참석자 이메일을 등록하면 그 사람과 주고받은 메일을
+// 압축해 보여 주고, 건마다 승인/미승인을 표시한다. 승인한 것만 회의 기록으로 올라간다.
+//
+// 왜 「미승인」이 기본인가 — 회의 기록은 참석자 모두가 봅니다. 기본을 승인으로 두면
+// 한 번 안 보고 넘긴 것이 그대로 공유됩니다. 아무것도 새지 않는 쪽을 기본으로 둡니다.
+// 압축할 때 연락처·내부 평가·미확정 금액/일정은 아예 빼고, 일자와 핵심 의견만 남깁니다.
+const MAILS_KEY="medit:mails";
+const mailKey=e=>String(e||"").trim().toLowerCase();
+function mailsFor(email){ const k=mailKey(email); return (state.mails&&state.mails[k])||[]; }
+function mailCounts(email){
+  const L=mailsFor(email);
+  return {all:L.length, ok:L.filter(x=>x.approved===true).length, no:L.filter(x=>x.approved===false).length,
+          wait:L.filter(x=>x.approved!==true&&x.approved!==false).length};
+}
+async function mailsSave(){ try{ return await store.set(MAILS_KEY, state.mails||{}); }catch(e){ return false; } }
+
+const MAIL_SYS=`당신은 회의 준비를 돕습니다. 주고받은 이메일 원문을 받아, 회의 기록에 올릴 수 있게 압축합니다.
+
+내보낼 것 — JSON 배열 하나만. 설명·머리말·코드울타리 없이 배열만.
+각 원소: {"date":"YYYY-MM-DD","dir":"받음"|"보냄","subject":"20자 이내","gist":"핵심 의견 한 줄(60자 이내)"}
+
+규칙
+· 메일 한 통이 원소 하나입니다. 날짜순(오래된 것부터).
+· gist 는 "무엇을 하기로 했는가 / 무엇을 요청했는가 / 무엇이 막혀 있는가" 중 하나로 씁니다.
+  인사말·서명·공지성 문장은 버립니다.
+· 원문에 없는 날짜·숫자·약속을 만들지 마세요. 날짜를 알 수 없으면 그 원소를 빼세요.
+· 다음은 어떤 경우에도 넣지 마세요 — 이것들이 들어가면 쓸 수 없습니다:
+    이메일 주소 · 전화번호 · 주소 · 직통 연락처
+    사람에 대한 평가("적극적이지 않다", "결정권이 없어 보인다" 등)
+    확정되지 않은 금액·지분·일정
+    환자·연구 참여자 정보, 개인 건강 정보
+· 사람은 "병원 측", "알앤디써클 측", "MedIT" 처럼 소속으로만 부릅니다. 직함까지만 허용하고
+  이름은 원문에 공개적으로 쓰인 경우에만 남깁니다.
+· 읽을 수 있는 메일이 없으면 빈 배열 [] 을 내보냅니다.`;
+
+async function mailDigest(email, raw){
+  const txt=String(raw||"").trim();
+  if(txt.length<30) throw new Error("붙여넣은 내용이 너무 짧습니다");
+  const out=await callClaude(MAIL_SYS, "상대방 이메일: "+mailKey(email)+"\n\n--- 메일 원문 ---\n"+txt.slice(0,60000), 2000);
+  let arr;
+  try{
+    const s=String(out||"").replace(/^```(?:json)?\s*/i,"").replace(/```\s*$/,"").trim();
+    arr=JSON.parse(s.slice(s.indexOf("["), s.lastIndexOf("]")+1));
+  }catch(e){ throw new Error("압축 결과를 읽지 못했습니다 — 다시 눌러 주세요"); }
+  if(!Array.isArray(arr)) throw new Error("압축 결과가 목록이 아닙니다");
+  const bad=/[\w.+-]+@[\w-]+\.[\w.]+|0\d{1,2}[-\s]?\d{3,4}[-\s]?\d{4}/;   // 주소·전화가 새어 나왔으면 그 줄은 버린다
+  const k=mailKey(email);
+  state.mails=state.mails||{}; state.mails[k]=state.mails[k]||[];
+  const have=new Set(state.mails[k].map(x=>x.date+"|"+(x.gist||"").slice(0,24)));
+  let added=0, dropped=0;
+  arr.forEach(it=>{
+    const date=String(it&&it.date||"").slice(0,10);
+    const gist=String(it&&it.gist||"").trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date) || !gist) { dropped++; return; }
+    if(bad.test(gist)||bad.test(String(it.subject||""))){ dropped++; return; }
+    const sig=date+"|"+gist.slice(0,24);
+    if(have.has(sig)){ dropped++; return; }
+    have.add(sig);
+    state.mails[k].push({ id:"ml"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+      date, dir:(it.dir==="보냄"?"보냄":"받음"), subject:String(it.subject||"").slice(0,40),
+      gist:gist.slice(0,120), approved:null, at:new Date().toISOString() });
+    added++;
+  });
+  state.mails[k].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  await mailsSave();
+  return {added, dropped};
+}
+
+async function mailSetApproved(email,id,val){
+  const L=mailsFor(email); const it=L.find(x=>x.id===id); if(!it) return;
+  it.approved = (it.approved===val) ? null : val;     // 같은 것을 다시 누르면 「대기」로 되돌립니다
+  await mailsSave(); renderMailBox(email); renderAtList();
+}
+async function mailRemove(email,id){
+  const k=mailKey(email); if(!state.mails||!state.mails[k]) return;
+  state.mails[k]=state.mails[k].filter(x=>x.id!==id);
+  await mailsSave(); renderMailBox(email); renderAtList();
+}
+
+// 승인한 것만 이 회의의 기록으로 — 미승인·대기는 올라가지 않습니다
+async function mailsToNotes(email){
+  const ok=mailsFor(email).filter(x=>x.approved===true);
+  if(!ok.length){ toast("승인된 것이 없습니다"); return; }
+  const who=(state.attendees||[]).find(a=>mailKey(a.email)===mailKey(email));
+  const head="## 주고받은 메일 — "+((who&&who.name)||mailKey(email))+" (승인된 "+ok.length+"건)";
+  const body=ok.map(x=>"- "+x.date+" · "+x.dir+" · "+x.gist).join("\n");
+  const block=head+"\n"+body;
+  state.notes=state.notes||{};
+  const prev=String(state.notes.mails||"");
+  state.notes.mails = prev && prev.indexOf(head)>=0
+    ? prev.replace(new RegExp(head.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"[\\s\\S]*?(?=\\n## |$)"), block+"\n")
+    : (prev? prev+"\n\n"+block : block);
+  let hit=false;
+  (state.records||[]).forEach(rr=>{ if(!rr.final && sameTitle(rr.title,(currentMeeting()||{}).title)){ rr.notes=state.notes; hit=true; } });
+  if(hit) await saveRecords();
+  scheduleSave();
+  toast("승인된 "+ok.length+"건을 회의 기록에 넣었습니다");
+  renderMailBox(email);
+}
+window.mailSetApproved=mailSetApproved; window.mailRemove=mailRemove; window.mailsToNotes=mailsToNotes;
 // 로그인 세션은 이 브라우저에만 저장 (클라우드 공유 X — 남의 기기에 로그인이 옮겨가면 안 됨)
 async function saveUser(){
   try{ if(window.storage) await window.storage.set("medit:user", JSON.stringify(state.user)); }catch(e){}
@@ -1240,6 +1353,7 @@ async function clearUser(){
 }
 async function loadAll(){
   const rec=await store.get("medit:records2");if(rec)state.records=rec;
+  try{ const mm=await store.get(MAILS_KEY); if(mm&&typeof mm==="object") state.mails=mm; }catch(_){}
   try{repairRecords();}catch(_){}
   const s=await store.get("medit:hub1");
   markBase("medit:hub1",s);          // (v108) 병합 기준본 — 이 시점 이후의 서버 변경만 상대 변경으로 본다
@@ -3555,15 +3669,80 @@ function bindPrep(){
 }
 function renderAtList(){const box=$("atList");if(!box)return;
   if(!state.attendees.length){ box.innerHTML='<div class="mini">아직 등록된 참석자가 없습니다.</div>'; return; }
-  box.innerHTML=state.attendees.map((a,i)=>
-    `<span class="chip"><span class="av">${esc(initials(a.name))}</span>${esc(a.name)}${a.email?` · ${esc(a.email)}`:""}`+
-    `${a.email?`<span class="x invite" onclick="inviteOne(${i})" title="초대 메일 보내기">초대</span>`:""}`+
-    `<span class="x" onclick="rmAt(${i})">삭제</span></span>`).join("")+
+  box.innerHTML=state.attendees.map((a,i)=>{
+    const c=a.email?mailCounts(a.email):null;                     // (v170) 이 사람과 주고받은 메일
+    const badge = c && c.all
+      ? `<span class="x mailb" onclick="openMailBox('${esc(mailKey(a.email))}')" title="주고받은 메일 ${c.all}건 — 승인 ${c.ok} · 대기 ${c.wait} · 미승인 ${c.no}">메일 ${c.all}${c.wait?" · 대기 "+c.wait:""}</span>`
+      : (a.email?`<span class="x mailb" onclick="openMailBox('${esc(mailKey(a.email))}')" title="이 사람과 주고받은 메일을 붙여넣어 압축합니다">메일 +</span>`:"");
+    return `<span class="chip"><span class="av">${esc(initials(a.name))}</span>${esc(a.name)}${a.email?` · ${esc(a.email)}`:""}`+
+    `${a.email?`<span class="x invite" onclick="inviteOne(${i})" title="초대 메일 보내기">초대</span>`:""}`+badge+
+    `<span class="x" onclick="rmAt(${i})">삭제</span></span>`;}).join("")+
     `<div style="margin-top:10px;display:flex;gap:7px;justify-content:flex-end">
        <button class="b-mint" id="inviteAll">전체에게 초대 메일</button>
-     </div>`;
+     </div>
+     <div id="mailBox" style="margin-top:12px"></div>`;
   const ia=$("inviteAll"); if(ia) ia.onclick=inviteAllAttendees;
+  if(MAIL_OPEN) renderMailBox(MAIL_OPEN);
 }
+
+// ── 메일 모음 패널 (v170) ─────────────────────────────────────────
+let MAIL_OPEN="";
+function openMailBox(email){ MAIL_OPEN = (MAIL_OPEN===mailKey(email)) ? "" : mailKey(email); renderAtList(); }
+window.openMailBox=openMailBox;
+
+function renderMailBox(email){
+  const box=$("mailBox"); if(!box) return;
+  const k=mailKey(email);
+  if(!k || MAIL_OPEN!==k){ box.innerHTML=""; return; }
+  const who=(state.attendees||[]).find(a=>mailKey(a.email)===k);
+  const L=mailsFor(k), c=mailCounts(k);
+  const row=x=>{
+    const on =x.approved===true, off=x.approved===false;
+    return `<div class="mailrow">
+      <div class="mailmeta"><b>${esc(x.date)}</b> · ${esc(x.dir)}${x.subject?` · ${esc(x.subject)}`:""}</div>
+      <div class="mailgist">${esc(x.gist)}</div>
+      <div class="mailacts">
+        <button class="${on?"b-deep":"b-ghost"}" onclick="mailSetApproved('${esc(k)}','${esc(x.id)}',true)"
+          title="회의 기록에 올려도 되는 내용">${on?"승인됨":"승인"}</button>
+        <button class="${off?"b-deep":"b-ghost"}" onclick="mailSetApproved('${esc(k)}','${esc(x.id)}',false)"
+          title="회의 기록에 올리지 않습니다">${off?"미승인":"미승인으로"}</button>
+        <button class="b-ghost" onclick="mailRemove('${esc(k)}','${esc(x.id)}')" title="이 줄을 지웁니다">삭제</button>
+      </div></div>`;
+  };
+  box.innerHTML=`<div class="glass tile" id="mailPanel" style="padding:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+      <h4 style="margin:0">주고받은 메일 — ${esc((who&&who.name)||k)}</h4>
+      <span class="mini" style="font-weight:700">승인 ${c.ok} · 대기 ${c.wait} · 미승인 ${c.no}</span>
+    </div>
+    <div class="mini" style="margin-bottom:9px;line-height:1.75">
+      메일 원문을 붙여넣으면 <b>일자와 핵심 의견 한 줄</b>로 줄여 보여 줍니다. 연락처·사람에 대한 평가·미확정 금액은 빼고 담습니다.
+      <b>승인한 것만</b> 회의 기록으로 올라갑니다 — 기본은 미승인입니다.
+    </div>
+    <textarea id="mailRaw" rows="4" placeholder="메일 원문을 붙여넣으세요 (여러 통을 한꺼번에 붙여도 됩니다)"
+      style="width:100%;box-sizing:border-box;padding:10px 11px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13px;line-height:1.6"></textarea>
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">
+      <button class="b-deep" id="mailGo">압축해서 담기</button>
+      <button class="b-ghost" id="mailPush" ${c.ok?"":"disabled"}>승인된 ${c.ok}건을 회의 기록에</button>
+    </div>
+    <div id="mailMsg" class="mini" style="min-height:18px;margin-top:7px;font-weight:700;color:var(--deep);line-height:1.7"></div>
+    <div style="margin-top:10px">${L.length?L.map(row).join(""):'<div class="mini">아직 담긴 메일이 없습니다.</div>'}</div>
+  </div>`;
+  const say=(t,bad)=>{ const e=$("mailMsg"); if(e){ e.textContent=t; e.style.color=bad?"#C24A4A":"var(--deep)"; } };
+  $("mailGo").onclick=async()=>{
+    const raw=($("mailRaw")||{}).value||"";
+    const b=$("mailGo"); b.disabled=true; say("압축하는 중…");
+    try{
+      const r=await mailDigest(k, raw);
+      say(r.added+"건을 담았습니다"+(r.dropped?" · "+r.dropped+"건은 날짜가 없거나 연락처가 섞여 버렸습니다":"")
+          +" — 아래에서 하나씩 승인해 주세요");
+      const t=$("mailRaw"); if(t) t.value="";
+      renderAtList();
+    }catch(e){ say((e&&e.message)||String(e), true); }
+    finally{ const bb=$("mailGo"); if(bb) bb.disabled=false; }
+  };
+  const mp=$("mailPush"); if(mp) mp.onclick=()=>mailsToNotes(k);
+}
+window.renderMailBox=renderMailBox;
 
 // 초대 메일 본문 생성 (사이트 주소 + 가입 안내)
 function buildInvite(names){
